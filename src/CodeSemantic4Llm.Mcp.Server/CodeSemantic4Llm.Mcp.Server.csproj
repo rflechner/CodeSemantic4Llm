@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CodeSemantic4Llm.Application/CodeSemantic4Llm.Application.csproj" />
+    <ProjectReference Include="../CodeSemantic4Llm.Analysis.CSharp/CodeSemantic4Llm.Analysis.CSharp.csproj" />
+    <ProjectReference Include="../CodeSemantic4Llm.Infrastructure.Workspace/CodeSemantic4Llm.Infrastructure.Workspace.csproj" />
+    <ProjectReference Include="../CodeSemantic4Llm.Persistence.Sqlite/CodeSemantic4Llm.Persistence.Sqlite.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+</Project>

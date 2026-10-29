@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../CodeSemantic4Llm.Domain/CodeSemantic4Llm.Domain.csproj" />
+  </ItemGroup>
+</Project>
