@@ -44,8 +44,9 @@ must be available before any configuration is written; unknown or unimplemented 
 fail with the available analyzer list. Currently only `dotnet-csharp` is installed;
 `typescript` remains planned and cannot be selected yet.
 
-Options may appear in any order after the repository path, including `--lang` between
-two `--analyzer` options. Each occurrence requires one value; only `--analyzer` is
+Options may appear before or after the repository path, including `--lang` between
+two `--analyzer` options. Spectre.Console.Cli also accepts `--lang=fr` and
+`--analyzer=dotnet-csharp`. Each occurrence requires one value; only `--analyzer` is
 repeatable. Empty analyzer IDs, missing values, unknown options and duplicate `--lang`
 options fail without creating a file.
 
@@ -59,7 +60,11 @@ Invalid arguments, languages and analyzer selections leave the target unchanged.
 
 `init --help` and `init -h` show usage without accessing the repository. Exit codes are
 0 for success/help, 1 for invalid input, existing configuration or filesystem errors,
-and 130 for cancellation. Top-level `--help` lists both console commands.
+and 130 for cancellation. Top-level `--help` lists `init`, `preview`, and `serve`.
+Spectre.Console generates help from the command settings. Results and help use stdout;
+parsing, validation and operation errors use stderr. Unknown commands and options fail
+instead of starting the MCP server. `serve`, or an invocation without arguments, starts
+the stdio MCP server with logs confined to stderr.
 
 ## Example
 
@@ -239,8 +244,11 @@ Functional behavior is described in
 `tests/CodeSemantic4Llm.FunctionalTests/Features/RecursiveFileDiscovery.feature`, with console
 behavior in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryPreview.feature`
 and `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryInitialization.feature`,
+and command routing in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleCommandRouting.feature`,
 using [Reqnroll](https://reqnroll.net/) and xUnit v3. The tests create temporary
 repositories, write YAML, create sample files, run the real loader and directory walker,
-and assert which files would be indexed. They do not require Git, MCP clients or SQLite.
+and assert which files would be indexed. The routing scenarios also launch the built
+server and send an MCP initialization request to verify that stdout remains protocol-only.
+They do not require Git, an external MCP client or SQLite.
 
 Run all tests with `dotnet test CodeSemantic4Llm.slnx`.

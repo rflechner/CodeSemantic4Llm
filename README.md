@@ -35,7 +35,8 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
 The target directory must already exist. Relative paths are resolved from the process's
 working directory; quote paths containing spaces. Omit `--lang` to use English (`en`).
 Use `--analyzer <id>` once per analyzer to select the YAML's `analyzers` list. The options
-may appear in any order after the path. Omit `--analyzer` to select `dotnet-csharp`.
+may appear before or after the path; `--lang=fr` syntax is also accepted.
+Omit `--analyzer` to select `dotnet-csharp`.
 IDs are trimmed, lowercased and deduplicated in first occurrence order. All selected
 analyzers must be installed; currently only `dotnet-csharp` is available.
 Each analyzer retains its default extensions, and the command adds no custom exclusions.
@@ -115,7 +116,12 @@ The preview uses the same discovery rules as MCP and exits after displaying its 
 The default limit is 50 and the maximum is 200; the output indicates when more files exist.
 It does not read source contents, execute the target repository, or persist an index.
 Running without a command starts the MCP server and waits for client requests.
-`--help` lists the `init` and `preview` commands.
+`--help` lists the `init`, `preview`, and `serve` commands. `serve` explicitly starts
+the same MCP server as an invocation without arguments.
+
+Console commands use Spectre.Console.Cli settings for argument parsing and generated
+help, with Spectre.Console for output. Help and results go to stdout; errors go to stderr.
+Unknown commands and options fail without starting the MCP server.
 
 ## Dependencies
 

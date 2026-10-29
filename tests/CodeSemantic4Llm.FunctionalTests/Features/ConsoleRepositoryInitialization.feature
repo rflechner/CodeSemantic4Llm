@@ -136,7 +136,7 @@ Feature: Initialize repository configuration from a terminal
     Then repository initialization fails with an error containing "does not exist or is not a directory"
     And the file at the target repository path is unchanged
 
-  Scenario Outline: Invalid command arguments display usage without creating YAML
+  Scenario Outline: Invalid command arguments report an error without creating YAML
     When I run repository initialization with these arguments:
       | argument     |
       | <repository> |
@@ -152,20 +152,20 @@ Feature: Initialize repository configuration from a terminal
       | {repository} | --unknown | fr    | Unknown option '--unknown'       |
       | {repository} | --lang    |       | language cannot be empty         |
 
-  Scenario: A missing language argument displays usage
+  Scenario: A missing language argument is rejected
     When I run repository initialization with these arguments:
       | argument     |
       | {repository} |
       | --lang       |
-    Then repository initialization fails with an error containing "Expected a value for --lang"
+    Then repository initialization fails with an error containing "Option 'lang' is defined but no value has been provided"
     And initialization leaves no configuration or temporary files
 
-  Scenario: A missing analyzer argument displays usage
+  Scenario: A missing analyzer argument is rejected
     When I run repository initialization with these arguments:
       | argument     |
       | {repository} |
       | --analyzer   |
-    Then repository initialization fails with an error containing "Expected a value for --analyzer"
+    Then repository initialization fails with an error containing "Option 'analyzer' is defined but no value has been provided"
     And initialization leaves no configuration or temporary files
 
   Scenario Outline: An option cannot consume another option as its value
@@ -175,7 +175,7 @@ Feature: Initialize repository configuration from a terminal
       | <option>     |
       | <next>       |
       | <value>      |
-    Then repository initialization fails with an error containing "Expected a value for <option>"
+    Then repository initialization fails with an error containing "no value has been provided"
     And initialization leaves no configuration or temporary files
 
     Examples:
@@ -204,12 +204,12 @@ Feature: Initialize repository configuration from a terminal
       | --analyzer    |
       | dotnet-csharp |
       | extra         |
-    Then repository initialization fails with an error containing "Unknown option 'extra'"
+    Then repository initialization fails with an error containing "Could not match 'extra' with an argument"
     And initialization leaves no configuration or temporary files
 
-  Scenario: Missing command arguments display usage
+  Scenario: A missing repository argument is rejected
     When I run repository initialization without arguments
-    Then repository initialization fails with an error containing "Expected a repository path"
+    Then repository initialization fails with an error containing "missing required argument 'repository-path'"
     And initialization leaves no configuration or temporary files
 
   Scenario Outline: Help is available without creating a configuration
@@ -233,4 +233,23 @@ Feature: Initialize repository configuration from a terminal
     Given the default C# analyzer is unavailable for initialization
     When I initialize the target repository using an "absolute" path
     Then repository initialization fails with an error containing "not installed or implemented"
+    And initialization leaves no configuration or temporary files
+
+  Scenario: Options can precede the repository path and use equals syntax
+    When I run repository initialization with these arguments:
+      | argument                   |
+      | --lang=FR-ch                |
+      | --analyzer=DOTNET-CSHARP     |
+      | {repository}               |
+      | --analyzer=dotnet-csharp     |
+    Then repository initialization succeeds
+    And the generated configuration uses language "fr-CH" and the default C# settings
+
+  Scenario: Unbound arguments after the separator do not bypass validation
+    When I run repository initialization with these arguments:
+      | argument     |
+      | {repository} |
+      | --           |
+      | --ignored    |
+    Then repository initialization fails with an error containing "--ignored"
     And initialization leaves no configuration or temporary files

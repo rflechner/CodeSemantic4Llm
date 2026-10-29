@@ -1,0 +1,24 @@
+using CodeSemantic4Llm.Analysis.CSharp;
+using CodeSemantic4Llm.Application.Abstractions;
+using CodeSemantic4Llm.Application.UseCases;
+using CodeSemantic4Llm.Configuration.Yaml;
+using CodeSemantic4Llm.Infrastructure.Workspace;
+using Microsoft.Extensions.DependencyInjection;
+
+namespace CodeSemantic4Llm.Mcp.Server;
+
+/// <summary>Shares application and adapter registrations between local commands and the MCP host.</summary>
+internal static class ServerServiceCollectionExtensions
+{
+    public static void AddRepositoryServices(this IServiceCollection services)
+    {
+        services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
+        services.AddSingleton<IGitBranchProvider, GitBranchProvider>();
+        services.AddSingleton<IRepositoryConfigurationLoader, YamlRepositoryConfigurationLoader>();
+        services.AddSingleton<IRepositoryConfigurationWriter, YamlRepositoryConfigurationWriter>();
+        services.AddSingleton<IRepositoryFileEnumerator, FileSystemRepositoryFileEnumerator>();
+        services.AddSingleton<AnalyzeSource>();
+        services.AddSingleton<PreviewRepositoryIndex>();
+        services.AddSingleton<InitializeRepositoryConfiguration>();
+    }
+}

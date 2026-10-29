@@ -21,6 +21,27 @@ flowchart TD
 The domain has no dependencies on Git, Roslyn, Tree-sitter, YAML, SQLite or MCP.
 The application owns the ports. Adapters depend inward; the MCP executable is the only composition root.
 
+## Console commands and MCP transport
+
+`Program.cs` wires dependency injection, output streams and cancellation. Spectre.Console.Cli
+dispatches `init`, `preview` and `serve` to separate commands with declarative settings.
+The default command starts the same stdio MCP server as `serve`. A small type registrar
+bridges Spectre to Microsoft dependency injection and disposes each run's service provider.
+Application use cases and adapters have no dependency on Spectre.
+
+Spectre generates help and parses typed arguments, including repeatable analyzer arrays.
+The language option captures occurrences to reject duplicates rather than silently choose
+the last value. A shared interceptor rejects arguments Spectre leaves unbound before a
+command runs. This avoids Spectre.Console.Cli 0.57.2's
+[strict-parsing retry](https://github.com/spectreconsole/spectre.console.cli/blob/9c88a343b8ce622e9fda4e4334b2057d773d90c9/src/Spectre.Console.Cli/Internal/CommandExecutor.cs#L165), which can
+mistake its internal default-command token for a missing option value. No application
+code tokenizes or manually consumes CLI options.
+
+Console results and help use stdout; errors use stderr. Dynamic paths and diagnostics
+are rendered as plain text rather than interpreted as Spectre markup. The MCP command
+keeps stdout exclusively for protocol messages and sends host logs to stderr. Functional
+tests exercise the same CLI parser and verify the executable's MCP initialization response.
+
 ## Repository-local configuration
 
 Every repository owns its root `codesemantic4llm.yaml`. The YAML adapter parses and

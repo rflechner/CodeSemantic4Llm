@@ -6,7 +6,7 @@ using CodeSemantic4Llm.Domain.Configuration;
 using CodeSemantic4Llm.Domain.Source;
 using CodeSemantic4Llm.Domain.Symbols;
 using CodeSemantic4Llm.Infrastructure.Workspace;
-using CodeSemantic4Llm.Mcp.Server.Commands;
+using Microsoft.Extensions.DependencyInjection;
 using Reqnroll;
 using Xunit;
 
@@ -26,7 +26,7 @@ public sealed class RepositoryInitializationSteps
     private string? _output;
     private string? _error;
 
-    private string RepositoryRoot => Path.Combine(_workspaceRoot, "target repository");
+    private string RepositoryRoot => Path.Combine(_workspaceRoot, "target [repository]");
     private string ConfigurationPath => Path.Combine(RepositoryRoot, RepositoryIndexingConfiguration.FileName);
     private string ExternalConfigurationPath => Path.Combine(_workspaceRoot, "external.yaml");
 
@@ -153,7 +153,6 @@ public sealed class RepositoryInitializationSteps
         Assert.Equal(1, _exitCode);
         Assert.Equal(string.Empty, _output);
         Assert.Contains(expected, _error, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Usage: init", _error);
     }
 
     [Then("initialization leaves no configuration or temporary files")]
@@ -190,10 +189,13 @@ public sealed class RepositoryInitializationSteps
     {
         Assert.Equal(0, _exitCode);
         Assert.Equal(string.Empty, _error);
-        Assert.Contains("Usage: init <repository-path> [--lang <language-tag>]", _output);
-        Assert.Contains("[--analyzer <analyzer-id>]...", _output);
-        Assert.Contains("analyzer default: dotnet-csharp", _output);
-        Assert.Contains("default: en", _output);
+        Assert.Contains("USAGE:", _output);
+        Assert.Contains("codesemantic4llm init <repository-path>", _output);
+        Assert.Contains("--analyzer", _output);
+        Assert.Contains("repeat for multiple analyzers", _output);
+        Assert.Contains("default: dotnet-csharp", _output);
+        Assert.Contains("--lang", _output);
+        Assert.Contains("en", _output);
     }
 
     [Then("repository initialization is canceled")]
@@ -201,7 +203,6 @@ public sealed class RepositoryInitializationSteps
     {
         Assert.Equal(130, _exitCode);
         Assert.Equal(string.Empty, _output);
-        Assert.Contains("canceled", _error);
     }
 
     [AfterScenario]
@@ -215,15 +216,15 @@ public sealed class RepositoryInitializationSteps
 
     private async Task RunAsync(string[] arguments, CancellationToken? cancellationToken = null)
     {
-        using var output = new StringWriter();
-        using var error = new StringWriter();
+        var services = new ServiceCollection();
         var initialize = new InitializeRepositoryConfiguration(new YamlRepositoryConfigurationWriter(), _analyzers);
-        var command = new RepositoryInitCommand(initialize);
+        services.AddSingleton(initialize);
 
-        _exitCode = await command.ExecuteAsync(
-            arguments, output, error, cancellationToken ?? TestContext.Current.CancellationToken);
-        _output = output.ToString();
-        _error = error.ToString();
+        var result = await ConsoleCommandRunner.RunAsync(
+            ["init", .. arguments], services, cancellationToken ?? TestContext.Current.CancellationToken);
+        _exitCode = result.ExitCode;
+        _output = result.Output;
+        _error = result.Error;
     }
 
     /// <summary>Registers an additional analyzer for selection tests without implementing another source language.</summary>

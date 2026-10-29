@@ -75,17 +75,18 @@ Feature: Preview a local repository from an IDE or terminal
     Then the console preview fails with an error containing "<error>"
 
     Examples:
-      | limit | error                       |
-      | 0     | maxFiles                    |
-      | 201   | maximum preview size is 200 |
-      | many  | must be a positive integer |
+      | limit | error                               |
+      | 0     | --max-files must be between 1 and 200 |
+      | 201   | --max-files must be between 1 and 200 |
+      | many  | Failed to convert 'many' to Int32    |
 
   Scenario: Help is available without repository configuration
     Given the repository has no configuration file
     When I request console preview help
     Then the console preview succeeds
-    And the console output contains "Usage: preview <repository-path>"
+    And the console output contains "codesemantic4llm preview <repository-path>"
+    And the console output contains "--max-files"
 
-  Scenario: Missing command arguments display usage
+  Scenario: A missing repository argument is rejected
     When I run the console preview without a repository path
-    Then the console preview fails with an error containing "Expected a repository path"
+    Then the console preview fails with an error containing "missing required argument 'repository-path'"

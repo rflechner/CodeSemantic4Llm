@@ -3,7 +3,7 @@ using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Configuration.Yaml;
 using CodeSemantic4Llm.Infrastructure.Workspace;
-using CodeSemantic4Llm.Mcp.Server.Commands;
+using Microsoft.Extensions.DependencyInjection;
 using Reqnroll;
 using Xunit;
 
@@ -126,7 +126,6 @@ public sealed class RepositoryConfigurationSteps
         Assert.Equal(string.Empty, _consoleOutput);
         Assert.NotNull(_consoleError);
         Assert.Contains(expected, _consoleError, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Usage: preview", _consoleError, StringComparison.Ordinal);
     }
 
     [Then("the indexable files are:")]
@@ -250,13 +249,14 @@ public sealed class RepositoryConfigurationSteps
 
     private async Task PreviewFromConsoleAsync(string[] arguments)
     {
-        using var output = new StringWriter();
-        using var error = new StringWriter();
-        var command = new RepositoryPreviewCommand(CreatePreviewUseCase());
+        var services = new ServiceCollection();
+        services.AddSingleton(CreatePreviewUseCase());
 
-        _consoleExitCode = await command.ExecuteAsync(arguments, output, error, TestContext.Current.CancellationToken);
-        _consoleOutput = output.ToString();
-        _consoleError = error.ToString();
+        var result = await ConsoleCommandRunner.RunAsync(
+            ["preview", .. arguments], services, TestContext.Current.CancellationToken);
+        _consoleExitCode = result.ExitCode;
+        _consoleOutput = result.Output;
+        _consoleError = result.Error;
     }
 
     private async Task PreviewAsync(int maxFiles)
