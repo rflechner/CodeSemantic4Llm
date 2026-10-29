@@ -1,6 +1,7 @@
 using CodeSemantic4Llm.Analysis.CSharp;
 using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.UseCases;
+using CodeSemantic4Llm.Configuration.Yaml;
 using CodeSemantic4Llm.Infrastructure.Workspace;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -14,7 +15,10 @@ builder.Logging.AddConsole(options => options.LogToStandardErrorThreshold = LogL
 
 builder.Services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
 builder.Services.AddSingleton<IGitBranchProvider, GitBranchProvider>();
+builder.Services.AddSingleton<IRepositoryConfigurationLoader, YamlRepositoryConfigurationLoader>();
+builder.Services.AddSingleton<IRepositoryFileEnumerator, FileSystemRepositoryFileEnumerator>();
 builder.Services.AddSingleton<AnalyzeSource>();
+builder.Services.AddSingleton<PreviewRepositoryIndex>();
 
 builder.Services.AddMcpServer()
     .WithStdioServerTransport()

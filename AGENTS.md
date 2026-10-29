@@ -78,6 +78,24 @@ Treat project specifications and accepted design decisions as authoritative when
 - Separate domain concepts, parsing/indexing, persistence, and MCP presentation. Keep SQLite implementation details out of domain objects.
 - Avoid making unapproved irreversible storage-layout or schema decisions when a specification is still being discussed.
 
+## Apply repository-local YAML configuration
+
+- Each checkout must provide `codesemantic4llm.yaml` at its root (see `docs/repository-configuration.md`).
+- Keep YAML parsing and schema mapping in `Configuration.Yaml`; keep analyzer selection in application use cases.
+- Use stable analyzer IDs and explicit availability checks; never silently ignore an unknown or unimplemented analyzer.
+- Respect both built-in and user-defined glob exclusions when discovering source files.
+- Skip symlinked directories and do not read beyond the operator-configured repository boundary.
+- Git submodules are included unless the repository's YAML excludes their paths.
+- Keep preview operations bounded and read-only; avoid advertising indexing or persistence until implemented.
+
+## Test behavior with executable specifications
+
+- Keep fast, focused unit tests for domain invariants and parsing details.
+- For repository-level behavior, prefer readable **Reqnroll / Gherkin** scenarios in `tests/CodeSemantic4Llm.FunctionalTests`, backed by real C# step definitions and xUnit v3.
+- A feature file should read like an executable specification (Given / When / Then), not an implementation transcript.
+- Test both successful configuration and important failure cases such as missing YAML, unsupported analyzers, and excluded directories.
+- Run the complete test suite before finalizing changes; all direct NuGet versions must stay in Central Package Management.
+
 ## Make MCP responses precise and economical
 
 - Prefer focused queries returning relevant symbols, references, or locations to dumping entire files or whole-project graphs.
