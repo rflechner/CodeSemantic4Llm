@@ -13,6 +13,7 @@ public sealed record RepositoryIndexingPreview(
     string ConfigurationFile,
     IReadOnlyList<string> EnabledAnalyzers,
     IReadOnlyList<string> EffectiveExclusions,
+    string SemanticIndexingLanguage,
     IReadOnlyList<IndexingCandidate> Files,
     bool HasMore);
 
@@ -71,6 +72,7 @@ public sealed class PreviewRepositoryIndex(
             RepositoryIndexingConfiguration.FileName,
             config.AnalyzerIds,
             config.Exclusions,
+            config.SemanticIndexing.Language,
             selected.AsReadOnly(),
             hasMore);
     }

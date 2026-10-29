@@ -29,12 +29,18 @@ Create `codesemantic4llm.yaml` at the root of **each repository**:
 version: 1
 analyzers:
   - dotnet-csharp
+semanticIndexing:
+  language: en   # Optional: use fr, fr-CH, etc.
 exclude:
   - submodules/**
 ```
 
 `**/.git/**`, `**/bin/**`, and `**/obj/**` are always excluded.
 Submodules are only excluded when explicitly selected by a rule.
+The optional `semanticIndexing.language` selects the language of **future AI-generated
+natural-language descriptions**; its default is `en`. It does not affect which source
+languages the analyzers support. The value is already validated and reported by the MCP preview,
+but natural-language index generation is not implemented yet.
 The TypeScript analyzer is planned but not yet registered.
 
 ## Build and test

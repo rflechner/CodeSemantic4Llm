@@ -81,6 +81,14 @@ public sealed class RepositoryConfigurationSteps
         Assert.Contains(pattern, _preview.EffectiveExclusions);
     }
 
+    [Then("the semantic indexing language is \"(.*)\"")]
+    public void ThenSemanticIndexingLanguageIs(string expected)
+    {
+        Assert.Null(_error);
+        Assert.NotNull(_preview);
+        Assert.Equal(expected, _preview.SemanticIndexingLanguage);
+    }
+
     [Then("the preview fails with an error containing \"(.*)\"")]
     public void ThenPreviewFailsWithErrorContaining(string expected)
     {

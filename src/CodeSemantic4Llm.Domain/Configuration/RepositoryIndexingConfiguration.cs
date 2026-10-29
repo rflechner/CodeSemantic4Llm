@@ -16,7 +16,8 @@ public sealed class RepositoryIndexingConfiguration
 
     public RepositoryIndexingConfiguration(
         IEnumerable<string> analyzerIds,
-        IEnumerable<string>? exclusions = null)
+        IEnumerable<string>? exclusions = null,
+        SemanticIndexingConfiguration? semanticIndexing = null)
     {
         ArgumentNullException.ThrowIfNull(analyzerIds);
 
@@ -37,6 +38,8 @@ public sealed class RepositoryIndexingConfiguration
                 .Select(NormalizeExclusion)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray());
+
+        SemanticIndexing = semanticIndexing ?? new SemanticIndexingConfiguration();
     }
 
     public int Version => CurrentVersion;
@@ -46,6 +49,9 @@ public sealed class RepositoryIndexingConfiguration
 
     /// <summary>Effective repository-relative glob exclusions, including the built-in defaults.</summary>
     public IReadOnlyList<string> Exclusions { get; }
+
+    /// <summary>Language used for future natural-language semantic descriptions, not for source parsing.</summary>
+    public SemanticIndexingConfiguration SemanticIndexing { get; }
 
     private static string NormalizeExclusion(string? value)
     {
