@@ -46,6 +46,35 @@ A repository index must be uniquely identified by a checkout and branch. A branc
 - Handle dirty working trees, branch switches, file renames and stale records explicitly when incremental indexing is implemented.
 - SQLite schema and index-generation lifecycle are **not frozen by this bootstrap**. The current SQLite adapter provides only a connection boundary.
 
+## Planned index storage
+
+![Planned index storage: each original Git checkout has codesemantic4llm.yaml at its root; a separate central store holds one SQLite index per checkout, branch snapshots, and caches shared across branches, without source-file copies.](index-storage-architecture.png)
+
+The illustration describes the intended architecture, **not an implemented storage layout**.
+Directory names, database names, and snapshot numbers are illustrative; the cache root,
+physical layout, and SQLite schema remain to be defined. The current server provides
+repository configuration and a read-only preview, not persistent indexing.
+
+- Each original checkout owns `codesemantic4llm.yaml` at its root, alongside `src/` and
+  `.git/` in the example. The YAML belongs to the repository, never to the central cache.
+  See the [repository-local YAML contract](repository-configuration.md) for supported keys.
+- The intended design uses one SQLite index per checkout, shared by that checkout's
+  branches. Each branch points to an explicit snapshot of derived index data. Snapshots
+  are logical metadata and references, not copies of the source tree or separate databases
+  per branch. Branch names are labels, not filesystem directory names.
+- Persist symbol identities, relationships, source paths and ranges, hashes, and revision
+  identifiers. Read current source files in place and historical versions from local Git
+  objects. Never copy source files or Git objects into the central index storage.
+- Read a source excerpt only from the requested revision or a working-tree version whose
+  content matches the indexed hash. If the exact version is unavailable, the planned lookup
+  returns `source_unavailable` rather than substituting another branch's source.
+- Reuse derived descriptions and embeddings across branches of the same checkout when
+  their inputs are unchanged. Reuse must account for content hashes and all relevant
+  analyzer, model, and generation settings, including `semanticIndexing.language` for
+  natural-language descriptions. Shared caches do not merge branch-specific index records.
+
+The [image generation prompt](index-storage-architecture.prompt.txt) is included for future updates.
+
 ## First usable slice
 
 The MCP host starts with the official .NET SDK and stdio transport.

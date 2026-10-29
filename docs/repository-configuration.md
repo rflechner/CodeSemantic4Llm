@@ -2,6 +2,9 @@
 
 Each checkout to be indexed contains its own `codesemantic4llm.yaml` **at the repository root**.
 The server does not search parent folders for shared defaults; each repository owns its configuration.
+The YAML file does not belong in the central index cache. See the
+[planned index storage illustration](architecture.md#planned-index-storage) for the separation
+between original checkouts, branch snapshots, and shared derived-data caches.
 
 ## Example
 

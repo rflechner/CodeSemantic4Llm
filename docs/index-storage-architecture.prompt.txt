@@ -1,0 +1,52 @@
+Use case: infographic-diagram
+Asset type: an English architecture illustration for the docs/ directory of CodeSemantic4Llm.
+Primary request: illustrate the planned storage layout for large Git repositories, with absolutely no copies of source files in index storage, one SQLite index per checkout shared by its branches, per-branch snapshots, and caches shared across branches.
+
+Style: polished technical infographic on a white background, crisp readable type, flat folder/file/database icons, restrained navy, blue, teal and amber. Landscape canvas, approximately 2304 x 1536. Generous spacing, clear connector lines, no overlapping text, no decorative filler. All visible text must be English. Render every file name verbatim.
+
+Title: "CodeSemantic4Llm"
+Subtitle: "Index storage without source-file copies"
+Small status badge: "Planned architecture"
+
+LEFT PANEL heading: "Original Git checkouts"
+Draw two clearly separate folder trees with exactly the following hierarchy:
+repository-a/
+    codesemantic4llm.yaml
+    src/
+    .git/
+repository-b/
+    codesemantic4llm.yaml
+    src/
+    .git/
+The YAML file must be a DIRECT child of each repository root, at the SAME indentation level as src/ and .git/. Highlight the exact text "codesemantic4llm.yaml" in both trees. Below the two trees, add "One YAML file at each repository root". The source files and Git object icons stay ONLY in this left panel.
+Add concise text: "Read source files in place" and "Read older revisions from local Git objects".
+
+MIDDLE: a small indexing process icon with label "Analyze". A thin arrow from the checkout panel to this icon says "Read only". An arrow from this icon to the central store says "Derived data only". No source files travel along the arrow.
+
+RIGHT PANEL heading: "Central index storage"
+Draw this conceptual tree:
+<index-root>/
+    repositories/
+        <checkout-a-id>/
+            index.sqlite
+            shared-cache/
+                descriptions/
+                embeddings/
+        <checkout-b-id>/
+            index.sqlite
+            shared-cache/
+No YAML files, no src/ folders, no source files, no copied Git objects anywhere inside the central store.
+Below or alongside the tree within the right panel, show a database detail inset labelled "One SQLite index per checkout".
+Inside the database inset show "Symbols, paths, ranges, hashes, relationships" followed by a clearly separated logical mapping area labelled "Branch snapshots":
+"main -> snapshot 42"
+"feature/search -> snapshot 57"
+"Snapshots hold metadata and references"
+These are logical records IN SQLite, NOT separate folders or separate databases per branch. Connect both snapshots to a single cache inset labelled "Caches shared across branches", with sublabel "Reuse unchanged descriptions and embeddings". This cache inset is part of the same checkout's shared-cache storage, not a global cross-repository promise.
+
+BOTTOM STRIP with three short statements:
+"Source files stay in their original repositories"
+"Branch and revision identity stay explicit"
+"No source-file copies in the cache"
+Small footnote: "Conceptual layout: directory names are illustrative; persistence is not implemented yet."
+
+Constraints: every letter of codesemantic4llm.yaml must be accurate, lower case, shown prominently only beneath repository-a/ and repository-b/. Preserve the distinction between existing repository-local configuration and planned persistence. No unsupported YAML options, no source content in caches, no French labels, no code samples, no branch-named filesystem directories. The diagram should communicate the filesystem hierarchy and branch snapshot/cache relationships at a glance.

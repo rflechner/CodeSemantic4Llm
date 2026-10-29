@@ -20,6 +20,8 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 | `CodeSemantic4Llm.Mcp.Server` | Composition root, stdio transport and MCP tools |
 
 See [architecture decisions](docs/architecture.md) and the [repository YAML specification](docs/repository-configuration.md).
+The [planned index storage illustration](docs/architecture.md#planned-index-storage) shows
+repository-root YAML files, branch snapshots, and shared caches without source-file copies.
 
 ## Configure each repository
 
