@@ -20,7 +20,9 @@ public sealed class CSharpSourceAnalyzerTests
             """;
 
         var analyzer = new CSharpSourceAnalyzer();
-        var symbols = await analyzer.AnalyzeAsync(new SourceDocument("src/Customer.cs", source));
+        var symbols = await analyzer.AnalyzeAsync(
+            new SourceDocument("src/Customer.cs", source),
+            TestContext.Current.CancellationToken);
 
         Assert.Contains(symbols, symbol => symbol.Kind == "class" && symbol.QualifiedName == "Demo.Sample.Customer");
         Assert.Contains(symbols, symbol => symbol.Kind == "property" && symbol.QualifiedName == "Demo.Sample.Customer.Name");
