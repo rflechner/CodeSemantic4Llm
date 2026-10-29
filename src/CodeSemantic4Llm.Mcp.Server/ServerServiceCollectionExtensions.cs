@@ -27,5 +27,6 @@ internal static class ServerServiceCollectionExtensions
         services.AddSingleton<InitializeRepositoryConfiguration>();
         services.AddSingleton<IndexRepository>();
         services.AddSingleton<FindSymbols>();
+        services.AddSingleton<GetTypeMembers>();
     }
 }

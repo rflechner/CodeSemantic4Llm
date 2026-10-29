@@ -44,18 +44,25 @@ public sealed class CSharpSourceAnalyzer : ISourceAnalyzer
                     .OfType<string>();
 
                 var qualifiedName = string.Join(".", ancestorNames.Append(name));
-                var position = identifier.GetLocation().GetLineSpan().StartLinePosition;
+                var containingType = member.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault();
 
                 symbols.Add(new SymbolDefinition(
                     LanguageId,
                     kind,
                     name,
                     qualifiedName,
-                    new SourceLocation(document.RelativePath, position.Line + 1, position.Character + 1)));
+                    GetLocation(document.RelativePath, identifier),
+                    containingType is null ? null : GetLocation(document.RelativePath, containingType.Identifier)));
             }
         }
 
         return Task.FromResult<IReadOnlyList<SymbolDefinition>>(symbols);
+    }
+
+    private static SourceLocation GetLocation(string path, SyntaxToken identifier)
+    {
+        var position = identifier.GetLocation().GetLineSpan().StartLinePosition;
+        return new SourceLocation(path, position.Line + 1, position.Character + 1);
     }
 
     private static string? GetContainerName(MemberDeclarationSyntax member) => member switch

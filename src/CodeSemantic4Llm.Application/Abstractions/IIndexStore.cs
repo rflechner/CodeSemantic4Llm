@@ -23,8 +23,20 @@ public interface IIndexStore
         string name,
         int maxResults,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Lists direct members of one type declaration in the expected published snapshot.</summary>
+    TypeMemberPage GetTypeMembers(
+        RepositoryScope scope, SourceLocation typeLocation, long snapshotId,
+        string? kind, int maxResults, int offset, CancellationToken cancellationToken = default);
 }
 
 /// <summary>A bounded declaration search with the identity of the saved snapshot and truncation information.</summary>
 public sealed record SymbolSearchResult(
     RepositoryIndexSnapshot Snapshot, IReadOnlyList<SymbolDefinition> Symbols, bool HasMore);
+
+/// <summary>One page of direct members. Partial declarations and inherited members are not combined.</summary>
+public sealed record TypeMemberPage(
+    RepositoryIndexSnapshot Snapshot, SymbolDefinition Type, IReadOnlyList<SymbolDefinition> Members, int? NextOffset)
+{
+    public bool HasMore => NextOffset.HasValue;
+}

@@ -109,6 +109,13 @@ owns one unpublished generation: disposing it without publication rolls back the
 The current C# adapter parses syntax independently per file. Future semantic models must
 also include project/dependency state in invalidation before reusing results.
 
+Roslyn records the immediate containing type's declaration location for each extracted
+member. This explicit edge distinguishes nested types and homonymous or generic declarations
+even when their display names match. Member queries use the selected type's exact source
+location within an expected snapshot, never a qualified-name prefix heuristic. Partial
+declarations are kept separate because syntax alone does not establish their compilation
+identity; inherited members are also outside this navigation contract.
+
 The SQLite adapter maps a canonical Git checkout root to a SHA-256 directory under an
 operator-configurable central cache. One database holds a completed snapshot per named
 branch. Snapshot IDs and branch names are database data; no branch name becomes a path.
@@ -121,6 +128,14 @@ files are analyzed; absent paths never enter the replacement snapshot. Publicati
 the branch pointer and deletes the old generation in the same transaction. WAL allows
 readers to keep seeing the previous complete snapshot during the write. Read queries use
 one transaction to keep snapshot metadata and declaration rows consistent.
+
+Schema 2 adds container coordinates to symbol rows and a membership-version marker to each
+snapshot. Version-one caches are upgraded only on the write path, in an additive schema
+transaction; existing snapshots receive a marker of zero and remain readable after migration.
+The next index run cannot reuse rows lacking containment metadata. Failed publication
+preserves the previous declarations, while member navigation asks for reindexing instead of
+silently returning an empty list. A container lookup index supports bounded member pages;
+snapshot IDs guard navigation against replacement between pages.
 
 SQLite operations are synchronous because Microsoft.Data.Sqlite executes asynchronous ADO
 operations synchronously. Cancellation is checked between files, declarations and statements,

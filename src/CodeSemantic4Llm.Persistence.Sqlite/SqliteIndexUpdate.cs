@@ -31,8 +31,8 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _previousId = SqliteIndexStore.ReadSnapshot(connection, _transaction, state.Scope)?.SnapshotId;
         _reusableId = GetReusableSnapshot(fingerprint);
         using var insert = Command("""
-            INSERT INTO snapshots(branch, revision, configuration_hash, semantic_language)
-            VALUES ($branch, $revision, $configuration, $language) RETURNING id;
+            INSERT INTO snapshots(branch, revision, configuration_hash, semantic_language, member_index_version)
+            VALUES ($branch, $revision, $configuration, $language, 1) RETURNING id;
             """, ("$branch", state.Scope.BranchName), ("$revision", state.Revision),
             ("$configuration", fingerprint), ("$language", language));
         _snapshotId = Convert.ToInt64(insert.ExecuteScalar());
@@ -63,7 +63,8 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         using var copy = Command("""
             INSERT INTO indexed_files SELECT $snapshot, path, content_hash, analyzer_id, analyzer_version, symbol_count
             FROM indexed_files WHERE snapshot_id = $previous AND path = $path;
-            INSERT INTO symbols SELECT $snapshot, path, ordinal, language, kind, name, qualified_name, line, column_number
+            INSERT INTO symbols SELECT $snapshot, path, ordinal, language, kind, name, qualified_name, line, column_number,
+                containing_type_line, containing_type_column
             FROM symbols WHERE snapshot_id = $previous AND path = $path;
             """, ("$snapshot", _snapshotId), ("$previous", _reusableId), ("$path", file.RelativePath));
         copy.ExecuteNonQuery();
@@ -121,7 +122,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
 
     private long? GetReusableSnapshot(string fingerprint)
     {
-        using var command = Command("SELECT id FROM snapshots WHERE id = $id AND configuration_hash = $hash;",
+        using var command = Command("SELECT id FROM snapshots WHERE id = $id AND configuration_hash = $hash AND member_index_version = 1;",
             ("$id", _previousId), ("$hash", fingerprint));
         return command.ExecuteScalar() is long id ? id : null;
     }
@@ -129,10 +130,12 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     private SqliteCommand CreateSymbolInsert()
     {
         var command = Command("""
-            INSERT INTO symbols(snapshot_id, path, ordinal, language, kind, name, qualified_name, line, column_number)
-            VALUES ($snapshot, $path, $ordinal, $language, $kind, $name, $qualified, $line, $column);
+            INSERT INTO symbols(snapshot_id, path, ordinal, language, kind, name, qualified_name, line, column_number,
+                containing_type_line, containing_type_column)
+            VALUES ($snapshot, $path, $ordinal, $language, $kind, $name, $qualified, $line, $column, $parentLine, $parentColumn);
             """, ("$snapshot", _snapshotId), ("$path", ""), ("$ordinal", 0), ("$language", ""),
-            ("$kind", ""), ("$name", ""), ("$qualified", ""), ("$line", 1), ("$column", 1));
+            ("$kind", ""), ("$name", ""), ("$qualified", ""), ("$line", 1), ("$column", 1),
+            ("$parentLine", null), ("$parentColumn", null));
         command.Prepare();
         return command;
     }
@@ -144,6 +147,11 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
             throw new InvalidOperationException("An analyzer returned a symbol outside the file being indexed.");
         }
 
+        if (symbol.ContainingType is not null && symbol.ContainingType.RelativePath != path)
+        {
+            throw new InvalidOperationException("An analyzer returned a containing type outside the file being indexed.");
+        }
+
         _insertSymbol.Parameters["$path"].Value = path;
         _insertSymbol.Parameters["$ordinal"].Value = ordinal;
         _insertSymbol.Parameters["$language"].Value = symbol.Language;
@@ -152,6 +160,8 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _insertSymbol.Parameters["$qualified"].Value = symbol.QualifiedName;
         _insertSymbol.Parameters["$line"].Value = symbol.Location.Line;
         _insertSymbol.Parameters["$column"].Value = symbol.Location.Column;
+        _insertSymbol.Parameters["$parentLine"].Value = (object?)symbol.ContainingType?.Line ?? DBNull.Value;
+        _insertSymbol.Parameters["$parentColumn"].Value = (object?)symbol.ContainingType?.Column ?? DBNull.Value;
         _insertSymbol.ExecuteNonQuery();
     }
 

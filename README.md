@@ -123,10 +123,21 @@ Relative paths are resolved from the process working directory. In Rider, use
 
 The server uses **stdio** for MCP and sends logs to **stderr**.
 It exposes `get_server_info`, `inspect_source`, `get_repository_configuration`,
-`preview_repository_index`, `get_repository_index_status`, and `find_symbols`.
+`preview_repository_index`, `get_repository_index_status`, `find_symbols`, and `get_type_members`.
 `find_symbols` returns saved declaration locations by exact, case-sensitive simple name
 (20 results by default, at most 200). Run `index` again after source edits. MCP startup and
 queries do not rebuild the index; preview remains read-only.
+
+To ask for a class's methods, first locate its declaration with `find_symbols`, then call
+`get_type_members` with that declaration's relative path, line, column, snapshot ID and
+`kind: "method"`. Results include overloads as separate locations and support pagination.
+Only members declared directly in the selected type declaration are returned: inherited
+methods and other parts of a partial type are not merged. See the
+[member navigation example](docs/indexing.md#listing-a-classs-methods).
+
+After upgrading from the first index format, rerun `index` for each branch you need to
+query. It upgrades the cache in place and records containment from Roslyn syntax. Restart
+the MCP server afterward so clients can discover `get_type_members`.
 
 ### MCP client configuration
 

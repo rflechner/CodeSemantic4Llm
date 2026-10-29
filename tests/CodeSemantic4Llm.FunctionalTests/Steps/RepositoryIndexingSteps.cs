@@ -20,7 +20,7 @@ namespace CodeSemantic4Llm.FunctionalTests.Steps;
 
 /// <summary>Indexes real temporary Git checkouts through Roslyn and SQLite, including rollback and branch isolation.</summary>
 [Binding]
-public sealed class RepositoryIndexingSteps
+public sealed partial class RepositoryIndexingSteps
 {
     private const string DefaultYaml = "version: 1\nanalyzers: [dotnet-csharp]\nfileExtensions:\n  dotnet-csharp: [.cs, .csharp]\nexclude: [vendor/**]\n";
     private const string SourceMarker = "SOURCE_BODY_MUST_NEVER_BE_STORED_37eabc";
@@ -422,7 +422,8 @@ public sealed class RepositoryIndexingSteps
         {
             ["CODESEMANTIC4LLM_REPOSITORY_ROOT"] = _root
         }).Build();
-        return new RepositoryIndexTools(configuration, _stateProvider, Store, new FindSymbols(Store, _stateProvider));
+        return new RepositoryIndexTools(configuration, _stateProvider, Store,
+            new FindSymbols(Store, _stateProvider), new GetTypeMembers(Store, _stateProvider));
     }
 
     private void WriteSource(string path, string content)

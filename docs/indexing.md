@@ -25,7 +25,8 @@ after reading. The command does not run target builds, restore packages or execu
 
 Currently `dotnet-csharp` extracts syntax declarations using Roslyn. Stored results
 include the language, declaration kind, simple and qualified names, relative path and
-one-based line/column. These are declaration locations, not compiler-backed semantic
+one-based line/column. Each member also records the immediate containing type's source
+location, obtained from Roslyn's syntax tree. These are declaration locations, not compiler-backed semantic
 identities. References, cross-file resolution, AI descriptions and embeddings are not
 implemented. `semanticIndexing.language` is recorded for future generated text.
 
@@ -62,9 +63,15 @@ stored in SQLite, not interpolated into paths. Renaming or moving a checkout sel
 different cache identity. No YAML or source files are copied into the cache.
 
 The versioned schema stores only derived declarations and lookup/invalidation metadata.
-It is a regenerable cache, not a stable interchange format or a source backup. Unsupported
-schema versions fail without migration; select a fresh cache directory and rerun `index`.
-Deleting an unused cache directory is sufficient to discard its derived data.
+It is a regenerable cache, not a stable interchange format or a source backup. Schema 2
+adds explicit type membership. Running `index` upgrades a version-one cache transactionally
+and reanalyzes its selected branch; no old snapshot is deleted until publication succeeds.
+Other branches retain their declarations but need their own index run before member queries
+can work. An interrupted run after migration preserves the old declarations and leaves
+member navigation explicitly unavailable for that snapshot. MCP reads never migrate storage.
+
+Unsupported schema versions fail without changes; select a fresh cache directory and rerun
+`index`. Deleting an unused cache directory is sufficient to discard its derived data.
 
 ## Reindexing and publication
 
@@ -100,9 +107,51 @@ relative paths are resolved against the process working directory. See the
   It matches the exact, case-sensitive simple name and returns declaration metadata,
   snapshot identity and `hasMore`. Ordering is deterministic by path, line, column and
   declaration order. It does not return source text or perform substring/semantic search.
+- `get_type_members` lists direct members of one type declaration by its relative path,
+  line, column and snapshot ID from `find_symbols`. The optional `kind` filter selects
+  `method`, `constructor`, `property`, `field`, `event`, or another supported declaration
+  kind; omission returns all indexed direct members. Pages default to 50 results, with
+  a maximum of 200. Start with `offset: 0` and follow `nextOffset` until it is null.
+  `hasMore` reports whether a next page exists. A changed snapshot requires a new lookup,
+  preventing pagination across different index generations.
 
 A missing branch snapshot or a different HEAD produces an error asking the operator to
 run `index`. Queries do not rehash the working tree or reload YAML to establish freshness;
 rerun `index` after source/configuration changes, even if HEAD has not changed. Locations
 refer to the recorded snapshot and can become stale after edits. Existing preview tools
 remain bounded and read-only.
+
+## Listing a class's methods
+
+For a class called `Worker`, ask the model to find `Worker` and list its methods using
+CodeSemantic4Llm. The MCP calls are equivalent to:
+
+```json
+{"name": "Worker", "maxResults": 20}
+```
+
+Then call `get_type_members`, copying the selected class's `location` and the response's
+`snapshot.snapshotId` (the following numbers are illustrative):
+
+```json
+{
+  "relativePath": "src/Worker.cs",
+  "line": 4,
+  "column": 14,
+  "snapshotId": 2,
+  "kind": "method",
+  "maxResults": 50,
+  "offset": 0
+}
+```
+
+The result contains the selected type, its matching members, snapshot metadata and
+pagination information. Overloads remain distinct by source location. Methods of nested
+classes and inherited methods are excluded from the containing class's method list.
+Constructors use `kind: "constructor"`; compiler-generated members, operators and property
+accessors are not extracted as ordinary methods. Source bodies are never returned or stored.
+
+Selection uses the declaration's exact location, so homonymous or generic types are not
+merged by their textual names. Partial types are handled declaration by declaration: query
+each intended part returned by `find_symbols`. Resolving all parts within a compilation,
+inheritance and full method signatures requires future semantic analysis.
