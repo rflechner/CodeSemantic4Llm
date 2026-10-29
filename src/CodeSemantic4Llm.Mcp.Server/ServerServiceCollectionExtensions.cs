@@ -3,6 +3,7 @@ using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Configuration.Yaml;
 using CodeSemantic4Llm.Infrastructure.Workspace;
+using CodeSemantic4Llm.Persistence.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CodeSemantic4Llm.Mcp.Server;
@@ -14,11 +15,17 @@ internal static class ServerServiceCollectionExtensions
     {
         services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
         services.AddSingleton<IGitBranchProvider, GitBranchProvider>();
+        services.AddSingleton<IRepositoryStateProvider, GitRepositoryStateProvider>();
+        services.AddSingleton<IRepositorySourceReader, RepositorySourceReader>();
+        services.AddSingleton(_ => IndexStoragePaths.FromEnvironment());
+        services.AddSingleton<IIndexStore, SqliteIndexStore>();
         services.AddSingleton<IRepositoryConfigurationLoader, YamlRepositoryConfigurationLoader>();
         services.AddSingleton<IRepositoryConfigurationWriter, YamlRepositoryConfigurationWriter>();
         services.AddSingleton<IRepositoryFileEnumerator, FileSystemRepositoryFileEnumerator>();
         services.AddSingleton<AnalyzeSource>();
         services.AddSingleton<PreviewRepositoryIndex>();
         services.AddSingleton<InitializeRepositoryConfiguration>();
+        services.AddSingleton<IndexRepository>();
+        services.AddSingleton<FindSymbols>();
     }
 }

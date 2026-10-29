@@ -1,14 +1,12 @@
 using CodeSemantic4Llm.Application.Abstractions;
-using CodeSemantic4Llm.Domain.Repositories;
-using CodeSemantic4Llm.Domain.Symbols;
 
 namespace CodeSemantic4Llm.Application.UseCases;
 
 /// <summary>Queries the index through a bounded, repository- and branch-scoped use case.</summary>
-public sealed class FindSymbols(IIndexStore indexStore)
+public sealed class FindSymbols(IIndexStore indexStore, IRepositoryStateProvider stateProvider)
 {
-    public Task<IReadOnlyList<SymbolDefinition>> ExecuteAsync(
-        RepositoryScope scope,
+    public async Task<SymbolSearchResult> ExecuteAsync(
+        string repositoryRoot,
         string name,
         int maxResults = 20,
         CancellationToken cancellationToken = default)
@@ -21,6 +19,14 @@ public sealed class FindSymbols(IIndexStore indexStore)
             throw new ArgumentOutOfRangeException(nameof(maxResults), "Limit must not exceed 200.");
         }
 
-        return indexStore.FindSymbolsAsync(scope, name, maxResults, cancellationToken);
+        var state = await stateProvider.GetStateAsync(repositoryRoot, cancellationToken);
+        var result = indexStore.FindSymbols(state.Scope, name, maxResults, cancellationToken);
+
+        if (result.Snapshot.RecordedRevision != state.Revision)
+        {
+            throw new InvalidOperationException("HEAD has changed since this index was recorded. Run index again before searching.");
+        }
+
+        return result;
     }
 }

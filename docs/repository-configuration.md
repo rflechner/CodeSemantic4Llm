@@ -60,7 +60,7 @@ Invalid arguments, languages and analyzer selections leave the target unchanged.
 
 `init --help` and `init -h` show usage without accessing the repository. Exit codes are
 0 for success/help, 1 for invalid input, existing configuration or filesystem errors,
-and 130 for cancellation. Top-level `--help` lists `init`, `preview`, and `serve`.
+and 130 for cancellation. Top-level `--help` lists `init`, `preview`, `index`, and `serve`.
 Spectre.Console generates help from the command settings. Results and help use stdout;
 parsing, validation and operation errors use stderr. Unknown commands and options fail
 instead of starting the MCP server. `serve`, or an invocation without arguments, starts
@@ -157,11 +157,12 @@ Incorrect formats such as `english`, `fr_CH` or an empty value fail validation.
 The code is validated syntactically; actual language support will depend on the semantic
 generation model when that feature is implemented.
 
-**Current status:** the option is parsed, validated and included in configuration and
-preview responses. Natural-language descriptions, vector generation, and index invalidation
-on a language change are not yet implemented. When the semantic indexing pipeline is added,
-changing the configured language must invalidate and regenerate any derived text that depends
-on that language, without changing the original source-code analysis or copying source files.
+**Current status:** the option is parsed, validated and included in configuration, preview
+responses and persisted snapshots. Changing it invalidates reuse for the next `index` run
+through the configuration fingerprint. Natural-language descriptions and vectors are not
+generated yet. When implemented, language-dependent text must be regenerated without
+translating source code or copying source files. Separate invalidation for declarations and
+generated text can then avoid unnecessary parsing.
 
 ## Exclusion rules
 
@@ -249,6 +250,9 @@ using [Reqnroll](https://reqnroll.net/) and xUnit v3. The tests create temporary
 repositories, write YAML, create sample files, run the real loader and directory walker,
 and assert which files would be indexed. The routing scenarios also launch the built
 server and send an MCP initialization request to verify that stdout remains protocol-only.
-They do not require Git, an external MCP client or SQLite.
+Those preview scenarios do not require Git or SQLite. Persistent indexing scenarios in
+`tests/CodeSemantic4Llm.FunctionalTests/Features/RepositoryIndexing.feature` use real temporary
+Git checkouts and SQLite to verify full indexing, reuse, stale-record removal, rollback,
+branch isolation and saved-index queries. See [the indexing guide](indexing.md).
 
 Run all tests with `dotnet test CodeSemantic4Llm.slnx`.

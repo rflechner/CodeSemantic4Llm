@@ -3,8 +3,7 @@ using Microsoft.Data.Sqlite;
 namespace CodeSemantic4Llm.Persistence.Sqlite;
 
 /// <summary>
-/// Low-level SQLite connection boundary. The final branch/language-specific schema
-/// is intentionally not defined by this bootstrap.
+/// General-purpose SQLite connection boundary. Repository snapshot storage is managed by SqliteIndexStore.
 /// </summary>
 public sealed class SqliteConnectionFactory
 {

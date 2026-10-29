@@ -10,6 +10,6 @@ public static class ServerInformationTools
     [McpServerTool, Description("Returns the server name and the current implementation status.")]
     public static string GetServerInfo() =>
         "CodeSemantic4Llm: MCP stdio host available. " +
-        "Roslyn syntax declaration extraction is available internally. " +
-        "Persistent indexing, semantic references, branch-aware search and TypeScript/Angular parsing are not yet implemented.";
+        "The index command persists branch-scoped C# declaration snapshots for bounded MCP symbol search. " +
+        "Semantic references, generated descriptions and TypeScript/Angular parsing are not yet implemented.";
 }

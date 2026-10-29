@@ -12,6 +12,9 @@ public interface ISourceAnalyzer
     /// <summary>Source language identity, independent of the analyzer implementation ID.</summary>
     string LanguageId { get; }
 
+    /// <summary>Changes when the compiled adapter changes, invalidating reusable derived declarations.</summary>
+    string IndexVersion => GetType().Assembly.ManifestModule.ModuleVersionId.ToString("N");
+
     /// <summary>Default discovery extensions, replaceable per repository through YAML configuration.</summary>
     SourceFileExtensions DefaultFileExtensions { get; }
 

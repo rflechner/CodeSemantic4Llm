@@ -3,8 +3,9 @@
 **CodeSemantic4Llm** is an experimental, local-first MCP server for semantic code indexing.
 The goal is to let coding agents retrieve small, relevant slices of a repository instead of repeatedly loading large source files into the LLM context.
 
-> Status: modular MCP bootstrap with repository-local YAML configuration and a read-only
-> indexing preview. The persistent index pipeline and SQLite schema are not implemented yet.
+> Status: repository-local YAML configuration, full C# declaration indexing into SQLite,
+> and bounded MCP queries against saved branch snapshots. Analysis is syntax-based;
+> semantic references, AI-generated descriptions and TypeScript analysis remain planned.
 
 ## Architecture
 
@@ -15,11 +16,12 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 | `CodeSemantic4Llm.Analysis.CSharp` | Roslyn-based C# declaration extraction (syntax-level bootstrap) |
 | `CodeSemantic4Llm.Analysis.TypeScript` | Reserved adapter for Tree-sitter and TypeScript/Angular |
 | `CodeSemantic4Llm.Configuration.Yaml` | Creates, reads and validates configuration at the checkout root |
-| `CodeSemantic4Llm.Persistence.Sqlite` | SQLite connection boundary; schema to be designed by language |
+| `CodeSemantic4Llm.Persistence.Sqlite` | Versioned declaration snapshots, atomic publication and bounded queries |
 | `CodeSemantic4Llm.Infrastructure.Workspace` | Git and safe filesystem integration, exclusion glob matching |
 | `CodeSemantic4Llm.Mcp.Server` | Composition root, stdio transport and MCP tools |
 
 See [architecture decisions](docs/architecture.md) and the [repository YAML specification](docs/repository-configuration.md).
+See [indexing and querying a repository](docs/indexing.md) for cache configuration and snapshot behavior.
 The [planned index storage illustration](docs/architecture.md#planned-index-storage) shows
 repository-root YAML files, branch snapshots, and shared caches without source-file copies.
 
@@ -84,6 +86,25 @@ dotnet test CodeSemantic4Llm.slnx
 The new functional tests use **Reqnroll (successor to SpecFlow)** with xUnit v3.
 The `.feature` files are executable examples of the intended indexing behavior.
 
+## Index before starting MCP
+
+After creating the repository YAML, index every matching source file:
+
+```shell
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
+  index /absolute-or-relative/path/to/repository
+```
+
+The path must identify a Git checkout root on a named branch. Interactive terminals show
+Spectre progress for discovery, indexing, verification and publication. Redirected output
+contains a plain summary. Unlike preview, indexing has no file-count limit.
+
+Rerunning `index` reuses unchanged declarations and removes stale records after deletions
+or renames. Each branch keeps its own completed snapshot. Failures and cancellation preserve
+the previous snapshot. SQLite stores derived metadata only, outside the source checkout.
+Set `CODESEMANTIC4LLM_INDEX_ROOT` to an absolute cache directory to override the default
+`LocalApplicationData/CodeSemantic4Llm/indexes`; use the same setting when starting MCP.
+
 Start the MCP server (choose the checkout explicitly):
 
 ```shell
@@ -93,7 +114,10 @@ CODESEMANTIC4LLM_REPOSITORY_ROOT=/absolute/path/to/repository \
 
 The server uses **stdio** for MCP and sends logs to **stderr**.
 It exposes `get_server_info`, `inspect_source`, `get_repository_configuration`,
-and `preview_repository_index`. Preview tools **do not yet build or persist an index**.
+`preview_repository_index`, `get_repository_index_status`, and `find_symbols`.
+`find_symbols` returns saved declaration locations by exact, case-sensitive simple name
+(20 results by default, at most 200). Run `index` again after source edits. MCP startup and
+queries do not rebuild the index; preview remains read-only.
 
 ## Preview a local repository from Rider or a terminal
 
@@ -116,7 +140,7 @@ The preview uses the same discovery rules as MCP and exits after displaying its 
 The default limit is 50 and the maximum is 200; the output indicates when more files exist.
 It does not read source contents, execute the target repository, or persist an index.
 Running without a command starts the MCP server and waits for client requests.
-`--help` lists the `init`, `preview`, and `serve` commands. `serve` explicitly starts
+`--help` lists the `init`, `preview`, `index`, and `serve` commands. `serve` explicitly starts
 the same MCP server as an invocation without arguments.
 
 Console commands use Spectre.Console.Cli settings for argument parsing and generated
@@ -142,10 +166,10 @@ NuGet packages use **Central Package Management**:
 
 ## Planned milestones
 
-1. Define and test the branch-aware SQLite layout and index lifecycle.
-2. Implement atomic per-file updates, deletions/renames and incremental maintenance.
-3. Add Roslyn semantic models, references and stable symbol identities.
-4. Implement TypeScript/Angular analysis using a validated Tree-sitter integration.
-5. Connect repository YAML-driven file discovery to actual indexing and targeted search through MCP.
+1. Add Roslyn semantic models, references and stable symbol identities.
+2. Implement TypeScript/Angular analysis using a validated Tree-sitter integration.
+3. Add source excerpts validated against indexed content hashes and paginated navigation.
+4. Add dependency-aware invalidation and reuse across branches as semantic analysis expands.
+5. Generate semantic descriptions and embeddings with explicit model and language invalidation.
 
 Read [AGENTS.md](AGENTS.md) before making changes.

@@ -47,6 +47,10 @@ public static class CommandLineApplication
                 .WithDescription("Preview discovered source files without reading or indexing source content.")
                 .WithExample("preview", "./repository", "--max-files", "200");
 
+            configuration.AddCommand<RepositoryIndexCommand>("index")
+                .WithDescription("Index every configured source file into a persistent branch snapshot.")
+                .WithExample("index", "./repository");
+
             configuration.AddCommand<StartMcpServerCommand>("serve")
                 .WithDescription("Start the stdio MCP server (default when no command is supplied).");
         });

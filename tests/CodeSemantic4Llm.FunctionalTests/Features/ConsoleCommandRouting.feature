@@ -5,7 +5,7 @@ Feature: Route console commands without interfering with MCP
 
   Scenario Outline: Top-level help describes the console commands and default server mode
     When I request application help with "<option>"
-    Then application help lists init, preview and the default MCP server
+    Then application help lists init, preview, index and the default MCP server
 
     Examples:
       | option |

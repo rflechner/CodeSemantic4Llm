@@ -24,7 +24,7 @@ The application owns the ports. Adapters depend inward; the MCP executable is th
 ## Console commands and MCP transport
 
 `Program.cs` wires dependency injection, output streams and cancellation. Spectre.Console.Cli
-dispatches `init`, `preview` and `serve` to separate commands with declarative settings.
+dispatches `init`, `preview`, `index` and `serve` to separate commands with declarative settings.
 The default command starts the same stdio MCP server as `serve`. A small type registrar
 bridges Spectre to Microsoft dependency injection and disposes each run's service provider.
 Application use cases and adapters have no dependency on Spectre.
@@ -46,8 +46,9 @@ tests exercise the same CLI parser and verify the executable's MCP initializatio
 
 Every repository owns its root `codesemantic4llm.yaml`. The YAML adapter parses and
 validates it, and the application use case resolves the requested analyzer implementations.
-The workspace adapter recursively walks the checkout with effective glob exclusions. The first slice is
-a **read-only preview**, not a persistent indexer.
+The workspace adapter recursively walks the checkout with effective glob exclusions.
+Preview returns bounded candidate paths; indexing processes every selected file. Both use
+the same application-owned analyzer resolution and extension selection.
 
 The local `init` command creates default configuration through an application use case.
 The application checks all selected analyzers, using C# when no selection is supplied;
@@ -82,17 +83,51 @@ A repository index must be uniquely identified by a checkout and branch. A branc
 - Keep symbol/source identities and locations separate from the storage engine.
 - Retain a minimal cross-language query projection, while allowing distinct relational tables for C#, TypeScript, F#, and other supported languages.
 - Read and validate the current Git branch rather than silently assuming `main`.
-- Handle dirty working trees, branch switches, file renames and stale records explicitly when incremental indexing is implemented.
-- SQLite schema and index-generation lifecycle are **not frozen by this bootstrap**. The current SQLite adapter provides only a connection boundary.
+- Index working-tree content with file hashes and an observed HEAD revision, without claiming that the tree is clean.
+- Remove deleted/renamed records when publishing a replacement snapshot and reject detected branch changes during a run.
+- Keep SQLite schema versioned and regenerable; this first declaration schema does not freeze the future language-specific semantic model.
+
+## Implemented declaration snapshots
+
+`IndexRepository` coordinates Git state, YAML configuration, discovery, source reads,
+analysis, verification and publication through application-owned ports. `IIndexUpdate`
+owns one unpublished generation: disposing it without publication rolls back the update.
+`ISourceAnalyzer.IndexVersion` invalidates reused analysis when the compiled adapter changes.
+The current C# adapter parses syntax independently per file. Future semantic models must
+also include project/dependency state in invalidation before reusing results.
+
+The SQLite adapter maps a canonical Git checkout root to a SHA-256 directory under an
+operator-configurable central cache. One database holds a completed snapshot per named
+branch. Snapshot IDs and branch names are database data; no branch name becomes a path.
+Source text is read in place, one file at a time, and is never inserted into SQLite.
+Memory grows with discovered paths and file metadata, not the whole source tree.
+
+A single writer transaction builds the new snapshot. Unchanged files reuse derived rows
+from the same branch when hashes, adapter versions and configuration match. New or changed
+files are analyzed; absent paths never enter the replacement snapshot. Publication switches
+the branch pointer and deletes the old generation in the same transaction. WAL allows
+readers to keep seeing the previous complete snapshot during the write. Read queries use
+one transaction to keep snapshot metadata and declaration rows consistent.
+
+SQLite operations are synchronous because Microsoft.Data.Sqlite executes asynchronous ADO
+operations synchronously. Cancellation is checked between files, declarations and statements,
+and before commit. Source reads, Git operations and analyzer calls accept cancellation.
+The CLI adapts use-case progress to Spectre; completion is emitted only after commit.
+
+Before publication, files are rehashed, paths rediscovered, and Git/configuration reread.
+Detected changes abort the run. This is best-effort verification, not an atomic filesystem
+snapshot; concurrent editing can still race the final check. Queries expose recorded metadata
+and reject a changed HEAD, but do not scan source files to prove working-tree freshness.
+See [indexing behavior and limitations](indexing.md).
 
 ## Planned index storage
 
 ![Planned index storage: each original Git checkout has codesemantic4llm.yaml at its root; a separate central store holds one SQLite index per checkout, branch snapshots, and caches shared across branches, without source-file copies.](index-storage-architecture.png)
 
-The illustration describes the intended architecture, **not an implemented storage layout**.
-Directory names, database names, and snapshot numbers are illustrative; the cache root,
-physical layout, and SQLite schema remain to be defined. The current server provides
-repository configuration and a read-only preview, not persistent indexing.
+The illustration describes the broader intended architecture. One database per checkout
+and branch snapshots are implemented as described above. Directory labels in the image
+are illustrative; shared cross-branch caches, historical source lookup, descriptions and
+embeddings remain planned.
 
 - Each original checkout owns `codesemantic4llm.yaml` at its root, alongside `src/` and
   `.git/` in the example. The YAML belongs to the repository, never to the central cache.
@@ -120,9 +155,9 @@ The MCP host starts with the official .NET SDK and stdio transport.
 The C# parser extracts syntax-level declarations without executing project code.
 The YAML adapter reads project-specific exclusions and extension overrides; the application
 resolves enabled analyzers and their effective extensions during recursive filesystem discovery.
-No source code is persisted, and no repository indexing is advertised as implemented.
-
-Next, implement an index transaction boundary that can publish complete, consistent generations while processing files in bounded batches. Branches must never share index records implicitly.
+The `index` command persists all selected declarations and exposes them through bounded
+MCP queries, without executing project code or storing source contents. It does not yet
+resolve semantic references, load project compilations or generate natural-language text.
 
 ## Project dependency rules
 
@@ -133,7 +168,7 @@ Next, implement an index transaction boundary that can publish complete, consist
 5. `Persistence.Sqlite` owns SQL and schema migrations, not language parsing.
 6. `Infrastructure.Workspace` owns Git/process and filesystem integration.
 7. `Mcp.Server` owns transport, DTO shaping, logging configuration, and dependency injection.
-8. Tests target layers directly; Reqnroll scenarios verify YAML + file-discovery behavior without MCP/SQLite.
+8. Tests target layers directly; Reqnroll scenarios exercise YAML, discovery, commands, real temporary Git checkouts, SQLite snapshots and MCP query boundaries.
 
 ## Central Package Management
 

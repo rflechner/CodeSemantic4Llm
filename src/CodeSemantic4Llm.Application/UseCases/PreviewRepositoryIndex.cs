@@ -51,14 +51,14 @@ public sealed class PreviewRepositoryIndex(
 
         var root = Path.GetFullPath(repositoryRoot);
         var config = await configurationLoader.LoadAsync(root, cancellationToken);
-        var selectedAnalyzers = ResolveAnalyzers(config);
+        var selectedAnalyzers = new ConfiguredSourceAnalyzers(config, _analyzers);
         var selected = new List<IndexingCandidate>();
 
         foreach (var path in fileEnumerator.EnumerateFiles(root, config.Exclusions, cancellationToken))
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var analyzer = selectedAnalyzers.FirstOrDefault(item => item.FileExtensions.Matches(path));
+            var analyzer = selectedAnalyzers.Select(path);
 
             if (analyzer is null)
             {
@@ -80,38 +80,11 @@ public sealed class PreviewRepositoryIndex(
             RepositoryIndexingConfiguration.FileName,
             config.AnalyzerIds,
             new ReadOnlyDictionary<string, SourceFileExtensions>(
-                selectedAnalyzers.ToDictionary(analyzer => analyzer.AnalyzerId, analyzer => analyzer.FileExtensions)),
+                selectedAnalyzers.Entries.ToDictionary(analyzer => analyzer.AnalyzerId, analyzer => analyzer.FileExtensions)),
             config.Exclusions,
             config.SemanticIndexing.Language,
             selected.AsReadOnly(),
             hasMore);
     }
 
-    private IReadOnlyList<ConfiguredAnalyzer> ResolveAnalyzers(RepositoryIndexingConfiguration config)
-    {
-        var selected = new List<ConfiguredAnalyzer>();
-
-        foreach (var id in config.AnalyzerIds)
-        {
-            var analyzer = _analyzers.FirstOrDefault(candidate =>
-                string.Equals(candidate.AnalyzerId, id, StringComparison.OrdinalIgnoreCase));
-
-            if (analyzer is null)
-            {
-                var available = string.Join(", ", _analyzers.Select(a => a.AnalyzerId).OrderBy(s => s));
-                throw new RepositoryConfigurationException(
-                    $"Analyzer '{id}' is not installed or implemented. Available analyzers: {available}.");
-            }
-
-            var extensions = config.FileExtensions.TryGetValue(id, out var configuredExtensions)
-                ? configuredExtensions
-                : analyzer.DefaultFileExtensions;
-
-            selected.Add(new ConfiguredAnalyzer(id, extensions));
-        }
-
-        return selected;
-    }
-
-    private sealed record ConfiguredAnalyzer(string AnalyzerId, SourceFileExtensions FileExtensions);
 }

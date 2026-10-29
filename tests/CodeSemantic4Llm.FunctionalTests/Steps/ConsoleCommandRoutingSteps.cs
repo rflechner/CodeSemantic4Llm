@@ -22,7 +22,7 @@ public sealed class ConsoleCommandRoutingSteps
             [argument], new ServiceCollection(), TestContext.Current.CancellationToken);
     }
 
-    [Then("application help lists init, preview and the default MCP server")]
+    [Then("application help lists init, preview, index and the default MCP server")]
     public void ThenApplicationHelpListsCommands()
     {
         Assert.NotNull(_result);
@@ -30,6 +30,7 @@ public sealed class ConsoleCommandRoutingSteps
         Assert.Empty(_result.Error);
         Assert.Contains("init", _result.Output);
         Assert.Contains("preview", _result.Output);
+        Assert.Contains("index", _result.Output);
         Assert.Contains("stdio MCP server", _result.Output);
     }
 

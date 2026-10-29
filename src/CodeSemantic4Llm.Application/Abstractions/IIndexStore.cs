@@ -9,16 +9,22 @@ namespace CodeSemantic4Llm.Application.Abstractions;
 /// </summary>
 public interface IIndexStore
 {
-    Task ReplaceFileAsync(
-        RepositoryScope scope,
-        string relativePath,
-        string contentHash,
-        IReadOnlyList<SymbolDefinition> symbols,
+    /// <summary>Starts an isolated generation. Configuration changes prevent reuse from the previous generation.</summary>
+    IIndexUpdate BeginUpdate(
+        RepositoryState state, string configurationFingerprint, string semanticLanguage,
         CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<SymbolDefinition>> FindSymbolsAsync(
+    /// <summary>Returns published metadata only; a missing index is never created by a read.</summary>
+    RepositoryIndexSnapshot? GetSnapshot(RepositoryScope scope, CancellationToken cancellationToken = default);
+
+    /// <summary>Queries a single published snapshot, in deterministic location order.</summary>
+    SymbolSearchResult FindSymbols(
         RepositoryScope scope,
         string name,
         int maxResults,
         CancellationToken cancellationToken = default);
 }
+
+/// <summary>A bounded declaration search with the identity of the saved snapshot and truncation information.</summary>
+public sealed record SymbolSearchResult(
+    RepositoryIndexSnapshot Snapshot, IReadOnlyList<SymbolDefinition> Symbols, bool HasMore);
