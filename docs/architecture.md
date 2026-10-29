@@ -28,6 +28,16 @@ validates it, and the application use case resolves the requested analyzer imple
 The workspace adapter recursively walks the checkout with effective glob exclusions. The first slice is
 a **read-only preview**, not a persistent indexer.
 
+The local `init` command creates default configuration through an application use case.
+The application checks all selected analyzers, using C# when no selection is supplied;
+the domain normalizes analyzer IDs and validates the semantic description language.
+Repeated CLI selections replace the default while preserving analyzer priority.
+`Configuration.Yaml` owns serialization and creates the
+file in the explicitly selected directory without replacing an existing entry. A temporary
+file in that directory is moved into place only after writing completes, so a failed or
+canceled initialization does not expose partial YAML. This write operation is local CLI
+functionality; MCP preview tools remain read-only.
+
 Each language adapter owns its default file extensions (`.cs` for C#). The domain models
 validated, immutable extension selections, and the YAML adapter maps optional per-analyzer
 overrides. The application checks analyzer availability, resolves overrides against defaults,
@@ -98,7 +108,7 @@ Next, implement an index transaction boundary that can publish complete, consist
 1. `Domain` references nothing in this solution.
 2. `Application` may reference `Domain`, never a concrete adapter.
 3. Each parser stays in its own assembly and implements application-owned contracts.
-4. `Configuration.Yaml` owns deserialization and schema validation; it has no knowledge of SQLite.
+4. `Configuration.Yaml` owns serialization, deserialization and schema validation; it has no knowledge of SQLite.
 5. `Persistence.Sqlite` owns SQL and schema migrations, not language parsing.
 6. `Infrastructure.Workspace` owns Git/process and filesystem integration.
 7. `Mcp.Server` owns transport, DTO shaping, logging configuration, and dependency injection.

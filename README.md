@@ -14,7 +14,7 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 | `CodeSemantic4Llm.Application` | Use cases and ports (analysis, configuration, discovery, index storage) |
 | `CodeSemantic4Llm.Analysis.CSharp` | Roslyn-based C# declaration extraction (syntax-level bootstrap) |
 | `CodeSemantic4Llm.Analysis.TypeScript` | Reserved adapter for Tree-sitter and TypeScript/Angular |
-| `CodeSemantic4Llm.Configuration.Yaml` | Reads and validates configuration from the checkout root |
+| `CodeSemantic4Llm.Configuration.Yaml` | Creates, reads and validates configuration at the checkout root |
 | `CodeSemantic4Llm.Persistence.Sqlite` | SQLite connection boundary; schema to be designed by language |
 | `CodeSemantic4Llm.Infrastructure.Workspace` | Git and safe filesystem integration, exclusion glob matching |
 | `CodeSemantic4Llm.Mcp.Server` | Composition root, stdio transport and MCP tools |
@@ -25,7 +25,25 @@ repository-root YAML files, branch snapshots, and shared caches without source-f
 
 ## Configure each repository
 
-Create `codesemantic4llm.yaml` at the root of **each repository**:
+Create `codesemantic4llm.yaml` at the root of **each repository** with the console command:
+
+```shell
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
+  init /absolute-or-relative/path/to/repository --analyzer dotnet-csharp --lang fr
+```
+
+The target directory must already exist. Relative paths are resolved from the process's
+working directory; quote paths containing spaces. Omit `--lang` to use English (`en`).
+Use `--analyzer <id>` once per analyzer to select the YAML's `analyzers` list. The options
+may appear in any order after the path. Omit `--analyzer` to select `dotnet-csharp`.
+IDs are trimmed, lowercased and deduplicated in first occurrence order. All selected
+analyzers must be installed; currently only `dotnet-csharp` is available.
+Each analyzer retains its default extensions, and the command adds no custom exclusions.
+Existing configuration files are preserved and reported as an error.
+Use `init --help` for usage. In Rider, use `init /path/to/repository --lang fr` as the
+program arguments for `CodeSemantic4Llm.Mcp.Server`.
+
+You can also create or edit the configuration manually:
 
 ```yaml
 version: 1
@@ -36,8 +54,7 @@ analyzers:
 #   dotnet-csharp: [.cs, .csharp]
 semanticIndexing:
   language: en   # Optional: use fr, fr-CH, etc.
-exclude:
-  - submodules/**
+exclude: []
 ```
 
 `**/.git/**`, `**/bin/**`, and `**/obj/**` are always excluded.
@@ -97,7 +114,8 @@ See [Rider's run configuration documentation](https://www.jetbrains.com/help/rid
 The preview uses the same discovery rules as MCP and exits after displaying its result.
 The default limit is 50 and the maximum is 200; the output indicates when more files exist.
 It does not read source contents, execute the target repository, or persist an index.
-Running without the `preview` command starts the MCP server and waits for client requests.
+Running without a command starts the MCP server and waits for client requests.
+`--help` lists the `init` and `preview` commands.
 
 ## Dependencies
 

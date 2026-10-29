@@ -6,6 +6,61 @@ The YAML file does not belong in the central index cache. See the
 [planned index storage illustration](architecture.md#planned-index-storage) for the separation
 between original checkouts, branch snapshots, and shared derived-data caches.
 
+## Create the default configuration
+
+From the CodeSemantic4Llm checkout, run:
+
+```sh
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
+  init /absolute-or-relative/path/to/repository --analyzer dotnet-csharp --lang fr-CH
+```
+
+`init <repository-path> [--lang <language-tag>] [--analyzer <analyzer-id>]...`
+creates `codesemantic4llm.yaml` directly in the specified existing directory.
+Absolute paths and paths relative to the process's
+working directory are accepted, including `.` and `..`; quote paths containing spaces.
+The command does not create missing directories or require Git metadata, and does not
+start an MCP session, discover source files, or build an index.
+
+When both options are omitted, the generated defaults are:
+
+```yaml
+version: 1
+analyzers:
+  - dotnet-csharp
+semanticIndexing:
+  language: en
+exclude: []
+```
+
+`--lang` selects `semanticIndexing.language`, using the same validation and case
+normalization as the YAML loader (for example, `FR-ch` becomes `fr-CH`). Its default
+is `en`.
+
+Repeat `--analyzer <analyzer-id>` to select multiple analyzers. An explicit selection
+replaces the default `dotnet-csharp` selection. IDs are trimmed, lowercased and
+deduplicated, retaining the order of their first occurrence. Every selected analyzer
+must be available before any configuration is written; unknown or unimplemented IDs
+fail with the available analyzer list. Currently only `dotnet-csharp` is installed;
+`typescript` remains planned and cannot be selected yet.
+
+Options may appear in any order after the repository path, including `--lang` between
+two `--analyzer` options. Each occurrence requires one value; only `--analyzer` is
+repeatable. Empty analyzer IDs, missing values, unknown options and duplicate `--lang`
+options fail without creating a file.
+
+Each analyzer retains its default extensions because no `fileExtensions` override is
+written (`.cs` for C#). Only built-in exclusions apply; submodules remain included.
+
+Initialization never replaces an existing configuration, including a symbolic link or
+directory at that path. It writes a temporary file in the target directory and publishes
+the complete YAML without replacement, cleaning up on failure or cancellation.
+Invalid arguments, languages and analyzer selections leave the target unchanged.
+
+`init --help` and `init -h` show usage without accessing the repository. Exit codes are
+0 for success/help, 1 for invalid input, existing configuration or filesystem errors,
+and 130 for cancellation. Top-level `--help` lists both console commands.
+
 ## Example
 
 ```yaml
@@ -182,7 +237,8 @@ use repository YAML settings.
 Functional behavior is described in
 `tests/CodeSemantic4Llm.FunctionalTests/Features/RepositoryConfiguration.feature` and
 `tests/CodeSemantic4Llm.FunctionalTests/Features/RecursiveFileDiscovery.feature`, with console
-behavior in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryPreview.feature`,
+behavior in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryPreview.feature`
+and `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryInitialization.feature`,
 using [Reqnroll](https://reqnroll.net/) and xUnit v3. The tests create temporary
 repositories, write YAML, create sample files, run the real loader and directory walker,
 and assert which files would be indexed. They do not require Git, MCP clients or SQLite.

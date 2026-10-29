@@ -9,10 +9,11 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
-if (args.FirstOrDefault() is "preview" or "--help" or "-h")
+if (args.FirstOrDefault() is "init" or "preview" or "--help" or "-h")
 {
     var services = new ServiceCollection();
     AddApplicationServices(services);
+    services.AddSingleton<RepositoryInitCommand>();
     services.AddSingleton<RepositoryPreviewCommand>();
 
     using var provider = services.BuildServiceProvider();
@@ -23,9 +24,21 @@ if (args.FirstOrDefault() is "preview" or "--help" or "-h")
         cancellation.Cancel();
     };
 
+    if (args[0] == "init")
+    {
+        var init = provider.GetRequiredService<RepositoryInitCommand>();
+        return await init.ExecuteAsync(args[1..], Console.Out, Console.Error, cancellation.Token);
+    }
+
+    if (args[0] is "--help" or "-h")
+    {
+        var init = provider.GetRequiredService<RepositoryInitCommand>();
+        await init.ExecuteAsync(["--help"], Console.Out, Console.Error, cancellation.Token);
+        await Console.Out.WriteLineAsync("Run without a command to start the stdio MCP server.");
+    }
+
     var command = provider.GetRequiredService<RepositoryPreviewCommand>();
     var commandArguments = args[0] == "preview" ? args[1..] : ["--help"];
-
     return await command.ExecuteAsync(commandArguments, Console.Out, Console.Error, cancellation.Token);
 }
 
@@ -48,7 +61,9 @@ static void AddApplicationServices(IServiceCollection services)
     services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
     services.AddSingleton<IGitBranchProvider, GitBranchProvider>();
     services.AddSingleton<IRepositoryConfigurationLoader, YamlRepositoryConfigurationLoader>();
+    services.AddSingleton<IRepositoryConfigurationWriter, YamlRepositoryConfigurationWriter>();
     services.AddSingleton<IRepositoryFileEnumerator, FileSystemRepositoryFileEnumerator>();
     services.AddSingleton<AnalyzeSource>();
     services.AddSingleton<PreviewRepositoryIndex>();
+    services.AddSingleton<InitializeRepositoryConfiguration>();
 }
