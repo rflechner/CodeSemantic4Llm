@@ -5,6 +5,11 @@ version: 1
 analyzers:
   - dotnet-csharp
 
+# Language for future AI-generated semantic summaries (independent of source language).
+# Optional: defaults to en when omitted. Examples: fr, fr-CH.
+semanticIndexing:
+  language: en
+
 # User-defined excludes extend the built-in defaults for **/.git/**, **/bin/** and **/obj/**.
 # Git submodules are NOT automatically excluded; opt out by path as needed.
 exclude:

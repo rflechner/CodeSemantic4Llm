@@ -83,6 +83,9 @@ Treat project specifications and accepted design decisions as authoritative when
 - Each checkout must provide `codesemantic4llm.yaml` at its root (see `docs/repository-configuration.md`).
 - Keep YAML parsing and schema mapping in `Configuration.Yaml`; keep analyzer selection in application use cases.
 - Use stable analyzer IDs and explicit availability checks; never silently ignore an unknown or unimplemented analyzer.
+- Keep `semanticIndexing.language` separate from analyzer IDs and source language; default to English when unspecified.
+- Treat this setting as the requested language of future generated natural-language index text, not as a translation request for source code.
+- When semantic text generation exists, changes to the language must invalidate affected derived descriptions without requiring source-file copies.
 - Respect both built-in and user-defined glob exclusions when discovering source files.
 - Skip symlinked directories and do not read beyond the operator-configured repository boundary.
 - Git submodules are included unless the repository's YAML excludes their paths.
@@ -93,7 +96,7 @@ Treat project specifications and accepted design decisions as authoritative when
 - Keep fast, focused unit tests for domain invariants and parsing details.
 - For repository-level behavior, prefer readable **Reqnroll / Gherkin** scenarios in `tests/CodeSemantic4Llm.FunctionalTests`, backed by real C# step definitions and xUnit v3.
 - A feature file should read like an executable specification (Given / When / Then), not an implementation transcript.
-- Test both successful configuration and important failure cases such as missing YAML, unsupported analyzers, and excluded directories.
+- Test both successful configuration and important failure cases such as missing YAML, unsupported analyzers, invalid semantic language tags, default English, and excluded directories.
 - Run the complete test suite before finalizing changes; all direct NuGet versions must stay in Central Package Management.
 
 ## Make MCP responses precise and economical

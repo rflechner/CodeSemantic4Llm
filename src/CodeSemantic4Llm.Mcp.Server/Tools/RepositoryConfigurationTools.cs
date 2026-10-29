@@ -17,14 +17,14 @@ public sealed class RepositoryConfigurationTools(
     IRepositoryConfigurationLoader configurationLoader,
     PreviewRepositoryIndex previewRepositoryIndex)
 {
-    [McpServerTool, Description("Reads the repository root's YAML configuration, including default path exclusions.")]
+    [McpServerTool, Description("Reads repository YAML settings, including default exclusions and the natural-language semantic indexing language.")]
     public Task<RepositoryIndexingConfiguration> GetRepositoryConfigurationAsync(
         CancellationToken cancellationToken = default)
     {
         return configurationLoader.LoadAsync(GetConfiguredRepositoryRoot(), cancellationToken);
     }
 
-    [McpServerTool, Description("Previews which source paths and analyzers are selected by the repository YAML; does not index files.")]
+    [McpServerTool, Description("Previews source paths, analyzers and the configured semantic description language; does not index files.")]
     public Task<RepositoryIndexingPreview> PreviewRepositoryIndexAsync(
         [Description("Number of candidate files to return (1 to 200).")] int maxFiles = 50,
         CancellationToken cancellationToken = default)

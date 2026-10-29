@@ -66,7 +66,11 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
                     $"Configuration '{configurationPath}' must declare at least one analyzer.");
             }
 
-            return new RepositoryIndexingConfiguration(document.Analyzers, document.Exclude);
+            var semanticIndexing = document.SemanticIndexing is null
+                ? new SemanticIndexingConfiguration()
+                : new SemanticIndexingConfiguration(document.SemanticIndexing.Language);
+
+            return new RepositoryIndexingConfiguration(document.Analyzers, document.Exclude, semanticIndexing);
         }
         catch (YamlException exception)
         {
@@ -87,5 +91,12 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         public List<string>? Analyzers { get; set; }
 
         public List<string>? Exclude { get; set; }
+
+        public SemanticIndexingYamlDocument? SemanticIndexing { get; set; }
+    }
+
+    private sealed class SemanticIndexingYamlDocument
+    {
+        public string? Language { get; set; } = SemanticIndexingConfiguration.DefaultLanguage;
     }
 }
