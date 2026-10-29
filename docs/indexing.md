@@ -53,8 +53,7 @@ override it. Use the same cache setting for `index` and the MCP server, for exam
 ```sh
 export CODESEMANTIC4LLM_INDEX_ROOT=/absolute/path/to/index-cache
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- index /path/to/repository
-CODESEMANTIC4LLM_REPOSITORY_ROOT=/path/to/repository \
-  dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- serve
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- serve /path/to/repository
 ```
 
 Each checkout has its own database, including separate Git worktrees. Each named branch
@@ -89,8 +88,11 @@ prove that working-tree content matches that commit or remains unchanged afterwa
 
 ## Querying through MCP
 
-MCP startup never indexes automatically. It reads the operator-selected checkout from
-`CODESEMANTIC4LLM_REPOSITORY_ROOT` and uses the same cache path as the CLI.
+MCP startup never indexes automatically. It selects the checkout from `serve [repository-path]`,
+falling back to `CODESEMANTIC4LLM_REPOSITORY_ROOT` when the argument is omitted, and uses the
+same cache path as the CLI. The argument accepts an existing absolute or relative directory;
+relative paths are resolved against the process working directory. See the
+[MCP client configuration example](../README.md#mcp-client-configuration).
 
 - `get_repository_index_status` returns observed Git state and the last saved snapshot
   for that branch, or `null` when no snapshot exists. Reading status does not create a cache.

@@ -25,6 +25,12 @@ public sealed class RepositoryPreviewCommand(
     private void WritePreview(RepositoryIndexingPreview preview)
     {
         console.WriteLine($"Repository: {preview.RepositoryRoot}");
+
+        if (preview.ProjectName is not null)
+        {
+            console.WriteLine($"Project: {preview.ProjectName}");
+        }
+
         console.WriteLine("Read-only discovery preview; no source content is read or indexed.");
         console.WriteLine($"Semantic description language: {preview.SemanticIndexingLanguage}");
 

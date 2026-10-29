@@ -166,6 +166,10 @@ public sealed class RepositoryIndexingSteps
     public void WhenLanguageChanges(string language) =>
         File.WriteAllText(Path.Combine(_root, "codesemantic4llm.yaml"), DefaultYaml + $"semanticIndexing: {{language: {language}}}\n");
 
+    [When("the indexing project name changes to \"(.*)\"")]
+    public void WhenProjectNameChanges(string name) =>
+        File.AppendAllText(Path.Combine(_root, "codesemantic4llm.yaml"), $"projectName: {name}\n");
+
     [Given("persistent indexing configuration is \"(.*)\"")]
     public void GivenInvalidConfiguration(string problem)
     {

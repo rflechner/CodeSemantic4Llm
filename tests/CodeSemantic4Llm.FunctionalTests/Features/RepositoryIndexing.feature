@@ -123,6 +123,14 @@ Feature: Persist a repository index before starting MCP
     Then the index command succeeds with 0 indexed files
     And a new store reads a published snapshot with 0 files
 
+  Scenario: Changing the project display name preserves reusable declarations
+    Given the indexing checkout contains 2 C# files
+    And the checkout has a completed index
+    When the indexing project name changes to "Renamed Project"
+    And I index the checkout again
+    Then the run analyzes 0 files and reuses 2 files
+    And only one snapshot remains for the indexed branch
+
   Scenario Outline: Invalid configuration fails before cache creation
     Given persistent indexing configuration is "<problem>"
     When I attempt to index the checkout

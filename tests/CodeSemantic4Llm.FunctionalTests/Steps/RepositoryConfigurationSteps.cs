@@ -184,6 +184,14 @@ public sealed class RepositoryConfigurationSteps
         Assert.Equal(expected, _preview.SemanticIndexingLanguage);
     }
 
+    [Then("the project name is \"(.*)\"")]
+    public void ThenProjectName(string expected)
+    {
+        Assert.Null(_error);
+        Assert.NotNull(_preview);
+        Assert.Equal(expected, _preview.ProjectName);
+    }
+
     [Then("the preview fails with an error containing \"(.*)\"")]
     public void ThenPreviewFailsWithErrorContaining(string expected)
     {

@@ -21,7 +21,8 @@ public sealed class RepositoryIndexingConfiguration
         IEnumerable<string> analyzerIds,
         IEnumerable<string>? exclusions = null,
         SemanticIndexingConfiguration? semanticIndexing = null,
-        IReadOnlyDictionary<string, SourceFileExtensions>? fileExtensions = null)
+        IReadOnlyDictionary<string, SourceFileExtensions>? fileExtensions = null,
+        string? projectName = null)
     {
         ArgumentNullException.ThrowIfNull(analyzerIds);
 
@@ -45,9 +46,13 @@ public sealed class RepositoryIndexingConfiguration
 
         SemanticIndexing = semanticIndexing ?? new SemanticIndexingConfiguration();
         FileExtensions = NormalizeFileExtensions(fileExtensions);
+        ProjectName = NormalizeProjectName(projectName);
     }
 
     public int Version => CurrentVersion;
+
+    /// <summary>Optional display name. Repository identity and index storage remain based on the checkout path.</summary>
+    public string? ProjectName { get; }
 
     /// <summary>Canonical, ordered IDs such as dotnet-csharp.</summary>
     public IReadOnlyList<string> AnalyzerIds { get; }
@@ -63,6 +68,26 @@ public sealed class RepositoryIndexingConfiguration
     /// defaults; omitted analyzers retain the defaults supplied by their adapter.
     /// </summary>
     public IReadOnlyDictionary<string, SourceFileExtensions> FileExtensions { get; }
+
+    private static string? NormalizeProjectName(string? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            throw new ArgumentException("Project name cannot be empty.", nameof(value));
+        }
+
+        if (value.Any(character => char.IsControl(character) || character is '\u2028' or '\u2029'))
+        {
+            throw new ArgumentException("Project name cannot contain control characters or line breaks.", nameof(value));
+        }
+
+        return value.Trim();
+    }
 
     private IReadOnlyDictionary<string, SourceFileExtensions> NormalizeFileExtensions(
         IReadOnlyDictionary<string, SourceFileExtensions>? overrides)

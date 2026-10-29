@@ -26,7 +26,7 @@ public sealed class RepositoryIndexTools(
         findSymbols.ExecuteAsync(GetRepositoryRoot(), name, maxResults, cancellationToken);
 
     private string GetRepositoryRoot() => configuration["CODESEMANTIC4LLM_REPOSITORY_ROOT"]
-        ?? throw new InvalidOperationException("Set CODESEMANTIC4LLM_REPOSITORY_ROOT before querying repository indexes.");
+        ?? throw new InvalidOperationException("Pass the repository path to serve or set CODESEMANTIC4LLM_REPOSITORY_ROOT before querying repository indexes.");
 }
 
 /// <summary>Snapshot metadata alongside observed Git state; neither implies that source files remain unchanged.</summary>

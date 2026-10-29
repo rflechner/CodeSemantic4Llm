@@ -129,6 +129,26 @@ public sealed class RepositoryInitializationSteps
         Assert.Equal(language, configuration.SemanticIndexing.Language);
     }
 
+    [Then("the generated configuration names the project \"(.*)\"")]
+    public async Task ThenGeneratedProjectName(string name)
+    {
+        var configuration = await new YamlRepositoryConfigurationLoader().LoadAsync(
+            RepositoryRoot, TestContext.Current.CancellationToken);
+
+        Assert.Equal(name, configuration.ProjectName);
+        Assert.Contains("projectName:", await File.ReadAllTextAsync(ConfigurationPath, TestContext.Current.CancellationToken));
+    }
+
+    [Then("the generated configuration has no project name")]
+    public async Task ThenGeneratedProjectNameIsOmitted()
+    {
+        var configuration = await new YamlRepositoryConfigurationLoader().LoadAsync(
+            RepositoryRoot, TestContext.Current.CancellationToken);
+
+        Assert.Null(configuration.ProjectName);
+        Assert.DoesNotContain("projectName:", await File.ReadAllTextAsync(ConfigurationPath, TestContext.Current.CancellationToken));
+    }
+
     [Then("the initialized repository can be previewed with built-in exclusions")]
     public async Task ThenInitializedRepositoryCanBePreviewed()
     {
@@ -195,6 +215,7 @@ public sealed class RepositoryInitializationSteps
         Assert.Contains("repeat for multiple analyzers", _output);
         Assert.Contains("default: dotnet-csharp", _output);
         Assert.Contains("--lang", _output);
+        Assert.Contains("--name", _output);
         Assert.Contains("en", _output);
     }
 

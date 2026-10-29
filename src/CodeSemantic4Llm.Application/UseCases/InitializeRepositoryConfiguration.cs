@@ -4,7 +4,7 @@ using CodeSemantic4Llm.Domain.Configuration;
 
 namespace CodeSemantic4Llm.Application.UseCases;
 
-/// <summary>Creates configuration for the selected analyzers and language for future semantic descriptions.</summary>
+/// <summary>Creates configuration with an optional project name, selected analyzers and semantic description language.</summary>
 public sealed class InitializeRepositoryConfiguration(
     IRepositoryConfigurationWriter configurationWriter,
     IEnumerable<ISourceAnalyzer> analyzers)
@@ -18,11 +18,13 @@ public sealed class InitializeRepositoryConfiguration(
     /// Defaults to English and C# when no analyzer selection is supplied. Explicit selections
     /// replace that default, preserve first occurrence order, and must all be available.
     /// Analyzer extensions retain their defaults, without adding user exclusions.
+    /// The optional project name is a display label and does not determine index storage paths.
     /// </summary>
     public Task<string> ExecuteAsync(
         string repositoryRoot,
         string language = SemanticIndexingConfiguration.DefaultLanguage,
         IEnumerable<string>? analyzerIds = null,
+        string? projectName = null,
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -30,7 +32,7 @@ public sealed class InitializeRepositoryConfiguration(
 
         var semanticIndexing = new SemanticIndexingConfiguration(language);
         var configuration = new RepositoryIndexingConfiguration(
-            analyzerIds ?? [DefaultAnalyzerId], semanticIndexing: semanticIndexing);
+            analyzerIds ?? [DefaultAnalyzerId], semanticIndexing: semanticIndexing, projectName: projectName);
 
         ValidateAnalyzerAvailability(configuration.AnalyzerIds);
 

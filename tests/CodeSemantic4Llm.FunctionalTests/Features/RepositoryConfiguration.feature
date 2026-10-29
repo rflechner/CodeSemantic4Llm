@@ -3,6 +3,58 @@ Feature: Per-repository YAML indexing configuration
   I want the checkout to declare its analyzers and excluded paths
   So that the semantic index only considers the source I have selected
 
+  Scenario: A project display name is normalized and exposed by preview
+    Given the repository configuration is:
+      """
+      version: 1
+      projectName: "  Équipe: Paiements #1 [API]  "
+      analyzers: [dotnet-csharp]
+      """
+    When I preview source indexing
+    Then the project name is "Équipe: Paiements #1 [API]"
+    When I preview source indexing from the console
+    Then the console preview succeeds
+    And the console output contains "Project: Équipe: Paiements #1 [API]"
+
+  Scenario Outline: Invalid project display names fail explicitly
+    Given the repository configuration is:
+      """
+      version: 1
+      projectName: <name>
+      analyzers: [dotnet-csharp]
+      """
+    When I preview source indexing
+    Then the preview fails with an error containing "<error>"
+
+    Examples:
+      | name               | error                    |
+      | ""                 | name cannot be empty     |
+      | "   "              | name cannot be empty     |
+      | [First, Second]    | Invalid YAML             |
+
+  Scenario: A multiline project name is rejected
+    Given the repository configuration is:
+      """
+      version: 1
+      projectName: |
+        First line
+        Second line
+      analyzers: [dotnet-csharp]
+      """
+    When I preview source indexing
+    Then the preview fails with an error containing "control characters"
+
+  Scenario: Duplicate project name keys are rejected
+    Given the repository configuration is:
+      """
+      version: 1
+      projectName: First
+      projectName: Second
+      analyzers: [dotnet-csharp]
+      """
+    When I preview source indexing
+    Then the preview fails with an error containing "Invalid YAML"
+
   Scenario: Default build folders and an explicitly excluded submodule are never indexed
     Given the repository configuration is:
       """

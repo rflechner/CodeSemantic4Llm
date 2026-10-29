@@ -17,7 +17,7 @@ public sealed class RepositoryConfigurationTools(
     IRepositoryConfigurationLoader configurationLoader,
     PreviewRepositoryIndex previewRepositoryIndex)
 {
-    [McpServerTool, Description("Reads repository YAML settings, including extension overrides, default exclusions and the semantic indexing language.")]
+    [McpServerTool, Description("Reads repository YAML settings, including the optional project name, extension overrides, default exclusions and the semantic indexing language.")]
     public Task<RepositoryIndexingConfiguration> GetRepositoryConfigurationAsync(
         CancellationToken cancellationToken = default)
     {
@@ -40,7 +40,7 @@ public sealed class RepositoryConfigurationTools(
         if (string.IsNullOrWhiteSpace(root))
         {
             throw new InvalidOperationException(
-                "Set CODESEMANTIC4LLM_REPOSITORY_ROOT to the checkout's absolute path " +
+                "Pass the repository path to serve or set CODESEMANTIC4LLM_REPOSITORY_ROOT " +
                 "before calling repository-scoped MCP tools.");
         }
 

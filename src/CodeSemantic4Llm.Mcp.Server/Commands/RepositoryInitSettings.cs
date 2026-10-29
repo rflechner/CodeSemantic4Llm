@@ -8,6 +8,14 @@ namespace CodeSemantic4Llm.Mcp.Server.Commands;
 /// <summary>Declarative options for creating repository configuration.</summary>
 public sealed class RepositoryInitSettings : RepositoryCommandSettings
 {
+    /// <summary>Captures occurrences so duplicate project names are rejected.</summary>
+    [CommandOption("--name <project-name>")]
+    [Description("Optional project display name (specify once).")]
+    public string[] ProjectNames { get; init; } = [];
+
+    /// <summary>Optional name written as projectName in the repository YAML.</summary>
+    public string? ProjectName => ProjectNames.Length == 0 ? null : ProjectNames[0];
+
     /// <summary>Captures occurrences so duplicate --lang options fail instead of silently selecting the last value.</summary>
     [CommandOption("--lang <language-tag>")]
     [Description("Language for future semantic descriptions (default: en; specify once).")]
@@ -31,8 +39,13 @@ public sealed class RepositoryInitSettings : RepositoryCommandSettings
             return repositoryValidation;
         }
 
-        return LanguageTags.Length > 1
-            ? ValidationResult.Error("--lang may only be specified once.")
+        if (LanguageTags.Length > 1)
+        {
+            return ValidationResult.Error("--lang may only be specified once.");
+        }
+
+        return ProjectNames.Length > 1
+            ? ValidationResult.Error("--name may only be specified once.")
             : ValidationResult.Success();
     }
 }

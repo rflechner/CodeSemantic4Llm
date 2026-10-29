@@ -31,7 +31,7 @@ Create `codesemantic4llm.yaml` at the root of **each repository** with the conso
 
 ```shell
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
-  init /absolute-or-relative/path/to/repository --analyzer dotnet-csharp --lang fr
+  init /absolute-or-relative/path/to/repository --name "My Project" --analyzer dotnet-csharp --lang fr
 ```
 
 The target directory must already exist. Relative paths are resolved from the process's
@@ -39,6 +39,9 @@ working directory; quote paths containing spaces. Omit `--lang` to use English (
 Use `--analyzer <id>` once per analyzer to select the YAML's `analyzers` list. The options
 may appear before or after the path; `--lang=fr` syntax is also accepted.
 Omit `--analyzer` to select `dotnet-csharp`.
+Use `--name "My Project"` to write the optional `projectName` display label. It accepts
+spaces and Unicode, trims surrounding whitespace and preserves case. Omit it to leave
+the project unnamed. The name is independent of the repository path and index cache identity.
 IDs are trimmed, lowercased and deduplicated in first occurrence order. All selected
 analyzers must be installed; currently only `dotnet-csharp` is available.
 Each analyzer retains its default extensions, and the command adds no custom exclusions.
@@ -50,6 +53,7 @@ You can also create or edit the configuration manually:
 
 ```yaml
 version: 1
+projectName: My Project   # Optional display label
 analyzers:
   - dotnet-csharp
 # Optional: replaces this analyzer's default extension list (.cs).
@@ -108,9 +112,14 @@ Set `CODESEMANTIC4LLM_INDEX_ROOT` to an absolute cache directory to override the
 Start the MCP server (choose the checkout explicitly):
 
 ```shell
-CODESEMANTIC4LLM_REPOSITORY_ROOT=/absolute/path/to/repository \
-  dotnet run --project src/CodeSemantic4Llm.Mcp.Server
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
+  serve /absolute-or-relative/path/to/repository
 ```
+
+`serve [repository-path]` accepts an existing directory. The argument overrides
+`CODESEMANTIC4LLM_REPOSITORY_ROOT`; omitting it preserves environment-based selection.
+Relative paths are resolved from the process working directory. In Rider, use
+`serve /path/to/repository` as the program arguments. Startup does not index the project.
 
 The server uses **stdio** for MCP and sends logs to **stderr**.
 It exposes `get_server_info`, `inspect_source`, `get_repository_configuration`,
@@ -118,6 +127,33 @@ It exposes `get_server_info`, `inspect_source`, `get_repository_configuration`,
 `find_symbols` returns saved declaration locations by exact, case-sensitive simple name
 (20 results by default, at most 200). Run `index` again after source edits. MCP startup and
 queries do not rebuild the index; preview remains read-only.
+
+### MCP client configuration
+
+For VS Code's `.vscode/mcp.json`, use a stdio server with the repository in `args`:
+
+```json
+{
+  "servers": {
+    "codeSemantic4Llm": {
+      "type": "stdio",
+      "command": "dotnet",
+      "args": [
+        "/absolute/path/to/CodeSemantic4Llm/src/CodeSemantic4Llm.Mcp.Server/bin/Debug/net10.0/CodeSemantic4Llm.Mcp.Server.dll",
+        "serve",
+        "${workspaceFolder}"
+      ]
+    }
+  }
+}
+```
+
+Build the server first and replace the DLL path. Launching the built DLL keeps build output
+out of the MCP protocol stream. `${workspaceFolder}` selects the open workspace; an absolute
+repository path also works. This example follows the [VS Code MCP configuration format](https://code.visualstudio.com/docs/agents/reference/mcp-configuration).
+Other clients may use a different outer JSON structure; pass the same executable arguments.
+If indexing uses a custom `CODESEMANTIC4LLM_INDEX_ROOT`, set that variable in the client's
+server environment too.
 
 ## Preview a local repository from Rider or a terminal
 
@@ -141,7 +177,7 @@ The default limit is 50 and the maximum is 200; the output indicates when more f
 It does not read source contents, execute the target repository, or persist an index.
 Running without a command starts the MCP server and waits for client requests.
 `--help` lists the `init`, `preview`, `index`, and `serve` commands. `serve` explicitly starts
-the same MCP server as an invocation without arguments.
+the same MCP server as an invocation without arguments, with optional repository selection.
 
 Console commands use Spectre.Console.Cli settings for argument parsing and generated
 help, with Spectre.Console for output. Help and results go to stdout; errors go to stderr.

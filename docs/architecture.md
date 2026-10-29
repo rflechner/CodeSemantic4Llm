@@ -29,6 +29,13 @@ The default command starts the same stdio MCP server as `serve`. A small type re
 bridges Spectre to Microsoft dependency injection and disposes each run's service provider.
 Application use cases and adapters have no dependency on Spectre.
 
+`serve [repository-path]` has its own settings and delegates to the same host composition
+as the argument-free default command. Keeping the default command argument-free ensures
+that unknown command names remain errors rather than becoming repository paths. A supplied
+path must be an existing directory and is normalized relative to the process working directory.
+The host adds it as a final configuration override, taking precedence over the environment
+without mutating process environment variables. MCP stdout remains protocol-only.
+
 Spectre generates help and parses typed arguments, including repeatable analyzer arrays.
 The language option captures occurrences to reject duplicates rather than silently choose
 the last value. A shared interceptor rejects arguments Spectre leaves unbound before a
@@ -70,8 +77,14 @@ The generic filesystem walker remains independent of language selection.
 
 The supported analyzer IDs are separate from source language identifiers (for example,
 `dotnet-csharp` is an analyzer, `csharp` is the language). Unsupported analyzers fail
-explicitly. The server reads only the checkout selected by
-`CODESEMANTIC4LLM_REPOSITORY_ROOT`; MCP clients cannot submit arbitrary filesystem roots.
+explicitly. The server reads only the checkout selected by the `serve` argument or, when
+omitted, `CODESEMANTIC4LLM_REPOSITORY_ROOT`. MCP tool calls cannot submit arbitrary filesystem roots.
+
+An optional `projectName` provides a display label, set by `init --name` or edited in YAML.
+The domain validates and trims the name; the YAML adapter owns serialization and mapping.
+Configuration and preview responses expose it without replacing checkout/branch identity.
+It is excluded from analysis fingerprints and storage paths, so changing a label preserves
+reusable declarations and does not require a SQLite schema change.
 
 See [the YAML contract](repository-configuration.md).
 

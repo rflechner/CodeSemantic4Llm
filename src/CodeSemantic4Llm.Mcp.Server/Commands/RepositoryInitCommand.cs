@@ -19,7 +19,8 @@ public sealed class RepositoryInitCommand(
             settings.RepositoryRoot,
             settings.Language,
             settings.AnalyzerIds.Length == 0 ? null : settings.AnalyzerIds,
-            cancellationToken);
+            projectName: settings.ProjectName,
+            cancellationToken: cancellationToken);
 
         console.WriteLine($"Created repository configuration: {configurationPath}");
         return 0;

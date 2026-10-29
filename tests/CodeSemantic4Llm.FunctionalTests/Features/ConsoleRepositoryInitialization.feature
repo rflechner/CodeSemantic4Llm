@@ -1,6 +1,6 @@
 Feature: Initialize repository configuration from a terminal
   As a developer preparing a checkout for semantic discovery
-  I want to create its YAML with chosen analyzers and a description language
+  I want to create its YAML with a project name, chosen analyzers and a description language
   So that I can preview the repository without writing configuration by hand
 
   Background:
@@ -10,6 +10,7 @@ Feature: Initialize repository configuration from a terminal
     When I initialize the target repository using an "<path>" path
     Then repository initialization succeeds
     And the generated configuration uses language "en" and the default C# settings
+    And the generated configuration has no project name
     And the initialized repository can be previewed with built-in exclusions
 
     Examples:
@@ -27,6 +28,56 @@ Feature: Initialize repository configuration from a terminal
       | fr         | fr         |
       | FR-ch      | fr-CH      |
       | zh-hant-tw | zh-Hant-TW |
+
+  Scenario: Initialize a named project with YAML-sensitive characters and Unicode
+    When I run repository initialization with these arguments:
+      | argument                   |
+      | {repository}               |
+      | --name                     |
+      | Équipe: Paiements #1 [API]  |
+      | --lang                     |
+      | fr                         |
+      | --analyzer                 |
+      | dotnet-csharp              |
+    Then repository initialization succeeds
+    And the generated configuration names the project "Équipe: Paiements #1 [API]"
+    And the generated configuration uses language "fr" and the default C# settings
+
+  Scenario: The project name accepts equals syntax before the repository path
+    When I run repository initialization with these arguments:
+      | argument            |
+      | --name=My Project   |
+      | {repository}        |
+    Then repository initialization succeeds
+    And the generated configuration names the project "My Project"
+
+  Scenario: An empty project name is rejected
+    When I run repository initialization with these arguments:
+      | argument     |
+      | {repository} |
+      | --name       |
+      |              |
+    Then repository initialization fails with an error containing "Project name cannot be empty"
+    And initialization leaves no configuration or temporary files
+
+  Scenario: A missing project name value is rejected
+    When I run repository initialization with these arguments:
+      | argument     |
+      | {repository} |
+      | --name       |
+    Then repository initialization fails with an error containing "Option 'name' is defined but no value has been provided"
+    And initialization leaves no configuration or temporary files
+
+  Scenario: Repeating the project name option is rejected
+    When I run repository initialization with these arguments:
+      | argument     |
+      | {repository} |
+      | --name       |
+      | First        |
+      | --name       |
+      | Second       |
+    Then repository initialization fails with an error containing "--name may only be specified once"
+    And initialization leaves no configuration or temporary files
 
   Scenario Outline: Combine an explicit analyzer with a language in either order
     When I run repository initialization with these arguments:
@@ -183,6 +234,7 @@ Feature: Initialize repository configuration from a terminal
       | --analyzer | --lang     | fr            |
       | --analyzer | --analyzer | dotnet-csharp |
       | --lang     | --analyzer | dotnet-csharp |
+      | --name     | --lang     | fr            |
 
   Scenario: Repeating the language option is rejected
     When I run repository initialization with these arguments:

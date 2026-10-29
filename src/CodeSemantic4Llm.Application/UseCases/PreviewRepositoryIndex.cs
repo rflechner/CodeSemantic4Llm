@@ -18,7 +18,8 @@ public sealed record RepositoryIndexingPreview(
     IReadOnlyList<string> EffectiveExclusions,
     string SemanticIndexingLanguage,
     IReadOnlyList<IndexingCandidate> Files,
-    bool HasMore);
+    bool HasMore,
+    string? ProjectName = null);
 
 /// <summary>
 /// Applies per-repository YAML settings when discovering indexable source paths.
@@ -84,7 +85,8 @@ public sealed class PreviewRepositoryIndex(
             config.Exclusions,
             config.SemanticIndexing.Language,
             selected.AsReadOnly(),
-            hasMore);
+            hasMore,
+            config.ProjectName);
     }
 
 }

@@ -141,6 +141,7 @@ public sealed class IndexRepository(
 
     private static string Fingerprint(RepositoryIndexingConfiguration configuration, ConfiguredSourceAnalyzers analyzers)
     {
+        // ProjectName is display metadata; renaming it does not change derived declarations.
         var settings = JsonSerializer.Serialize(new
         {
             configuration.Version,

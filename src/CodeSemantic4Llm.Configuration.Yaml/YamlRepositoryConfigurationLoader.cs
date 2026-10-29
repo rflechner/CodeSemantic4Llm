@@ -74,7 +74,7 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
             var fileExtensions = MapFileExtensions(document.FileExtensions);
 
             return new RepositoryIndexingConfiguration(
-                document.Analyzers, document.Exclude, semanticIndexing, fileExtensions);
+                document.Analyzers, document.Exclude, semanticIndexing, fileExtensions, document.ProjectName);
         }
         catch (YamlException exception)
         {
@@ -106,6 +106,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
     private sealed class RepositoryYamlDocument
     {
         public int Version { get; set; }
+
+        public string? ProjectName { get; set; }
 
         public List<string>? Analyzers { get; set; }
 

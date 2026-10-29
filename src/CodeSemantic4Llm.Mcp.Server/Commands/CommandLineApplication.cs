@@ -41,7 +41,7 @@ public static class CommandLineApplication
 
             configuration.AddCommand<RepositoryInitCommand>("init")
                 .WithDescription("Create repository YAML without overwriting an existing configuration.")
-                .WithExample("init", "./repository", "--lang", "fr", "--analyzer", "dotnet-csharp");
+                .WithExample("init", "./repository", "--name", "MyProject", "--lang", "fr", "--analyzer", "dotnet-csharp");
 
             configuration.AddCommand<RepositoryPreviewCommand>("preview")
                 .WithDescription("Preview discovered source files without reading or indexing source content.")
@@ -51,8 +51,9 @@ public static class CommandLineApplication
                 .WithDescription("Index every configured source file into a persistent branch snapshot.")
                 .WithExample("index", "./repository");
 
-            configuration.AddCommand<StartMcpServerCommand>("serve")
-                .WithDescription("Start the stdio MCP server (default when no command is supplied).");
+            configuration.AddCommand<ServeMcpServerCommand>("serve")
+                .WithDescription("Start the stdio MCP server, optionally selecting a repository.")
+                .WithExample("serve", "./repository");
         });
 
         return application.RunAsync(arguments, cancellationToken);

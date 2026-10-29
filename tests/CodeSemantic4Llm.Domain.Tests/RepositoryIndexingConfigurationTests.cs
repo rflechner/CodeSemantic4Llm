@@ -7,6 +7,36 @@ namespace CodeSemantic4Llm.Domain.Tests;
 public sealed class RepositoryIndexingConfigurationTests
 {
     [Fact]
+    public void Project_names_are_optional_display_labels()
+    {
+        var configuration = new RepositoryIndexingConfiguration(["dotnet-csharp"]);
+
+        Assert.Null(configuration.ProjectName);
+    }
+
+    [Fact]
+    public void Project_names_are_trimmed_without_changing_case_or_unicode()
+    {
+        var configuration = new RepositoryIndexingConfiguration(["dotnet-csharp"], projectName: "  Équipe: Paiements #1 [API]  ");
+
+        Assert.Equal("Équipe: Paiements #1 [API]", configuration.ProjectName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("First\nSecond")]
+    [InlineData("\tProject")]
+    [InlineData("Project\u001b[31m")]
+    [InlineData("First\u2028Second")]
+    [InlineData("First\u2029Second")]
+    public void Empty_or_multiline_project_names_are_rejected(string name)
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new RepositoryIndexingConfiguration(["dotnet-csharp"], projectName: name));
+    }
+
+    [Fact]
     public void Omitted_extension_overrides_leave_defaults_to_the_analyzers()
     {
         var configuration = new RepositoryIndexingConfiguration(["dotnet-csharp"]);

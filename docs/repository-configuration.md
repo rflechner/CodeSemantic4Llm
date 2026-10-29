@@ -12,17 +12,17 @@ From the CodeSemantic4Llm checkout, run:
 
 ```sh
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
-  init /absolute-or-relative/path/to/repository --analyzer dotnet-csharp --lang fr-CH
+  init /absolute-or-relative/path/to/repository --name "My Project" --analyzer dotnet-csharp --lang fr-CH
 ```
 
-`init <repository-path> [--lang <language-tag>] [--analyzer <analyzer-id>]...`
+`init <repository-path> [--name <project-name>] [--lang <language-tag>] [--analyzer <analyzer-id>]...`
 creates `codesemantic4llm.yaml` directly in the specified existing directory.
 Absolute paths and paths relative to the process's
 working directory are accepted, including `.` and `..`; quote paths containing spaces.
 The command does not create missing directories or require Git metadata, and does not
 start an MCP session, discover source files, or build an index.
 
-When both options are omitted, the generated defaults are:
+When all options are omitted, the generated defaults are:
 
 ```yaml
 version: 1
@@ -32,6 +32,19 @@ semanticIndexing:
   language: en
 exclude: []
 ```
+
+`--name "My Project"` writes `projectName: My Project`. The optional name is a display
+label, independent of the checkout path, branch identity and cache location. It is trimmed
+at both ends; case, spaces inside the name and Unicode characters are preserved. Empty or
+whitespace-only names, control characters and line breaks are rejected. Quote a name
+containing spaces when passing it through a shell. YAML-sensitive characters are escaped
+by the writer, so names such as `Payments: API #1` round-trip correctly.
+
+Without `--name`, no `projectName` key is written. Existing YAML without this property
+remains valid; omission or YAML `null` means there is no configured display name. The name
+is returned by `get_repository_configuration` and `preview_repository_index`, and shown
+by the console preview when present. Changing only this label does not invalidate reusable
+declarations or create a different index cache.
 
 `--lang` selects `semanticIndexing.language`, using the same validation and case
 normalization as the YAML loader (for example, `FR-ch` becomes `fr-CH`). Its default
@@ -45,10 +58,10 @@ fail with the available analyzer list. Currently only `dotnet-csharp` is install
 `typescript` remains planned and cannot be selected yet.
 
 Options may appear before or after the repository path, including `--lang` between
-two `--analyzer` options. Spectre.Console.Cli also accepts `--lang=fr` and
-`--analyzer=dotnet-csharp`. Each occurrence requires one value; only `--analyzer` is
-repeatable. Empty analyzer IDs, missing values, unknown options and duplicate `--lang`
-options fail without creating a file.
+two `--analyzer` options. Spectre.Console.Cli also accepts `--name=MyProject`, `--lang=fr`
+and `--analyzer=dotnet-csharp`. Each occurrence requires one value; only `--analyzer` is
+repeatable. Empty names or analyzer IDs, missing values, unknown options, and duplicate
+`--name` or `--lang` options fail without creating a file.
 
 Each analyzer retains its default extensions because no `fileExtensions` override is
 written (`.cs` for C#). Only built-in exclusions apply; submodules remain included.
@@ -56,20 +69,22 @@ written (`.cs` for C#). Only built-in exclusions apply; submodules remain includ
 Initialization never replaces an existing configuration, including a symbolic link or
 directory at that path. It writes a temporary file in the target directory and publishes
 the complete YAML without replacement, cleaning up on failure or cancellation.
-Invalid arguments, languages and analyzer selections leave the target unchanged.
+Invalid arguments, project names, languages and analyzer selections leave the target unchanged.
 
 `init --help` and `init -h` show usage without accessing the repository. Exit codes are
 0 for success/help, 1 for invalid input, existing configuration or filesystem errors,
 and 130 for cancellation. Top-level `--help` lists `init`, `preview`, `index`, and `serve`.
 Spectre.Console generates help from the command settings. Results and help use stdout;
 parsing, validation and operation errors use stderr. Unknown commands and options fail
-instead of starting the MCP server. `serve`, or an invocation without arguments, starts
-the stdio MCP server with logs confined to stderr.
+instead of starting the MCP server. `serve [repository-path]`, or an invocation without
+arguments, starts the stdio MCP server with logs confined to stderr. The optional path
+overrides `CODESEMANTIC4LLM_REPOSITORY_ROOT` for this server instance.
 
 ## Example
 
 ```yaml
 version: 1
+projectName: My Project
 
 analyzers:
   - dotnet-csharp
@@ -89,6 +104,7 @@ exclude:
 ```
 
 - `version` must be `1`.
+- `projectName` is an optional, non-empty, single-line display name; omission or null leaves it unspecified.
 - `analyzers` is a required, non-empty list of installed analyzer IDs. Currently only `dotnet-csharp` is registered.
 - `fileExtensions` is an optional mapping of enabled analyzer IDs to replacement extension lists.
 - `semanticIndexing.language` is optional and defaults to `en` (English).
@@ -195,7 +211,7 @@ The target checkout must contain `codesemantic4llm.yaml`. The command reuses the
 preview use case and prints effective analyzer extensions, exclusions, semantic language,
 relative file paths, and whether more matching files exist. It does not read source
 contents or execute code from the target checkout. The path is supplied directly by
-the local operator; `CODESEMANTIC4LLM_REPOSITORY_ROOT` is only needed for MCP mode.
+the local operator; no MCP environment configuration is required.
 
 In Rider, select the `CodeSemantic4Llm.Mcp.Server` project in a **.NET Project** run
 configuration and use `preview /absolute/path/to/checkout --max-files 200` as the
@@ -213,22 +229,32 @@ input/configuration/discovery errors, and 130 on cancellation.
 The MCP server is explicitly restricted to a repository selected by the operator:
 
 ```sh
-CODESEMANTIC4LLM_REPOSITORY_ROOT=/absolute/path/to/checkout \
-  dotnet run --project src/CodeSemantic4Llm.Mcp.Server
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- serve /absolute/path/to/checkout
 ```
 
 For PowerShell:
 
 ```powershell
-$env:CODESEMANTIC4LLM_REPOSITORY_ROOT = "D:\\source\\my-project"
-dotnet run --project src/CodeSemantic4Llm.Mcp.Server
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- serve "D:\source\my-project"
 ```
 
+`serve [repository-path]` accepts an existing directory, absolute or relative to the
+process working directory. Use an absolute path in client configuration when the working
+directory is uncertain. A supplied path takes precedence over
+`CODESEMANTIC4LLM_REPOSITORY_ROOT`; `serve` without a path and startup without any arguments
+retain environment-based selection. An empty or nonexistent argument fails before the
+server starts. `serve --help` describes the optional argument without starting MCP.
+
+Startup does not require Git metadata or YAML to initialize the MCP protocol, and does
+not index automatically. Repository tools validate the YAML and Git state when needed.
+Without either selection method, repository tools report a configuration error while
+repository-independent tools remain available. See the [mcp.json example](../README.md#mcp-client-configuration).
+
 The `get_repository_configuration` MCP tool returns the validated settings, including
-`semanticIndexing.language` (default `en`), built-in exclusions, and the requested
+`projectName` (null when unspecified), `semanticIndexing.language` (default `en`), built-in exclusions, and the requested
 `fileExtensions` overrides (an empty mapping when omitted). Analyzer defaults are resolved
 by the application when previewing. The preview reports `effectiveFileExtensions` as a
-mapping of analyzer IDs to extension arrays, alongside `semanticIndexingLanguage`.
+mapping of analyzer IDs to extension arrays, alongside `semanticIndexingLanguage` and `projectName`.
 The `preview_repository_index` MCP tool selects a **bounded** set of candidate source files
 without reading their contents or writing a database. The default limit is 50, with a
 maximum of 200. `hasMore` is true only when another matching, non-excluded file exists;
@@ -245,7 +271,9 @@ Functional behavior is described in
 `tests/CodeSemantic4Llm.FunctionalTests/Features/RecursiveFileDiscovery.feature`, with console
 behavior in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryPreview.feature`
 and `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryInitialization.feature`,
-and command routing in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleCommandRouting.feature`,
+and command routing in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleCommandRouting.feature`.
+`tests/CodeSemantic4Llm.FunctionalTests/Features/ServeRepository.feature` covers absolute and
+relative serve paths, environment precedence and MCP preview calls through a real server,
 using [Reqnroll](https://reqnroll.net/) and xUnit v3. The tests create temporary
 repositories, write YAML, create sample files, run the real loader and directory walker,
 and assert which files would be indexed. The routing scenarios also launch the built

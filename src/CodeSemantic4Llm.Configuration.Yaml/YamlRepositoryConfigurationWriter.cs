@@ -59,9 +59,15 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
     {
         var document = new Dictionary<string, object>
         {
-            ["version"] = configuration.Version,
-            ["analyzers"] = configuration.AnalyzerIds.ToArray()
+            ["version"] = configuration.Version
         };
+
+        if (configuration.ProjectName is not null)
+        {
+            document["projectName"] = configuration.ProjectName;
+        }
+
+        document["analyzers"] = configuration.AnalyzerIds.ToArray();
 
         if (configuration.FileExtensions.Count > 0)
         {
