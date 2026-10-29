@@ -1,0 +1,137 @@
+Feature: Per-repository YAML indexing configuration
+  As a developer indexing several repositories
+  I want the checkout to declare its analyzers and excluded paths
+  So that the semantic index only considers the source I have selected
+
+  Scenario: Default build folders and an explicitly excluded submodule are never indexed
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers:
+        - dotnet-csharp
+      exclude:
+        - submodules/**
+      """
+    And the repository contains these source files:
+      | path                                  |
+      | src/Customer.cs                       |
+      | src/Shared.cs                         |
+      | src/app.ts                            |
+      | submodules/vendor/External.cs         |
+      | bin/Debug/net10.0/Generated.cs        |
+      | src/obj/Debug/net10.0/Generated.cs    |
+      | .git/hooks/Generated.cs               |
+    When I preview source indexing
+    Then the indexable files are:
+      | path            | analyzer      |
+      | src/Customer.cs | dotnet-csharp |
+      | src/Shared.cs   | dotnet-csharp |
+    And the effective exclusions include "**/bin/**"
+    And the effective exclusions include "**/obj/**"
+    And the effective exclusions include "**/.git/**"
+
+  Scenario: A Git submodule is included unless excluded by YAML
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers:
+        - dotnet-csharp
+      """
+    And the repository contains these source files:
+      | path                         |
+      | src/Main.cs                  |
+      | submodules/vendor/External.cs|
+    When I preview source indexing
+    Then the indexable files are:
+      | path                          | analyzer      |
+      | src/Main.cs                   | dotnet-csharp |
+      | submodules/vendor/External.cs | dotnet-csharp |
+
+  Scenario: Directory names without globs also exclude their contents
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers:
+        - dotnet-csharp
+      exclude:
+        - third_party
+        - "**/*.g.cs"
+      """
+    And the repository contains these source files:
+      | path                       |
+      | src/Main.cs                |
+      | src/Generated.g.cs         |
+      | src/SomeOther.cs           |
+      | third_party/vendor/Lib.cs  |
+    When I preview source indexing
+    Then the indexable files are:
+      | path             | analyzer      |
+      | src/Main.cs      | dotnet-csharp |
+      | src/SomeOther.cs | dotnet-csharp |
+
+  Scenario: An unknown or not-yet-implemented analyzer fails explicitly
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers:
+        - dotnet-csharp
+        - typescript
+      """
+    And the repository contains these source files:
+      | path        |
+      | src/Main.cs |
+    When I preview source indexing
+    Then the preview fails with an error containing "typescript"
+
+  Scenario: Missing YAML is rejected instead of inheriting settings from elsewhere
+    Given the repository has no configuration file
+    When I preview source indexing
+    Then the preview fails with an error containing "Missing repository configuration"
+
+  Scenario: Unexpected YAML keys are rejected
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers:
+        - dotnet-csharp
+      unknownSetting: true
+      """
+    When I preview source indexing
+    Then the preview fails with an error containing "Invalid YAML"
+
+  Scenario: Unsupported configuration versions are rejected
+    Given the repository configuration is:
+      """
+      version: 2
+      analyzers:
+        - dotnet-csharp
+      """
+    When I preview source indexing
+    Then the preview fails with an error containing "Unsupported configuration version"
+
+  Scenario: Preview results are bounded and report that more candidates exist
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers:
+        - dotnet-csharp
+      """
+    And the repository contains these source files:
+      | path          |
+      | src/First.cs  |
+      | src/Second.cs |
+    When I preview source indexing with a limit of 1 file
+    Then the preview contains 1 file
+    And the preview indicates that more files are available
+
+  Scenario: Repository paths cannot escape the checkout through exclusions
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers:
+        - dotnet-csharp
+      exclude:
+        - ../other-repository/**
+      """
+    When I preview source indexing
+    Then the preview fails with an error containing "Invalid indexing configuration"

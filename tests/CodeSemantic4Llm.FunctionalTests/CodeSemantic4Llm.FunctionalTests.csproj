@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+    <ReqnrollUseIntermediateOutputPathForCodeBehind>true</ReqnrollUseIntermediateOutputPathForCodeBehind>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/CodeSemantic4Llm.Application/CodeSemantic4Llm.Application.csproj" />
+    <ProjectReference Include="../../src/CodeSemantic4Llm.Analysis.CSharp/CodeSemantic4Llm.Analysis.CSharp.csproj" />
+    <ProjectReference Include="../../src/CodeSemantic4Llm.Configuration.Yaml/CodeSemantic4Llm.Configuration.Yaml.csproj" />
+    <ProjectReference Include="../../src/CodeSemantic4Llm.Infrastructure.Workspace/CodeSemantic4Llm.Infrastructure.Workspace.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Reqnroll.xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

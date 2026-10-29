@@ -13,6 +13,8 @@ namespace CodeSemantic4Llm.Analysis.CSharp;
 /// </summary>
 public sealed class CSharpSourceAnalyzer : ISourceAnalyzer
 {
+    public string AnalyzerId => "dotnet-csharp";
+
     public string LanguageId => "csharp";
 
     public bool Supports(string relativePath) =>

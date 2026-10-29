@@ -1,0 +1,11 @@
+# Repository-specific configuration used by CodeSemantic4Llm.
+# The file lives in the source checkout, not in the index storage directory.
+version: 1
+
+analyzers:
+  - dotnet-csharp
+
+# User-defined excludes extend the built-in defaults for **/.git/**, **/bin/** and **/obj/**.
+# Git submodules are NOT automatically excluded; opt out by path as needed.
+exclude:
+  - submodules/**

@@ -7,17 +7,33 @@ flowchart TD
     Host["MCP Server / composition root"] --> App["Application / use cases & ports"]
     Host --> Roslyn["Analysis.CSharp / Roslyn"]
     Host -. planned .-> Ts["Analysis.TypeScript / Tree-sitter"]
+    Host --> Yaml["Configuration.Yaml"]
     Host --> Sqlite["Persistence.Sqlite"]
     Host --> Workspace["Infrastructure.Workspace"]
     Roslyn --> App
     Ts --> App
+    Yaml --> App
     Sqlite --> App
     Workspace --> App
-    App --> Domain["Domain / repository, location, symbol"]
+    App --> Domain["Domain / identities, configuration, symbols"]
 ```
 
-The domain has no dependencies on Git, Roslyn, Tree-sitter, SQLite or MCP.
+The domain has no dependencies on Git, Roslyn, Tree-sitter, YAML, SQLite or MCP.
 The application owns the ports. Adapters depend inward; the MCP executable is the only composition root.
+
+## Repository-local configuration
+
+Every repository owns its root `codesemantic4llm.yaml`. The YAML adapter parses and
+validates it, and the application use case resolves the requested analyzer implementations.
+The workspace adapter walks the checkout with effective glob exclusions. The first slice is
+a **read-only preview**, not a persistent indexer.
+
+The supported analyzer IDs are separate from source language identifiers (for example,
+`dotnet-csharp` is an analyzer, `csharp` is the language). Unsupported analyzers fail
+explicitly. The server reads only the checkout selected by
+`CODESEMANTIC4LLM_REPOSITORY_ROOT`; MCP clients cannot submit arbitrary filesystem roots.
+
+See [the YAML contract](repository-configuration.md).
 
 ## Index boundaries
 
@@ -34,6 +50,7 @@ A repository index must be uniquely identified by a checkout and branch. A branc
 
 The MCP host starts with the official .NET SDK and stdio transport.
 The C# parser extracts syntax-level declarations without executing project code.
+The YAML adapter resolves project-specific exclusions and analyzers during filesystem discovery.
 No source code is persisted, and no repository indexing is advertised as implemented.
 
 Next, implement an index transaction boundary that can publish complete, consistent generations while processing files in bounded batches. Branches must never share index records implicitly.
@@ -43,10 +60,11 @@ Next, implement an index transaction boundary that can publish complete, consist
 1. `Domain` references nothing in this solution.
 2. `Application` may reference `Domain`, never a concrete adapter.
 3. Each parser stays in its own assembly and implements application-owned contracts.
-4. `Persistence.Sqlite` owns SQL and schema migrations, not language parsing.
-5. `Infrastructure.Workspace` owns Git/process and filesystem integration.
-6. `Mcp.Server` owns transport, DTO shaping, logging configuration, and dependency injection.
-7. Tests target each layer directly; avoid requiring an MCP host for domain/parser tests.
+4. `Configuration.Yaml` owns deserialization and schema validation; it has no knowledge of SQLite.
+5. `Persistence.Sqlite` owns SQL and schema migrations, not language parsing.
+6. `Infrastructure.Workspace` owns Git/process and filesystem integration.
+7. `Mcp.Server` owns transport, DTO shaping, logging configuration, and dependency injection.
+8. Tests target layers directly; Reqnroll scenarios verify YAML + file-discovery behavior without MCP/SQLite.
 
 ## Central Package Management
 

@@ -4,6 +4,7 @@
     <Project Path="src/CodeSemantic4Llm.Application/CodeSemantic4Llm.Application.csproj" />
     <Project Path="src/CodeSemantic4Llm.Analysis.CSharp/CodeSemantic4Llm.Analysis.CSharp.csproj" />
     <Project Path="src/CodeSemantic4Llm.Analysis.TypeScript/CodeSemantic4Llm.Analysis.TypeScript.csproj" />
+    <Project Path="src/CodeSemantic4Llm.Configuration.Yaml/CodeSemantic4Llm.Configuration.Yaml.csproj" />
     <Project Path="src/CodeSemantic4Llm.Persistence.Sqlite/CodeSemantic4Llm.Persistence.Sqlite.csproj" />
     <Project Path="src/CodeSemantic4Llm.Infrastructure.Workspace/CodeSemantic4Llm.Infrastructure.Workspace.csproj" />
     <Project Path="src/CodeSemantic4Llm.Mcp.Server/CodeSemantic4Llm.Mcp.Server.csproj" />
@@ -11,5 +12,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/CodeSemantic4Llm.Domain.Tests/CodeSemantic4Llm.Domain.Tests.csproj" />
     <Project Path="tests/CodeSemantic4Llm.Analysis.CSharp.Tests/CodeSemantic4Llm.Analysis.CSharp.Tests.csproj" />
+    <Project Path="tests/CodeSemantic4Llm.FunctionalTests/CodeSemantic4Llm.FunctionalTests.csproj" />
   </Folder>
 </Solution>
