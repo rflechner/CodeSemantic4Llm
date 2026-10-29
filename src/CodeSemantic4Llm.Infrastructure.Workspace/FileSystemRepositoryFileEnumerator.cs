@@ -4,7 +4,7 @@ using Microsoft.Extensions.FileSystemGlobbing;
 namespace CodeSemantic4Llm.Infrastructure.Workspace;
 
 /// <summary>
-/// Discovers existing source paths in deterministic directory order, without entering
+/// Recursively discovers existing paths in deterministic directory order, without entering
 /// excluded directories, directory symlinks, or Git working trees outside the root.
 /// </summary>
 public sealed class FileSystemRepositoryFileEnumerator : IRepositoryFileEnumerator

@@ -25,8 +25,16 @@ The application owns the ports. Adapters depend inward; the MCP executable is th
 
 Every repository owns its root `codesemantic4llm.yaml`. The YAML adapter parses and
 validates it, and the application use case resolves the requested analyzer implementations.
-The workspace adapter walks the checkout with effective glob exclusions. The first slice is
+The workspace adapter recursively walks the checkout with effective glob exclusions. The first slice is
 a **read-only preview**, not a persistent indexer.
+
+Each language adapter owns its default file extensions (`.cs` for C#). The domain models
+validated, immutable extension selections, and the YAML adapter maps optional per-analyzer
+overrides. The application checks analyzer availability, resolves overrides against defaults,
+and selects candidate paths. An override replaces only that analyzer's extension list;
+it does not change its parser or bypass exclusions. Keeping defaults with the adapter avoids
+a central language-extension registry that would need updating for every new language.
+The generic filesystem walker remains independent of language selection.
 
 The supported analyzer IDs are separate from source language identifiers (for example,
 `dotnet-csharp` is an analyzer, `csharp` is the language). Unsupported analyzers fail
@@ -79,7 +87,8 @@ The [image generation prompt](index-storage-architecture.prompt.txt) is included
 
 The MCP host starts with the official .NET SDK and stdio transport.
 The C# parser extracts syntax-level declarations without executing project code.
-The YAML adapter resolves project-specific exclusions and analyzers during filesystem discovery.
+The YAML adapter reads project-specific exclusions and extension overrides; the application
+resolves enabled analyzers and their effective extensions during recursive filesystem discovery.
 No source code is persisted, and no repository indexing is advertised as implemented.
 
 Next, implement an index transaction boundary that can publish complete, consistent generations while processing files in bounded batches. Branches must never share index records implicitly.

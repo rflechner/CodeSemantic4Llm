@@ -17,16 +17,16 @@ public sealed class RepositoryConfigurationTools(
     IRepositoryConfigurationLoader configurationLoader,
     PreviewRepositoryIndex previewRepositoryIndex)
 {
-    [McpServerTool, Description("Reads repository YAML settings, including default exclusions and the natural-language semantic indexing language.")]
+    [McpServerTool, Description("Reads repository YAML settings, including extension overrides, default exclusions and the semantic indexing language.")]
     public Task<RepositoryIndexingConfiguration> GetRepositoryConfigurationAsync(
         CancellationToken cancellationToken = default)
     {
         return configurationLoader.LoadAsync(GetConfiguredRepositoryRoot(), cancellationToken);
     }
 
-    [McpServerTool, Description("Previews source paths, analyzers and the configured semantic description language; does not index files.")]
+    [McpServerTool, Description("Recursively previews source paths with effective analyzer extensions, exclusions and semantic description language; does not index files.")]
     public Task<RepositoryIndexingPreview> PreviewRepositoryIndexAsync(
-        [Description("Number of candidate files to return (1 to 200).")] int maxFiles = 50,
+        [Description("Number of candidate files to return (1 to 200).")] int maxFiles = PreviewRepositoryIndex.DefaultMaxFiles,
         CancellationToken cancellationToken = default)
     {
         return previewRepositoryIndex.ExecuteAsync(

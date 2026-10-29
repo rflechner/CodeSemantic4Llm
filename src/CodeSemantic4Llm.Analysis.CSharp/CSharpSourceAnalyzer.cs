@@ -17,8 +17,9 @@ public sealed class CSharpSourceAnalyzer : ISourceAnalyzer
 
     public string LanguageId => "csharp";
 
-    public bool Supports(string relativePath) =>
-        string.Equals(Path.GetExtension(relativePath), ".cs", StringComparison.OrdinalIgnoreCase);
+    public SourceFileExtensions DefaultFileExtensions { get; } = new([".cs"]);
+
+    public bool Supports(string relativePath) => DefaultFileExtensions.Matches(relativePath);
 
     public Task<IReadOnlyList<SymbolDefinition>> AnalyzeAsync(
         SourceDocument document,

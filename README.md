@@ -31,6 +31,9 @@ Create `codesemantic4llm.yaml` at the root of **each repository**:
 version: 1
 analyzers:
   - dotnet-csharp
+# Optional: replaces this analyzer's default extension list (.cs).
+# fileExtensions:
+#   dotnet-csharp: [.cs, .csharp]
 semanticIndexing:
   language: en   # Optional: use fr, fr-CH, etc.
 exclude:
@@ -39,6 +42,11 @@ exclude:
 
 `**/.git/**`, `**/bin/**`, and `**/obj/**` are always excluded.
 Submodules are only excluded when explicitly selected by a rule.
+Discovery recursively visits the root and its nested directories, skips symbolic links,
+and selects `.cs` files by default for `dotnet-csharp`, ignoring extension case.
+The optional `fileExtensions` mapping replaces extensions per enabled analyzer;
+include `.cs` in an override to keep it alongside custom extensions. The preview reports
+the effective extensions and returns at most 200 candidate paths without reading source contents.
 The optional `semanticIndexing.language` selects the language of **future AI-generated
 natural-language descriptions**; its default is `en`. It does not affect which source
 languages the analyzers support. The value is already validated and reported by the MCP preview,
@@ -68,6 +76,28 @@ CODESEMANTIC4LLM_REPOSITORY_ROOT=/absolute/path/to/repository \
 The server uses **stdio** for MCP and sends logs to **stderr**.
 It exposes `get_server_info`, `inspect_source`, `get_repository_configuration`,
 and `preview_repository_index`. Preview tools **do not yet build or persist an index**.
+
+## Preview a local repository from Rider or a terminal
+
+To display discovered files immediately, run the console preview with the path to a
+checkout containing `codesemantic4llm.yaml`:
+
+```shell
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
+  preview /absolute/path/to/repository --max-files 200
+```
+
+In Rider, open **Run > Edit Configurations**, create a **.NET Project** configuration,
+select `CodeSemantic4Llm.Mcp.Server`, and set **Program arguments** to
+`preview /absolute/path/to/repository --max-files 200`. Run or Debug displays the
+effective settings and selected files in the console. You can set a breakpoint in
+`FileSystemRepositoryFileEnumerator.EnumerateFiles` to inspect traversal.
+See [Rider's run configuration documentation](https://www.jetbrains.com/help/rider/Run_Debug_Configuration_dotNet_Project.html).
+
+The preview uses the same discovery rules as MCP and exits after displaying its result.
+The default limit is 50 and the maximum is 200; the output indicates when more files exist.
+It does not read source contents, execute the target repository, or persist an index.
+Running without the `preview` command starts the MCP server and waits for client requests.
 
 ## Dependencies
 

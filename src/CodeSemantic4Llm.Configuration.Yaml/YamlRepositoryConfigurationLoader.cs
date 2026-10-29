@@ -1,6 +1,7 @@
 using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.Configuration;
 using CodeSemantic4Llm.Domain.Configuration;
+using CodeSemantic4Llm.Domain.Source;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -70,7 +71,10 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
                 ? new SemanticIndexingConfiguration()
                 : new SemanticIndexingConfiguration(document.SemanticIndexing.Language);
 
-            return new RepositoryIndexingConfiguration(document.Analyzers, document.Exclude, semanticIndexing);
+            var fileExtensions = MapFileExtensions(document.FileExtensions);
+
+            return new RepositoryIndexingConfiguration(
+                document.Analyzers, document.Exclude, semanticIndexing, fileExtensions);
         }
         catch (YamlException exception)
         {
@@ -84,6 +88,21 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         }
     }
 
+    private static IReadOnlyDictionary<string, SourceFileExtensions> MapFileExtensions(
+        Dictionary<string, List<string>?>? overrides)
+    {
+        if (overrides is null)
+        {
+            throw new RepositoryConfigurationException("fileExtensions must be a mapping of analyzer IDs to extension lists.");
+        }
+
+        return overrides.ToDictionary(
+            entry => entry.Key,
+            entry => new SourceFileExtensions(entry.Value
+                ?? throw new RepositoryConfigurationException(
+                    $"File extensions for analyzer '{entry.Key}' must be a non-empty list.")));
+    }
+
     private sealed class RepositoryYamlDocument
     {
         public int Version { get; set; }
@@ -91,6 +110,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         public List<string>? Analyzers { get; set; }
 
         public List<string>? Exclude { get; set; }
+
+        public Dictionary<string, List<string>?>? FileExtensions { get; set; } = new();
 
         public SemanticIndexingYamlDocument? SemanticIndexing { get; set; }
     }

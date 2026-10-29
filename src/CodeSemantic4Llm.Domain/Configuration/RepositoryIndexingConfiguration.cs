@@ -1,3 +1,6 @@
+using System.Collections.ObjectModel;
+using CodeSemantic4Llm.Domain.Source;
+
 namespace CodeSemantic4Llm.Domain.Configuration;
 
 /// <summary>
@@ -17,7 +20,8 @@ public sealed class RepositoryIndexingConfiguration
     public RepositoryIndexingConfiguration(
         IEnumerable<string> analyzerIds,
         IEnumerable<string>? exclusions = null,
-        SemanticIndexingConfiguration? semanticIndexing = null)
+        SemanticIndexingConfiguration? semanticIndexing = null,
+        IReadOnlyDictionary<string, SourceFileExtensions>? fileExtensions = null)
     {
         ArgumentNullException.ThrowIfNull(analyzerIds);
 
@@ -40,6 +44,7 @@ public sealed class RepositoryIndexingConfiguration
                 .ToArray());
 
         SemanticIndexing = semanticIndexing ?? new SemanticIndexingConfiguration();
+        FileExtensions = NormalizeFileExtensions(fileExtensions);
     }
 
     public int Version => CurrentVersion;
@@ -52,6 +57,37 @@ public sealed class RepositoryIndexingConfiguration
 
     /// <summary>Language used for future natural-language semantic descriptions, not for source parsing.</summary>
     public SemanticIndexingConfiguration SemanticIndexing { get; }
+
+    /// <summary>
+    /// Extension overrides keyed by enabled analyzer ID. An entry replaces that analyzer's
+    /// defaults; omitted analyzers retain the defaults supplied by their adapter.
+    /// </summary>
+    public IReadOnlyDictionary<string, SourceFileExtensions> FileExtensions { get; }
+
+    private IReadOnlyDictionary<string, SourceFileExtensions> NormalizeFileExtensions(
+        IReadOnlyDictionary<string, SourceFileExtensions>? overrides)
+    {
+        var normalized = new Dictionary<string, SourceFileExtensions>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (id, extensions) in overrides ?? new Dictionary<string, SourceFileExtensions>())
+        {
+            var analyzerId = id.Trim().ToLowerInvariant();
+
+            if (!AnalyzerIds.Contains(analyzerId, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new ArgumentException($"File extensions reference analyzer '{id}', which is not enabled.");
+            }
+
+            ArgumentNullException.ThrowIfNull(extensions);
+
+            if (!normalized.TryAdd(analyzerId, extensions))
+            {
+                throw new ArgumentException($"Duplicate file extension overrides for analyzer '{analyzerId}'.");
+            }
+        }
+
+        return new ReadOnlyDictionary<string, SourceFileExtensions>(normalized);
+    }
 
     private static string NormalizeExclusion(string? value)
     {

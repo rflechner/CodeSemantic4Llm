@@ -5,6 +5,12 @@ version: 1
 analyzers:
   - dotnet-csharp
 
+# Optional extension overrides, keyed by enabled analyzer ID.
+# Each list replaces that analyzer's defaults (.cs for dotnet-csharp).
+# Discovery always visits nested directories, subject to exclusions below.
+# fileExtensions:
+#   dotnet-csharp: [.cs, .csharp]
+
 # Language for future AI-generated semantic summaries (independent of source language).
 # Optional: defaults to en when omitted. Examples: fr, fr-CH.
 semanticIndexing:

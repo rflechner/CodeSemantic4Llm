@@ -1,6 +1,8 @@
+using System.Collections.ObjectModel;
 using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.Configuration;
 using CodeSemantic4Llm.Domain.Configuration;
+using CodeSemantic4Llm.Domain.Source;
 
 namespace CodeSemantic4Llm.Application.UseCases;
 
@@ -12,6 +14,7 @@ public sealed record RepositoryIndexingPreview(
     string RepositoryRoot,
     string ConfigurationFile,
     IReadOnlyList<string> EnabledAnalyzers,
+    IReadOnlyDictionary<string, SourceFileExtensions> EffectiveFileExtensions,
     IReadOnlyList<string> EffectiveExclusions,
     string SemanticIndexingLanguage,
     IReadOnlyList<IndexingCandidate> Files,
@@ -26,19 +29,24 @@ public sealed class PreviewRepositoryIndex(
     IRepositoryFileEnumerator fileEnumerator,
     IEnumerable<ISourceAnalyzer> analyzers)
 {
+    public const int DefaultMaxFiles = 50;
+
+    public const int MaximumMaxFiles = 200;
+
     private readonly IReadOnlyList<ISourceAnalyzer> _analyzers = analyzers.ToArray();
 
     public async Task<RepositoryIndexingPreview> ExecuteAsync(
         string repositoryRoot,
-        int maxFiles = 50,
+        int maxFiles = DefaultMaxFiles,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxFiles);
 
-        if (maxFiles > 200)
+        if (maxFiles > MaximumMaxFiles)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxFiles), "The maximum preview size is 200 files.");
+            throw new ArgumentOutOfRangeException(
+                nameof(maxFiles), $"The maximum preview size is {MaximumMaxFiles} files.");
         }
 
         var root = Path.GetFullPath(repositoryRoot);
@@ -50,7 +58,7 @@ public sealed class PreviewRepositoryIndex(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var analyzer = selectedAnalyzers.FirstOrDefault(item => item.Supports(path));
+            var analyzer = selectedAnalyzers.FirstOrDefault(item => item.FileExtensions.Matches(path));
 
             if (analyzer is null)
             {
@@ -71,15 +79,17 @@ public sealed class PreviewRepositoryIndex(
             root,
             RepositoryIndexingConfiguration.FileName,
             config.AnalyzerIds,
+            new ReadOnlyDictionary<string, SourceFileExtensions>(
+                selectedAnalyzers.ToDictionary(analyzer => analyzer.AnalyzerId, analyzer => analyzer.FileExtensions)),
             config.Exclusions,
             config.SemanticIndexing.Language,
             selected.AsReadOnly(),
             hasMore);
     }
 
-    private IReadOnlyList<ISourceAnalyzer> ResolveAnalyzers(RepositoryIndexingConfiguration config)
+    private IReadOnlyList<ConfiguredAnalyzer> ResolveAnalyzers(RepositoryIndexingConfiguration config)
     {
-        var selected = new List<ISourceAnalyzer>();
+        var selected = new List<ConfiguredAnalyzer>();
 
         foreach (var id in config.AnalyzerIds)
         {
@@ -93,9 +103,15 @@ public sealed class PreviewRepositoryIndex(
                     $"Analyzer '{id}' is not installed or implemented. Available analyzers: {available}.");
             }
 
-            selected.Add(analyzer);
+            var extensions = config.FileExtensions.TryGetValue(id, out var configuredExtensions)
+                ? configuredExtensions
+                : analyzer.DefaultFileExtensions;
+
+            selected.Add(new ConfiguredAnalyzer(id, extensions));
         }
 
         return selected;
     }
+
+    private sealed record ConfiguredAnalyzer(string AnalyzerId, SourceFileExtensions FileExtensions);
 }
