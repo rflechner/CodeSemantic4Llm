@@ -135,13 +135,32 @@ internal static class IndexDatabase
 
     private static void UpgradeFromVersionThree(SqliteConnection connection)
     {
-        // Preserve existing symbols and snapshots. Re-indexing will populate summaries when enabled.
+        // Older real caches lack the column. The test suite also simulates legacy caches
+        // by downgrading a newer schema while retaining unrelated columns.
         using var transaction = connection.BeginTransaction();
-        using var migration = Command(connection, transaction, """
-            ALTER TABLE symbols ADD COLUMN summary TEXT;
-            PRAGMA user_version = 4;
-            """);
-        migration.ExecuteNonQuery();
+        using var columns = Command(connection, transaction, "PRAGMA table_info(symbols);");
+        var hasSummary = false;
+
+        using (var reader = columns.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), "summary", StringComparison.Ordinal))
+                {
+                    hasSummary = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasSummary)
+        {
+            using var addSummary = Command(connection, transaction, "ALTER TABLE symbols ADD COLUMN summary TEXT;");
+            addSummary.ExecuteNonQuery();
+        }
+
+        using var version = Command(connection, transaction, "PRAGMA user_version = 4;");
+        version.ExecuteNonQuery();
         transaction.Commit();
     }
 
