@@ -24,7 +24,7 @@ public sealed class RepositorySourceWriterTests
                 "class Worker { void Run() {} }", TestContext.Current.CancellationToken);
 
             var bytes = await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken);
-            Assert.True(bytes.AsSpan().StartsWith([0xEF, 0xBB, 0xBF]));
+            Assert.True(bytes.AsSpan().StartsWith(new byte[] { 0xEF, 0xBB, 0xBF }));
             Assert.Equal("class Worker { void Run() {} }", Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3));
             Assert.Equal(Convert.ToHexString(SHA256.HashData(bytes)), newHash);
             Assert.Single(Directory.EnumerateFiles(root));
