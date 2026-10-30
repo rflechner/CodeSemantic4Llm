@@ -8,5 +8,5 @@ public sealed class ServeMcpServerCommand : AsyncCommand<ServeMcpServerSettings>
     /// <inheritdoc />
     public override Task<int> ExecuteAsync(
         CommandContext context, ServeMcpServerSettings settings, CancellationToken cancellationToken) =>
-        McpServerHost.RunAsync(settings.RepositoryRoot, cancellationToken);
+        McpServerHost.RunAsync(settings.RepositoryRoot, settings.AllowWrite, cancellationToken);
 }

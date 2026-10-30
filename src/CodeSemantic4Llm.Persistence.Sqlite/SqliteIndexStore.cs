@@ -148,6 +148,45 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         return new SymbolUsagePage(snapshot, target, usages.Take(maxResults).ToArray(), nextOffset);
     }
 
+    public IndexedMethod GetIndexedMethod(
+        RepositoryScope scope, SourceLocation methodLocation, long snapshotId,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var path = paths.GetDatabasePath(scope.RootPath);
+
+        if (!File.Exists(path))
+        {
+            throw MissingIndex();
+        }
+
+        using var connection = IndexDatabase.Open(path, scope.RootPath, writable: false);
+        using var transaction = connection.BeginTransaction(deferred: true);
+        var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
+
+        if (snapshot.SnapshotId != snapshotId)
+        {
+            throw new InvalidOperationException(
+                "The active index snapshot changed. Call find_symbols again before editing a method.");
+        }
+
+        using var command = IndexDatabase.Command(connection, transaction, """
+            SELECT s.language, s.kind, s.name, s.qualified_name, s.path, s.line, s.column_number,
+                   s.containing_type_line, s.containing_type_column, f.content_hash
+            FROM symbols s
+            JOIN indexed_files f ON f.snapshot_id = s.snapshot_id AND f.path = s.path
+            WHERE s.snapshot_id = $snapshot AND s.path = $path
+                AND s.line = $line AND s.column_number = $column AND s.kind = 'method';
+            """, ("$snapshot", snapshotId), ("$path", methodLocation.RelativePath),
+            ("$line", methodLocation.Line), ("$column", methodLocation.Column));
+
+        using var reader = command.ExecuteReader();
+        return reader.Read()
+            ? new IndexedMethod(snapshot, ReadSymbol(reader), reader.GetString(9))
+            : throw new InvalidOperationException(
+                "No indexed method exists at this declaration location. Use find_symbols with kind 'method'.");
+    }
+
     public TypeMemberPage GetTypeMembers(
         RepositoryScope scope, SourceLocation typeLocation, long snapshotId,
         string? kind, int maxResults, int offset, CancellationToken cancellationToken = default)

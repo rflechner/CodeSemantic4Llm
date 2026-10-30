@@ -153,6 +153,30 @@ snapshot; concurrent editing can still race the final check. Queries expose reco
 and reject a changed HEAD, but do not scan source files to prove working-tree freshness.
 See [indexing behavior and limitations](indexing.md).
 
+## Explicitly authorized source editing
+
+The `serve --allow-write` switch sets an immutable `RepositoryWriteAccess` capability
+for that host process. It is not derived from YAML, environment configuration or MCP
+request parameters. Read-only hosts register `get_method_body` but do not advertise
+`replace_method_body`. This is deliberate explicit tool registration rather than
+assembly-wide automatic discovery; the use case independently checks write permission.
+
+The `MethodBodyOperations` application use case selects a method by its precise
+published declaration location and snapshot ID through `IIndexStore`, checks the
+recorded HEAD and the indexed file's SHA-256 hash, then delegates C# parsing to
+`IMethodBodyEditor`. Roslyn locates the exact `MethodDeclarationSyntax` and validates
+the replacement as one executable C# block. It replaces the body's character span,
+not the whole declaration or file, preserving unrelated source text.
+
+`IRepositorySourceWriter` owns the actual checkout edit. Its filesystem implementation
+rejects path traversal and symbolic links, checks the expected hash again just before
+replacement, preserves UTF-8 BOM and Unix file mode, and uses a temporary sibling
+rename so incomplete writes are not exposed. Non-UTF-8 files are refused. The
+check-plus-rename is best-effort optimistic concurrency, **not** a cross-process
+atomic compare-and-swap. Concurrent checkout edits may still race. No new code or
+source copies are persisted into the central index; a successful write marks the
+index stale and requires an explicit reindex.
+
 ## Planned index storage
 
 ![Planned index storage: each original Git checkout has codesemantic4llm.yaml at its root; a separate central store holds one SQLite index per checkout, branch snapshots, and caches shared across branches, without source-file copies.](index-storage-architecture.png)

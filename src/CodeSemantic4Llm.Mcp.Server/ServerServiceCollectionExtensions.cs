@@ -15,9 +15,11 @@ internal static class ServerServiceCollectionExtensions
     {
         services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
         services.AddSingleton<ISourceReferenceAnalyzer, CSharpReferenceAnalyzer>();
+        services.AddSingleton<IMethodBodyEditor, CSharpMethodBodyEditor>();
         services.AddSingleton<IGitBranchProvider, GitBranchProvider>();
         services.AddSingleton<IRepositoryStateProvider, GitRepositoryStateProvider>();
         services.AddSingleton<IRepositorySourceReader, RepositorySourceReader>();
+        services.AddSingleton<IRepositorySourceWriter, RepositorySourceWriter>();
         services.AddSingleton(_ => IndexStoragePaths.FromEnvironment());
         services.AddSingleton<IIndexStore, SqliteIndexStore>();
         services.AddSingleton<IRepositoryConfigurationLoader, YamlRepositoryConfigurationLoader>();
@@ -29,6 +31,7 @@ internal static class ServerServiceCollectionExtensions
         services.AddSingleton<IndexRepository>();
         services.AddSingleton<FindSymbols>();
         services.AddSingleton<GetTypeMembers>();
+        services.AddSingleton<MethodBodyOperations>();
         services.AddSingleton<FindUsages>();
     }
 }

@@ -137,6 +137,15 @@ relative paths are resolved against the process working directory. See the
   to 50 (maximum 200); follow `nextOffset` and check `hasMore`. Partial class declarations
   share type references; overloads remain separate. Other declarations (such as fields and
   properties) are not yet supported. Missing reference metadata requires reindexing.
+- `get_method_body` reads only one indexed C# method body using its exact declaration
+  location and snapshot ID. It verifies that the current file's bytes match the published
+  source hash. By default it returns at most 12,000 characters; follow `nextOffset` to
+  read more (maximum 20,000 per request). Results include `contentHash` and whether the
+  method is expression-bodied.
+- `replace_method_body` changes only that method's executable body on disk. It is
+  registered only when the operator uses `serve --allow-write`. It requires a matching
+  `contentHash` from `get_method_body` and a complete C# block. No tool call or
+  repository YAML setting can enable write access once the server starts.
 
 A missing branch snapshot or a different HEAD produces an error asking the operator to
 run `index`. Queries do not rehash the working tree or reload YAML to establish freshness;
@@ -204,3 +213,58 @@ type arguments when Roslyn resolves them. For a method, overloads and extension
 method calls are matched to the declared method rather than its simple name.
 An unresolvable use, dynamic call or reflective invocation is not inferred.
 No source bodies are read during `find_usages`; indexing must be rerun after edits.
+
+
+## Reading and replacing a method body
+
+By default the server is read-only. Pass `--allow-write` explicitly to `serve`
+only when you want an MCP client to modify code:
+
+```sh
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
+  serve /absolute/path/to/repository --allow-write
+```
+
+The argument is a **server startup permission**, not a setting in
+`codesemantic4llm.yaml` and not a tool-call argument. Without it,
+`replace_method_body` is absent from MCP tool discovery. The default argument-free
+server is always read-only. `get_method_body` works in either mode.
+
+1. Index the checkout and locate the exact method with `find_symbols` or
+   `get_type_members`. Select its declaration position, not just its name (overloads
+   may share names).
+2. Call `get_method_body` with the method's `relativePath`, `line`, `column`,
+   and `snapshotId`. The response contains `body.text`, `contentHash`,
+   `totalCharacters` and `nextOffset`; page if the body is large.
+3. Call `replace_method_body` with the same location/snapshot, the exact
+   `expectedContentHash` obtained above, and `newBody` containing only a valid
+   C# block *including braces*. The replacement can convert an expression-bodied
+   method into a block body. It cannot rewrite the signature, attributes or adjacent
+   methods, and will not add an implementation to an abstract or interface method.
+4. Inspect the local Git diff and rerun `index`. The old index and its source
+   locations are deliberately not altered by the write tool; the reply sets
+   `reindexRequired: true`.
+
+Example edit arguments (locations and hashes are illustrative):
+
+```json
+{
+  "relativePath": "src/Worker.cs",
+  "line": 12,
+  "column": 17,
+  "snapshotId": 3,
+  "expectedContentHash": "THE_SHA256_FROM_GET_METHOD_BODY",
+  "newBody": "{ return 42; }"
+}
+```
+
+The application validates the selected branch, active index generation, recorded HEAD,
+current file hash and exact Roslyn method declaration location. The workspace adapter
+rejects relative-path traversal and symlinks, rejects non-UTF-8 source files and writes
+through a temporary sibling file followed by replacement. It preserves a UTF-8 BOM and
+the untouched source text outside the body. The write does **not** compile, run tests,
+execute code, commit, or stage changes.
+
+A file-hash check immediately before replacement catches ordinary concurrent edits,
+but is not a cross-process atomic compare-and-swap. Avoid concurrent writers to the
+same checkout. Prefer reviewing changes and using Git to revert unwanted edits.

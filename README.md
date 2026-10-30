@@ -152,6 +152,31 @@ query. Schema 3 adds reference relationships; existing declarations remain reada
 until that branch has been reindexed. Restart the MCP server so clients can discover
 `find_usages`.
 
+### Optional method-level source editing
+
+The MCP server is **read-only by default**. To allow a connected agent to change an
+indexed method body, explicitly start this server process with:
+
+```shell
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
+  serve /path/to/repository --allow-write
+```
+
+`get_method_body` is always available: after `find_symbols` or `get_type_members`,
+it reads only the selected method's body (12,000 characters per page by default) and
+returns the source-file `contentHash`. `replace_method_body` is **advertised only**
+when `--allow-write` is set. It accepts the method's exact indexed location and
+`snapshotId`, the `contentHash` from `get_method_body`, and a replacement C# block
+including braces. It changes **only that method's executable body**, without requiring
+a whole-file text replacement by the agent.
+
+The write is rejected if the index or working-tree file is stale, the syntax is invalid,
+or the method has no body. Writes are restricted to the operator-selected checkout;
+symlinks and traversal are rejected. This is a local source edit, not an index update:
+**run `index` again after any successful edit**, and review your Git diff before committing.
+Only UTF-8 source files are supported for editing in this first version.
+See [the editing workflow](docs/indexing.md#reading-and-replacing-a-method-body).
+
 ### MCP client configuration
 
 For VS Code's `.vscode/mcp.json`, use a stdio server with the repository in `args`:

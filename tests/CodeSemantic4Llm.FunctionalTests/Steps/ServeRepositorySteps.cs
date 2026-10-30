@@ -9,7 +9,7 @@ namespace CodeSemantic4Llm.FunctionalTests.Steps;
 
 /// <summary>Exercises repository selection through the real stdio server and CLI validation.</summary>
 [Binding]
-public sealed class ServeRepositorySteps
+public sealed partial class ServeRepositorySteps
 {
     private readonly string _workspace = Path.Combine(ResolveDirectoryPath(Path.GetTempPath()), "CodeSemantic4Llm.ServeTests", Guid.NewGuid().ToString("N"));
     private ConsoleCommandResult? _console;

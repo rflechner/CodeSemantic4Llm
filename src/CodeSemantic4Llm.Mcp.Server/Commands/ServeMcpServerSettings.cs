@@ -12,6 +12,11 @@ public sealed class ServeMcpServerSettings : CommandSettings
     [Description("Repository directory (absolute or relative). Overrides CODESEMANTIC4LLM_REPOSITORY_ROOT.")]
     public string? RepositoryRoot { get; init; }
 
+    /// <summary>Explicitly enables MCP source writes for this server process only.</summary>
+    [CommandOption("--allow-write")]
+    [Description("Allow MCP clients to replace indexed C# method bodies. Disabled by default.")]
+    public bool AllowWrite { get; init; }
+
     /// <inheritdoc />
     public override ValidationResult Validate()
     {
