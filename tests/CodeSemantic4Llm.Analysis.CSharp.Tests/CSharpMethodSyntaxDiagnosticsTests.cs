@@ -27,7 +27,8 @@ public sealed class CSharpMethodSyntaxDiagnosticsTests
         var error = Assert.Single(diagnostics, item => item.Id == "CS1002");
         Assert.Equal("error", error.Severity);
         Assert.Equal("src/Worker.cs", error.Location.RelativePath);
-        Assert.Equal(6, error.Location.Line);
+        // Roslyn anchors the missing semicolon at the end of the return expression.
+        Assert.Equal(5, error.Location.Line);
         Assert.True(error.Location.Column > 0);
         // Preflight must never mutate the original source document.
         Assert.Contains("return 1;", document.Content);
