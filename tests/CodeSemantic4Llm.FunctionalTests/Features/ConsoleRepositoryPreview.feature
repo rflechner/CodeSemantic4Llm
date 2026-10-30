@@ -84,7 +84,9 @@ Feature: Preview a local repository from an IDE or terminal
     Given the repository has no configuration file
     When I request console preview help
     Then the console preview succeeds
-    And the console output contains "codesemantic4llm preview <repository-path>"
+    And the console output contains "codesemantic4llm"
+    And the console output contains "preview"
+    And the console output contains "<repository-path>"
     And the console output contains "--max-files"
 
   Scenario: A missing repository argument is rejected

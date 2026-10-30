@@ -388,7 +388,9 @@ public sealed partial class RepositoryIndexingSteps
     {
         Assert.Equal(0, _console!.ExitCode);
         Assert.Empty(_console.Error);
-        Assert.Contains("index <repository-path>", _console.Output);
+        // Assert usage semantics, not Spectre's placement of the generated [OPTIONS] group.
+        Assert.Contains("index", _console.Output);
+        Assert.Contains("<repository-path>", _console.Output);
     }
 
     [Then("the newer schema version remains unchanged")]

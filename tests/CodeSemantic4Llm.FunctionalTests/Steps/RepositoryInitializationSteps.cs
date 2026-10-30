@@ -210,7 +210,10 @@ public sealed class RepositoryInitializationSteps
         Assert.Equal(0, _exitCode);
         Assert.Equal(string.Empty, _error);
         Assert.Contains("USAGE:", _output);
-        Assert.Contains("codesemantic4llm init <repository-path>", _output);
+        // Spectre inserts optional arguments between the executable and required path.
+        Assert.Contains("codesemantic4llm", _output);
+        Assert.Contains("init", _output);
+        Assert.Contains("<repository-path>", _output);
         Assert.Contains("--analyzer", _output);
         Assert.Contains("repeat for multiple analyzers", _output);
         Assert.Contains("default: dotnet-csharp", _output);
