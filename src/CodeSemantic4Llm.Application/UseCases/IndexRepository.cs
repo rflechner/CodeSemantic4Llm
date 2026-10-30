@@ -25,9 +25,11 @@ public sealed class IndexRepository(
     IRepositoryFileEnumerator fileEnumerator,
     IRepositorySourceReader sourceReader,
     IIndexStore indexStore,
-    IEnumerable<ISourceAnalyzer> analyzers)
+    IEnumerable<ISourceAnalyzer> analyzers,
+    IEnumerable<ISourceReferenceAnalyzer>? referenceAnalyzers = null)
 {
     private readonly IReadOnlyList<ISourceAnalyzer> _analyzers = analyzers.ToArray();
+    private readonly IReadOnlyList<ISourceReferenceAnalyzer> _referenceAnalyzers = referenceAnalyzers?.ToArray() ?? [];
 
     public async Task<RepositoryIndexingResult> ExecuteAsync(
         string repositoryRoot,
@@ -70,6 +72,13 @@ public sealed class IndexRepository(
             progress?.Report(new(RepositoryIndexingPhase.Indexing, index + 1, candidates.Count));
         }
 
+        // Reference binding depends on other files and cannot be reused per file like declarations.
+        // An unchanged snapshot can copy all resolved edges; otherwise rebuild them together.
+        if (!update.TryReuseReferences(cancellationToken))
+        {
+            await IndexReferencesAsync(root, candidates, indexedFiles, update, cancellationToken);
+        }
+
         await VerifyFilesAsync(root, indexedFiles, progress, cancellationToken);
         var finalCandidates = Discover(root, configuration, selectedAnalyzers, null, cancellationToken);
 
@@ -107,6 +116,39 @@ public sealed class IndexRepository(
         return candidates;
     }
 
+    private async Task IndexReferencesAsync(
+        string root, IReadOnlyList<IndexingSource> candidates, IReadOnlyList<IndexedSourceFile> files,
+        IIndexUpdate update, CancellationToken cancellationToken)
+    {
+        foreach (var analyzer in _referenceAnalyzers)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var documents = new List<SourceDocument>();
+
+            for (var index = 0; index < candidates.Count; index++)
+            {
+                var candidate = candidates[index];
+
+                if (!string.Equals(candidate.Analyzer.Analyzer.AnalyzerId, analyzer.AnalyzerId, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var observed = await sourceReader.ReadAsync(root, candidate.RelativePath, cancellationToken);
+
+                if (observed.ContentHash != files[index].ContentHash)
+                {
+                    throw new IOException($"Source file '{candidate.RelativePath}' changed during reference indexing. Run index again.");
+                }
+
+                documents.Add(observed.Document);
+            }
+
+            var references = await analyzer.AnalyzeAsync(documents, cancellationToken);
+            update.AddReferences(references, cancellationToken);
+        }
+    }
+
     private async Task VerifyFilesAsync(
         string root, IReadOnlyList<IndexedSourceFile> files,
         IProgress<RepositoryIndexingProgress>? progress, CancellationToken cancellationToken)
@@ -139,7 +181,7 @@ public sealed class IndexRepository(
         }
     }
 
-    private static string Fingerprint(RepositoryIndexingConfiguration configuration, ConfiguredSourceAnalyzers analyzers)
+    private string Fingerprint(RepositoryIndexingConfiguration configuration, ConfiguredSourceAnalyzers analyzers)
     {
         // ProjectName is display metadata; renaming it does not change derived declarations.
         var settings = JsonSerializer.Serialize(new
@@ -147,6 +189,8 @@ public sealed class IndexRepository(
             configuration.Version,
             configuration.SemanticIndexing.Language,
             configuration.Exclusions,
+            ReferenceAnalyzers = _referenceAnalyzers.OrderBy(entry => entry.AnalyzerId, StringComparer.Ordinal)
+                .Select(entry => new { entry.AnalyzerId, entry.IndexVersion }),
             Analyzers = analyzers.Entries.Select(entry => new
             {
                 entry.AnalyzerId, entry.Analyzer.IndexVersion, Extensions = entry.FileExtensions.ToArray()

@@ -12,7 +12,7 @@ namespace CodeSemantic4Llm.Mcp.Server.Tools;
 [McpServerToolType]
 public sealed class RepositoryIndexTools(
     IConfiguration configuration, IRepositoryStateProvider stateProvider, IIndexStore indexStore,
-    FindSymbols findSymbols, GetTypeMembers getTypeMembers)
+    FindSymbols findSymbols, GetTypeMembers getTypeMembers, FindUsages findUsages)
 {
     [McpServerTool, Description("Returns the saved index snapshot and observed Git state. This does not verify working-tree freshness.")]
     public async Task<RepositoryIndexStatus> GetRepositoryIndexStatusAsync(CancellationToken cancellationToken = default)
@@ -39,6 +39,18 @@ public sealed class RepositoryIndexTools(
         CancellationToken cancellationToken = default) =>
         getTypeMembers.ExecuteAsync(GetRepositoryRoot(), new SourceLocation(relativePath, line, column),
             snapshotId, kind, maxResults, offset, cancellationToken);
+
+    [McpServerTool, Description("Finds references to one exact indexed method or type using Roslyn-resolved symbol identities. First call find_symbols, then pass the declaration's location and snapshot.snapshotId. Returns repository-relative reference positions, not source text. Results are paginated with nextOffset. C# project references are not yet evaluated; unresolved references are omitted. Run index again after source edits.")]
+    public Task<SymbolUsagePage> FindUsagesAsync(
+        [Description("Declaration's location.relativePath from find_symbols.")] string relativePath,
+        [Description("Declaration's one-based location.line.")] int line,
+        [Description("Declaration's one-based location.column.")] int column,
+        [Description("snapshot.snapshotId returned by find_symbols.")] long snapshotId,
+        [Description("Maximum references per page, from 1 to 200.")] int maxResults = 50,
+        [Description("Start at 0; use nextOffset to read subsequent pages.")] int offset = 0,
+        CancellationToken cancellationToken = default) =>
+        findUsages.ExecuteAsync(GetRepositoryRoot(), new SourceLocation(relativePath, line, column),
+            snapshotId, maxResults, offset, cancellationToken);
 
     private string GetRepositoryRoot() => configuration["CODESEMANTIC4LLM_REPOSITORY_ROOT"]
         ?? throw new InvalidOperationException("Pass the repository path to serve or set CODESEMANTIC4LLM_REPOSITORY_ROOT before querying repository indexes.");

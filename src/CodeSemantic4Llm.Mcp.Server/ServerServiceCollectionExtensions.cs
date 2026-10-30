@@ -14,6 +14,7 @@ internal static class ServerServiceCollectionExtensions
     public static void AddRepositoryServices(this IServiceCollection services)
     {
         services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
+        services.AddSingleton<ISourceReferenceAnalyzer, CSharpReferenceAnalyzer>();
         services.AddSingleton<IGitBranchProvider, GitBranchProvider>();
         services.AddSingleton<IRepositoryStateProvider, GitRepositoryStateProvider>();
         services.AddSingleton<IRepositorySourceReader, RepositorySourceReader>();
@@ -28,5 +29,6 @@ internal static class ServerServiceCollectionExtensions
         services.AddSingleton<IndexRepository>();
         services.AddSingleton<FindSymbols>();
         services.AddSingleton<GetTypeMembers>();
+        services.AddSingleton<FindUsages>();
     }
 }

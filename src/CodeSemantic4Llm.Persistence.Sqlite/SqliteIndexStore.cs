@@ -73,6 +73,81 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         return new SymbolSearchResult(snapshot, symbols.Take(maxResults).ToArray(), hasMore);
     }
 
+    public SymbolUsagePage FindUsages(
+        RepositoryScope scope, SourceLocation targetLocation, long snapshotId,
+        int maxResults, int offset, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var path = paths.GetDatabasePath(scope.RootPath);
+
+        if (!File.Exists(path))
+        {
+            throw MissingIndex();
+        }
+
+        using var connection = IndexDatabase.Open(path, scope.RootPath, writable: false);
+        using var transaction = connection.BeginTransaction(deferred: true);
+        var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
+
+        if (snapshot.SnapshotId != snapshotId)
+        {
+            throw new InvalidOperationException("The active index snapshot changed. Call find_symbols again before finding usages.");
+        }
+
+        using (var version = IndexDatabase.Command(connection, transaction, "PRAGMA user_version;"))
+        {
+            if (Convert.ToInt32(version.ExecuteScalar()) < 3)
+            {
+                throw new InvalidOperationException("This branch snapshot has no reference metadata. Run the index command again.");
+            }
+        }
+
+        using (var version = IndexDatabase.Command(connection, transaction,
+                   "SELECT reference_index_version FROM snapshots WHERE id = $snapshot;", ("$snapshot", snapshotId)))
+        {
+            if (Convert.ToInt32(version.ExecuteScalar()) != 1)
+            {
+                throw new InvalidOperationException("This branch snapshot has no reference metadata. Run the index command again.");
+            }
+        }
+
+        using var targetCommand = IndexDatabase.Command(connection, transaction, """
+            SELECT language, kind, name, qualified_name, path, line, column_number, containing_type_line, containing_type_column
+            FROM symbols WHERE snapshot_id = $snapshot AND path = $path AND line = $line AND column_number = $column
+                AND kind IN ('method', 'class', 'struct', 'interface', 'record', 'enum', 'delegate');
+            """, ("$snapshot", snapshotId), ("$path", targetLocation.RelativePath),
+            ("$line", targetLocation.Line), ("$column", targetLocation.Column));
+        SymbolDefinition target;
+        using (var reader = targetCommand.ExecuteReader())
+        {
+            target = reader.Read() ? ReadSymbol(reader)
+                : throw new InvalidOperationException("No indexed method or type exists at this location. Use the location from find_symbols.");
+        }
+
+        using var command = IndexDatabase.Command(connection, transaction, """
+            SELECT usage_path, usage_line, usage_column
+            FROM symbol_references
+            WHERE snapshot_id = $snapshot AND target_path = $path AND target_line = $line AND target_column = $column
+            ORDER BY usage_path COLLATE BINARY, usage_line, usage_column
+            LIMIT $limit OFFSET $offset;
+            """, ("$snapshot", snapshotId), ("$path", targetLocation.RelativePath),
+            ("$line", targetLocation.Line), ("$column", targetLocation.Column),
+            ("$limit", maxResults + 1), ("$offset", offset));
+
+        var usages = new List<SourceLocation>();
+        using (var reader = command.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                usages.Add(new SourceLocation(reader.GetString(0), reader.GetInt32(1), reader.GetInt32(2)));
+            }
+        }
+
+        int? nextOffset = usages.Count > maxResults ? checked(offset + maxResults) : null;
+        return new SymbolUsagePage(snapshot, target, usages.Take(maxResults).ToArray(), nextOffset);
+    }
+
     public TypeMemberPage GetTypeMembers(
         RepositoryScope scope, SourceLocation typeLocation, long snapshotId,
         string? kind, int maxResults, int offset, CancellationToken cancellationToken = default)
