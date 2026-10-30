@@ -21,6 +21,10 @@ and `serve`. Index each checkout and Git branch you want to examine first:
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- index /path/to/checkout
 ```
 
+The declaration inspector displays generated LLM summaries when the repository opted
+in to `semanticIndexing.llm.enabled`. Summaries come from the published SQLite
+index; the dashboard never sends code to a model and never opens source files.
+
 ## What you can browse
 
 - **Projects:** every recognized, published cache database, identified by the
