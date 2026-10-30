@@ -76,8 +76,8 @@ public sealed class CSharpReferenceAnalyzerTests
             }
             class Caller { void Use(Worker worker) { worker.Ping(); } }
             """);
-        var method = Assert.Single((await new CSharpSourceAnalyzer().AnalyzeAsync(
-            source, TestContext.Current.CancellationToken)).Where(symbol => symbol.Name == "Ping"));
+        var method = Assert.Single(await new CSharpSourceAnalyzer().AnalyzeAsync(
+            source, TestContext.Current.CancellationToken), symbol => symbol.Name == "Ping");
 
         var references = await new CSharpReferenceAnalyzer().AnalyzeAsync(
             [source], TestContext.Current.CancellationToken);
@@ -93,8 +93,8 @@ public sealed class CSharpReferenceAnalyzerTests
             class Worker { public void Run() {} }
             class Caller { void Use() { Unknown.Run(); } }
             """);
-        var method = Assert.Single((await new CSharpSourceAnalyzer().AnalyzeAsync(
-            source, TestContext.Current.CancellationToken)).Where(symbol => symbol.Name == "Run"));
+        var method = Assert.Single(await new CSharpSourceAnalyzer().AnalyzeAsync(
+            source, TestContext.Current.CancellationToken), symbol => symbol.Name == "Run");
 
         var references = await new CSharpReferenceAnalyzer().AnalyzeAsync(
             [source], TestContext.Current.CancellationToken);
