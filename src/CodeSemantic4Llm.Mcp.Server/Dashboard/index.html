@@ -1,0 +1,676 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Index Explorer · CodeSemantic4Llm</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0f1e;
+      --panel: #101a2c;
+      --panel-2: #142136;
+      --line: #27364d;
+      --text: #ecf2fc;
+      --muted: #93a5c0;
+      --soft: #637792;
+      --accent: #56d5c2;
+      --blue: #82a9ff;
+      --purple: #baa2ff;
+      --shadow: 0 22px 64px rgba(0, 0, 0, .24);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .35; cursor: default; }
+    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    .app { display: grid; grid-template-columns: 285px minmax(0, 1fr); min-height: 100vh; }
+    .sidebar { display: flex; flex-direction: column; padding: 28px 18px 22px; background: #0d1627; border-right: 1px solid #233249; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 13px; padding: 2px 10px 24px; border-bottom: 1px solid var(--line); }
+    .brand-mark { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; font-size: 21px; font-weight: 800; color: #061b25; background: linear-gradient(140deg, #71e8cf, #78a8ff); box-shadow: 0 7px 23px #50bbd233; }
+    .brand strong { display: block; font-size: 15px; letter-spacing: -.03em; }
+    .brand span { display: block; color: var(--muted); font-size: 11px; letter-spacing: .11em; font-weight: 700; }
+    .side-title { display: flex; justify-content: space-between; align-items: center; margin: 0 8px 0; color: var(--muted); text-transform: uppercase; font-size: 10px; font-weight: 800; letter-spacing: .16em; }
+    .icon-button { width: 29px; height: 29px; background: transparent; border: 1px solid var(--line); border-radius: 9px; color: var(--text); font-size: 17px; }
+    .icon-button:hover, .soft-button:hover { background: #24334a; }
+    .project-list { display: grid; align-content: start; gap: 7px; overflow-y: auto; max-height: 62vh; }
+    .project-item { width: 100%; display: flex; gap: 11px; align-items: center; text-align: left; padding: 13px 11px; border: 1px solid transparent; border-radius: 13px; background: transparent; color: var(--text); }
+    .project-item:hover { background: #18253a; }
+    .project-item.active { background: #203248; border-color: #3b6171; }
+    .project-avatar { min-width: 33px; width: 33px; height: 33px; display: grid; place-items: center; border-radius: 10px; color: #b4eff2; background: #234358; font-size: 16px; }
+    .project-info { min-width: 0; flex: 1; }
+    .project-info strong { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .project-info small { display: block; font-size: 11px; color: var(--muted); }
+    .side-footer { margin-top: auto; border-top: 1px solid var(--line); padding: 17px 10px 0; color: var(--muted); font-size: 12px; }
+    .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px #56d5c21c; margin-right: 9px; }
+    .side-footer p { margin: 6px 0 0 16px; color: var(--soft); font-size: 11px; }
+    main { min-width: 0; max-width: 1600px; width: 100%; margin: 0 auto; padding: 28px clamp(20px, 3vw, 55px) 64px; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin-bottom: 34px; }
+    .breadcrumb { font-size: 12px; color: var(--muted); letter-spacing: .02em; }
+    .breadcrumb span { color: var(--accent); }
+    .top-tag { color: #afe9da; background: #15382f; border: 1px solid #346c5b; border-radius: 50px; padding: 6px 11px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .hero { position: relative; overflow: hidden; padding: 30px 34px; border: 1px solid #30445f; border-radius: 20px; background: radial-gradient(ellipse at 95% 5%, #244661 0, transparent 46%), linear-gradient(120deg, #1a2b43, #111d30 75%); box-shadow: var(--shadow); }
+    .hero::after { content: "</>"; position: absolute; right: 35px; top: -21px; font-size: 140px; font-weight: 800; letter-spacing: -.17em; color: #b4dbec0b; pointer-events: none; }
+    .eyebrow { color: #93e0d7; font-size: 10px; letter-spacing: .18em; font-weight: 800; text-transform: uppercase; }
+    .hero h1 { position: relative; max-width: 900px; margin: 7px 0 7px; font-size: clamp(25px, 3.1vw, 39px); letter-spacing: -.055em; line-height: 1.18; overflow-wrap: anywhere; }
+    .hero p { position: relative; color: var(--muted); margin: 0; overflow-wrap: anywhere; font-size: 12px; }
+    .hero-bottom { position: relative; display: flex; margin-top: 25px; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .branch-picker { display: flex; align-items: center; gap: 10px; }
+    .branch-picker label { color: #b5c5dc; font-size: 12px; }
+    select, .search-input { outline: none; border: 1px solid #34465e; background: #122036; color: var(--text); border-radius: 10px; min-height: 37px; padding: 7px 12px; }
+    select { max-width: 270px; }
+    .meta-inline { color: var(--muted); font-size: 11px; }
+    .stat-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 19px 0; }
+    .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 15px; padding: 19px 19px 17px; }
+    .stat .label { color: var(--muted); font-size: 11px; letter-spacing: .045em; }
+    .stat .value { display: block; font-weight: 760; font-size: clamp(23px, 2.45vw, 33px); letter-spacing: -.055em; margin: 3px 0; }
+    .stat .sub { color: var(--soft); font-size: 11px; }
+    .value.teal { color: var(--accent); } .value.blue { color: var(--blue); } .value.purple { color: var(--purple); }
+    .insights { display: grid; grid-template-columns: 1.5fr 1fr; gap: 15px; margin-bottom: 23px; }
+    .panel { min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 23px 24px; }
+    .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 20px; }
+    .panel h2 { font-size: 14px; margin: 0; font-weight: 750; letter-spacing: -.016em; }
+    .panel-head small { color: var(--soft); font-size: 11px; }
+    .kind-list { display: grid; gap: 10px; }
+    .kind-row { display: grid; grid-template-columns: 85px minmax(0, 1fr) 48px; gap: 13px; align-items: center; font-size: 12px; color: #c8d5e8; }
+    .kind-track { height: 7px; background: #25334a; border-radius: 5px; overflow: hidden; }
+    .kind-track > span { display: block; height: 100%; background: linear-gradient(90deg, #6c95ee, #58d2c5); border-radius: inherit; }
+    .kind-row .count { font-variant-numeric: tabular-nums; text-align: right; color: var(--muted); }
+    .details { display: grid; gap: 15px; grid-template-columns: 1fr 1fr; }
+    .detail-block { min-width: 0; }
+    .detail-block small { display: block; color: var(--muted); font-size: 11px; }
+    .detail-block strong { display: block; margin-top: 3px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .explorer { border: 1px solid var(--line); border-radius: 16px; background: var(--panel); overflow: hidden; }
+    .explorer-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 15px; padding: 19px 21px 14px; border-bottom: 1px solid var(--line); }
+    .tabs { display: flex; gap: 7px; flex-wrap: wrap; }
+    .tab { border: 0; background: transparent; color: var(--muted); border-radius: 9px; padding: 9px 14px; font-weight: 690; font-size: 12px; }
+    .tab.active { color: #d8fbf6; background: #214038; }
+    .tab:hover:not(.active) { color: var(--text); background: #1a283e; }
+    .toolbar { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .search-input { width: clamp(190px, 21vw, 320px); font-size: 12px; }
+    .search-input::placeholder { color: #8497b1; }
+    .filters { padding: 11px 22px; display: flex; align-items: center; gap: 9px; flex-wrap: wrap; border-bottom: 1px solid var(--line); min-height: 56px; }
+    .filters label { color: var(--muted); font-size: 11px; }
+    .filters select { min-height: 32px; font-size: 12px; }
+    .file-chip { display: none; align-items: center; gap: 8px; padding: 6px 9px; color: #c6e7f0; border: 1px solid #3f6271; border-radius: 8px; background: #1c3744; font-size: 11px; max-width: 100%; }
+    .file-chip.visible { display: flex; }
+    .file-chip > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .file-chip button { background: transparent; border: 0; color: #c6e7f0; font-size: 16px; line-height: 1; }
+    .table-scroll { overflow-x: auto; min-height: 220px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; }
+    thead th { font-weight: 690; color: var(--muted); font-size: 10px; letter-spacing: .095em; text-transform: uppercase; background: #121e31; }
+    th, td { padding: 13px 20px; border-bottom: 1px solid #233047; vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #1a2a3e; }
+    tbody tr.clickable { cursor: pointer; }
+    td { font-size: 12px; color: #d2def0; }
+    .cell-strong { display: block; font-weight: 670; color: #eef4ff; overflow-wrap: anywhere; }
+    .cell-sub { display: block; margin-top: 3px; font-size: 11px; color: var(--muted); overflow-wrap: anywhere; }
+    .code { font: 11px/1.5 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace; overflow-wrap: anywhere; }
+    .symbol-badge { display: inline-block; color: #a9e6dd; border: 1px solid #33695e; border-radius: 7px; background: #1c3938; font-size: 10px; font-weight: 700; padding: 3px 8px; white-space: nowrap; }
+    .symbol-badge.method { color: #c2bdff; border-color: #514c7b; background: #2c2a47; }
+    .symbol-badge.interface, .symbol-badge.record { color: #a9c8ff; border-color: #3f547c; background: #24344f; }
+    .symbol-badge.property, .symbol-badge.field { color: #ffdab0; border-color: #705742; background: #3b302c; }
+    .arrow { color: var(--accent); font-size: 18px; text-align: right; }
+    .pager { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 13px; padding: 16px 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .pager-actions { display: flex; gap: 9px; }
+    .soft-button { color: var(--text); background: #19283d; border: 1px solid #34445c; border-radius: 9px; padding: 7px 12px; font-size: 12px; }
+    .empty { padding: 58px 22px; text-align: center; color: var(--muted); }
+    .empty .illustration { display: block; font-size: 32px; opacity: .7; margin-bottom: 10px; }
+    .error { color: #ffb6b6; }
+    .drawer-backdrop { position: fixed; inset: 0; background: #030915b8; display: flex; justify-content: flex-end; z-index: 20; }
+    .drawer-backdrop[hidden] { display: none; }
+    .drawer { width: min(560px, 100%); height: 100%; overflow-y: auto; background: #122036; border-left: 1px solid #3c536d; padding: 28px 30px; box-shadow: -15px 0 60px #0005; }
+    .drawer-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .drawer h2 { font-size: 23px; letter-spacing: -.04em; overflow-wrap: anywhere; margin: 12px 0 8px; }
+    .drawer-path { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .drawer-separator { height: 1px; background: var(--line); margin: 23px 0; }
+    .drawer-data { display: grid; gap: 17px; grid-template-columns: 1fr 1fr; margin-top: 24px; }
+    .drawer h3 { font-size: 14px; }
+    .reference-item { display: block; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .reference-item .cell-sub { margin-top: 2px; }
+    .reference-footer { margin-top: 13px; display: flex; gap: 10px; align-items: center; justify-content: space-between; color: var(--muted); }
+    .hint { color: var(--soft); font-size: 12px; }
+    [hidden] { display: none !important; }
+    @media (max-width: 1120px) {
+      .insights { grid-template-columns: 1fr; }
+      .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 770px) {
+      .app { display: block; }
+      .sidebar { padding: 14px; gap: 12px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .brand { padding: 0 0 11px; }
+      .project-list { display: flex; gap: 7px; overflow-x: auto; max-height: none; }
+      .project-item { min-width: 175px; max-width: 225px; padding: 9px; }
+      .side-footer { display: none; }
+      main { padding: 17px 14px 40px; }
+      .topbar { margin-bottom: 15px; }
+      .hero { padding: 23px 20px; }
+      .hero::after { display: none; }
+      .panel { padding: 19px; }
+      .stat { padding: 14px; }
+      th, td { padding: 11px 13px; }
+      .explorer-head { padding: 14px; }
+      .filters { padding: 11px 14px; }
+      .search-input { width: min(330px, 75vw); }
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      .project-item, .tab, .soft-button { transition: background .15s ease, color .15s ease; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" aria-label="Indexed projects">
+      <div class="brand"><div class="brand-mark" aria-hidden="true">{ }</div><div><strong>CodeSemantic4Llm</strong><span>INDEX EXPLORER</span></div></div>
+      <div class="side-title"><span>Indexed projects <span id="project-count">0</span></span><button class="icon-button" id="refresh" title="Reload available indexes" aria-label="Refresh projects">↻</button></div>
+      <nav id="projects" class="project-list" aria-label="Projects"></nav>
+      <div class="side-footer"><span class="status-dot"></span>Local explorer · Read only<p>Snapshots are displayed as saved. The dashboard never reindexes or modifies source code.</p></div>
+    </aside>
+    <main>
+      <header class="topbar"><div class="breadcrumb">Workspace <span>/</span> Index explorer <span>/</span> <span id="crumb">Overview</span></div><div class="top-tag">● READ-ONLY</div></header>
+      <section class="hero" aria-label="Selected index">
+        <span class="eyebrow">Repository index overview</span>
+        <h1 id="project-name">Your code, mapped.</h1>
+        <p id="project-root">Explore the declarations, source files and relationships saved in your local cache.</p>
+        <div class="hero-bottom">
+          <div class="branch-picker"><label for="branch">Git branch</label><select id="branch" aria-label="Git branch" disabled><option>No index selected</option></select></div>
+          <span class="meta-inline" id="indexed-at">Select an indexed repository to begin.</span>
+        </div>
+      </section>
+      <section class="stat-grid" aria-label="Index statistics">
+        <div class="stat"><span class="label">INDEXED PROJECTS</span><strong class="value" id="stat-projects">0</strong><span class="sub">Local cache</span></div>
+        <div class="stat"><span class="label">SOURCE FILES</span><strong class="value blue" id="stat-files">—</strong><span class="sub">Indexed metadata</span></div>
+        <div class="stat"><span class="label">DECLARATIONS</span><strong class="value teal" id="stat-symbols">—</strong><span class="sub">Classes, methods, members</span></div>
+        <div class="stat"><span class="label">REFERENCES</span><strong class="value purple" id="stat-references">—</strong><span class="sub">Resolved usages</span></div>
+      </section>
+      <section class="insights" aria-label="Index composition">
+        <div class="panel"><div class="panel-head"><h2>Declaration breakdown</h2><small>Saved symbol kinds</small></div><div class="kind-list" id="kinds"><div class="hint">Select an index to see its composition.</div></div></div>
+        <div class="panel"><div class="panel-head"><h2>Snapshot details</h2><small>Published branch</small></div>
+          <div class="details">
+            <div class="detail-block"><small>Snapshot ID</small><strong id="meta-snapshot">—</strong></div>
+            <div class="detail-block"><small>Recorded revision</small><strong class="code" id="meta-revision">—</strong></div>
+            <div class="detail-block"><small>Index language</small><strong id="meta-language">—</strong></div>
+            <div class="detail-block"><small>Relationships</small><strong id="meta-relations">—</strong></div>
+          </div>
+        </div>
+      </section>
+      <section class="explorer" aria-label="Index explorer">
+        <div class="explorer-head">
+          <div class="tabs" role="tablist" aria-label="Explore index records">
+            <button class="tab active" role="tab" aria-selected="true" data-tab="symbols">⌘ &nbsp; Symbols</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="files">▤ &nbsp; Files</button>
+            <button class="tab" role="tab" aria-selected="false" data-tab="references">⇄ &nbsp; References</button>
+          </div>
+          <div class="toolbar"><label for="search" class="hint">Search</label><input id="search" class="search-input" type="search" placeholder="Name, path or type…" autocomplete="off" maxlength="200" aria-label="Search current index records"></div>
+        </div>
+        <div class="filters">
+          <label for="kind">Symbol kind</label><select id="kind" aria-label="Filter by symbol kind"><option value="">All kinds</option></select>
+          <div class="file-chip" id="file-chip"><span id="file-filter-name"></span><button id="clear-file" title="Remove file filter" aria-label="Remove file filter">×</button></div>
+          <span class="hint" id="scope-hint">Choose a project and branch to explore.</span>
+        </div>
+        <div class="table-scroll"><table aria-label="Indexed data"><thead id="table-head"></thead><tbody id="table-body"></tbody></table><div class="empty" id="empty"><span class="illustration">⌁</span>Index records will appear here.</div></div>
+        <footer class="pager"><span id="page-label">No results</span><div class="pager-actions"><button class="soft-button" id="prev" disabled>← Previous</button><button class="soft-button" id="next" disabled>Next →</button></div></footer>
+      </section>
+    </main>
+  </div>
+  <div class="drawer-backdrop" id="backdrop" hidden>
+    <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+      <div class="drawer-top"><span class="eyebrow">Declaration inspector</span><button id="close-drawer" class="icon-button" title="Close inspector" aria-label="Close inspector">×</button></div>
+      <h2 id="drawer-title"></h2><div class="drawer-path code" id="drawer-path"></div>
+      <div class="drawer-data">
+        <div class="detail-block"><small>Kind</small><strong id="drawer-kind"></strong></div>
+        <div class="detail-block"><small>Language</small><strong id="drawer-language"></strong></div>
+        <div class="detail-block"><small>Line : Column</small><strong id="drawer-location"></strong></div>
+        <div class="detail-block"><small>Containing type location</small><strong id="drawer-container"></strong></div>
+      </div>
+      <div class="drawer-separator"></div>
+      <h3>Recorded usages <span class="hint" id="drawer-ref-count"></span></h3>
+      <div id="drawer-references"></div>
+      <div class="reference-footer"><span id="drawer-ref-page"></span><div class="pager-actions"><button class="soft-button" id="drawer-prev">←</button><button class="soft-button" id="drawer-next">→</button></div></div>
+      <p class="hint">Location and relationship metadata comes from the selected published index. Source files are never copied or served.</p>
+    </aside>
+  </div>
+  <script>
+    'use strict';
+
+    const state = {
+      projects: [], project: null, branch: null, summary: null,
+      tab: 'symbols', search: '', kind: '', file: '', offset: 0, limit: 50, total: 0,
+      tableToken: 0, summaryToken: 0, drawerToken: 0, drawerSymbol: null, drawerOffset: 0
+    };
+
+    const byId = id => document.getElementById(id);
+    const number = value => new Intl.NumberFormat(undefined).format(value);
+    const element = (tag, className, value) => {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      if (value !== undefined && value !== null) node.textContent = String(value);
+      return node;
+    };
+    const currentBranch = () => state.project && state.project.branches.find(branch => branch.name === state.branch);
+    const params = extra => Object.assign({ project: state.project.id, branch: state.branch }, extra || {});
+
+    async function api(endpoint, query) {
+      const url = new URL(endpoint, location.origin);
+      Object.entries(query || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+      });
+      const response = await fetch(url, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+      if (!response.ok) {
+        const problem = await response.json().catch(() => ({}));
+        throw new Error(problem.error || problem.detail || 'Request failed (' + response.status + ')');
+      }
+      return response.json();
+    }
+
+    function setEmpty(message, isError) {
+      const empty = byId('empty');
+      empty.replaceChildren(element('span', 'illustration', isError ? '!' : '⌁'), element('span', isError ? 'error' : '', message));
+      empty.hidden = false;
+      byId('table-head').replaceChildren();
+      byId('table-body').replaceChildren();
+    }
+
+    function renderProjects() {
+      const list = byId('projects');
+      list.replaceChildren();
+      byId('project-count').textContent = state.projects.length;
+      byId('stat-projects').textContent = number(state.projects.length);
+
+      for (const project of state.projects) {
+        const button = element('button', 'project-item');
+        button.type = 'button';
+        button.classList.toggle('active', state.project && state.project.id === project.id);
+        button.setAttribute('aria-pressed', String(state.project && state.project.id === project.id));
+        button.title = project.rootPath;
+        const avatar = element('span', 'project-avatar', '⌘');
+        const text = element('span', 'project-info');
+        text.append(element('strong', '', project.name),
+          element('small', '', project.branches.length + (project.branches.length === 1 ? ' branch' : ' branches')));
+        button.append(avatar, text);
+        button.addEventListener('click', () => selectProject(project.id));
+        list.append(button);
+      }
+    }
+
+    function selectProject(id) {
+      const project = state.projects.find(item => item.id === id);
+      if (!project) return;
+      state.project = project;
+      state.branch = project.branches.some(branch => branch.name === state.branch)
+        ? state.branch : (project.branches[0] && project.branches[0].name) || null;
+      state.kind = '';
+      state.file = '';
+      state.offset = 0;
+      closeDrawer();
+      renderSelection();
+      loadSummary();
+      loadTable();
+    }
+
+    function renderSelection() {
+      renderProjects();
+      const project = state.project;
+      const branch = currentBranch();
+      byId('project-name').textContent = project ? project.name : 'Your code, mapped.';
+      byId('crumb').textContent = project ? project.name : 'Overview';
+      byId('project-root').textContent = project ? project.rootPath : 'No indexed repository found. Run the index command first.';
+      const picker = byId('branch');
+      picker.replaceChildren();
+
+      for (const item of (project && project.branches) || []) {
+        const option = element('option', '', item.name);
+        option.value = item.name;
+        picker.append(option);
+      }
+      picker.disabled = !branch;
+      if (branch) picker.value = branch.name;
+      byId('indexed-at').textContent = branch
+        ? 'Published ' + new Date(branch.completedAt).toLocaleString()
+        : 'No published branch snapshots';
+      byId('stat-files').textContent = branch ? number(branch.fileCount) : '—';
+      byId('stat-symbols').textContent = branch ? number(branch.symbolCount) : '—';
+      byId('stat-references').textContent = '—';
+      byId('meta-snapshot').textContent = branch ? '#' + branch.snapshotId : '—';
+      byId('meta-revision').textContent = branch && branch.recordedRevision ? branch.recordedRevision.slice(0, 12) : '—';
+      byId('meta-revision').title = branch && branch.recordedRevision || '';
+      byId('meta-language').textContent = branch ? branch.semanticLanguage : '—';
+      byId('meta-relations').textContent = branch ? (branch.hasReferences ? 'Available' : 'Not indexed') : '—';
+      byId('kinds').replaceChildren(element('span', 'hint', branch ? 'Loading composition…' : 'No published snapshot.'));
+      updateFilterUI();
+    }
+
+    async function refresh() {
+      try {
+        const projects = await api('/api/projects');
+        const selectedId = state.project && state.project.id;
+        state.projects = projects;
+        renderProjects();
+        if (!projects.length) {
+          state.project = null;
+          state.branch = null;
+          ++state.tableToken;
+          ++state.summaryToken;
+          renderSelection();
+          setEmpty('No published index found. Run codesemantic4llm index /path/to/repository.', false);
+          byId('page-label').textContent = 'No results';
+          byId('prev').disabled = true;
+          byId('next').disabled = true;
+          return;
+        }
+        selectProject(projects.some(project => project.id === selectedId) ? selectedId : projects[0].id);
+      } catch (error) {
+        setEmpty(error.message, true);
+      }
+    }
+
+    async function loadSummary() {
+      const token = ++state.summaryToken;
+      const branch = currentBranch();
+      if (!branch) return;
+      try {
+        const summary = await api('/api/summary', params());
+        if (token !== state.summaryToken) return;
+        state.summary = summary;
+        byId('stat-references').textContent = number(summary.referenceCount);
+        const kinds = byId('kinds');
+        kinds.replaceChildren();
+
+        if (!summary.kinds.length) {
+          kinds.append(element('p', 'hint', 'No declarations in this snapshot.'));
+        } else {
+          const maximum = summary.kinds[0].count || 1;
+          for (const kind of summary.kinds.slice(0, 8)) {
+            const row = element('div', 'kind-row');
+            const track = element('div', 'kind-track');
+            const bar = element('span');
+            bar.style.width = Math.max(2, kind.count / maximum * 100) + '%';
+            track.append(bar);
+            row.append(element('span', '', kind.name), track, element('span', 'count', number(kind.count)));
+            kinds.append(row);
+          }
+        }
+        updateFilterUI();
+      } catch (error) {
+        if (token === state.summaryToken) {
+          byId('kinds').replaceChildren(element('span', 'error', error.message));
+        }
+      }
+    }
+
+    function updateFilterUI() {
+      const onSymbols = state.tab === 'symbols';
+      byId('kind').disabled = !onSymbols || !currentBranch();
+      byId('kind').parentElement.hidden = false;
+      const kindPicker = byId('kind');
+      kindPicker.replaceChildren();
+      const all = element('option', '', 'All kinds');
+      all.value = '';
+      kindPicker.append(all);
+      for (const kind of (state.summary && state.summary.kinds) || []) {
+        const option = element('option', '', kind.name);
+        option.value = kind.name;
+        kindPicker.append(option);
+      }
+      kindPicker.value = state.kind;
+      const chip = byId('file-chip');
+      chip.classList.toggle('visible', onSymbols && !!state.file);
+      byId('file-filter-name').textContent = state.file;
+      byId('scope-hint').textContent = onSymbols ? 'Select a declaration to inspect its usages.' :
+        state.tab === 'files' ? 'Select a file to view its declarations.' : 'Resolved symbol occurrences stored in SQLite.';
+      for (const tab of document.querySelectorAll('[data-tab]')) {
+        const selected = tab.dataset.tab === state.tab;
+        tab.classList.toggle('active', selected);
+        tab.setAttribute('aria-selected', String(selected));
+      }
+      byId('search').placeholder = state.tab === 'files' ? 'Filter paths…' :
+        state.tab === 'references' ? 'Target or usage path…' : 'Name, qualified name or path…';
+    }
+
+    function cell(main, sub, code) {
+      const td = element('td');
+      td.append(element('span', 'cell-strong' + (code ? ' code' : ''), main));
+      if (sub) td.append(element('span', 'cell-sub' + (code ? ' code' : ''), sub));
+      return td;
+    }
+    function headings(names) {
+      const tr = element('tr');
+      for (const label of names) tr.append(element('th', '', label));
+      byId('table-head').replaceChildren(tr);
+    }
+    function interactive(row, callback) {
+      row.classList.add('clickable');
+      row.tabIndex = 0;
+      row.setAttribute('role', 'button');
+      row.addEventListener('click', callback);
+      row.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); callback(); }
+      });
+    }
+
+    function renderRows(items) {
+      const body = byId('table-body');
+      body.replaceChildren();
+
+      if (state.tab === 'symbols') {
+        headings(['Declaration', 'Kind', 'Language', 'Location', '']);
+        for (const symbol of items) {
+          const row = element('tr');
+          interactive(row, () => openDrawer(symbol));
+          row.append(cell(symbol.name, symbol.qualifiedName, false));
+          const kindTd = element('td');
+          kindTd.append(element('span', 'symbol-badge ' + symbol.kind.replace(/[^a-z-]/g, ''), symbol.kind));
+          row.append(kindTd, element('td', '', symbol.language),
+            cell(symbol.path, symbol.line + ':' + symbol.column, true),
+            element('td', 'arrow', '›'));
+          body.append(row);
+        }
+      } else if (state.tab === 'files') {
+        headings(['Indexed source file', 'Analyzer', 'Version', 'Symbols', 'Hash']);
+        for (const file of items) {
+          const row = element('tr');
+          interactive(row, () => {
+            state.tab = 'symbols';
+            state.file = file.path;
+            state.search = '';
+            state.kind = '';
+            state.offset = 0;
+            byId('search').value = '';
+            updateFilterUI();
+            loadTable();
+          });
+          row.append(cell(file.path, 'View indexed declarations', true),
+            element('td', '', file.analyzerId), element('td', 'code', file.analyzerVersion),
+            element('td', '', number(file.symbolCount)),
+            element('td', 'code', file.contentHash.slice(0, 12)));
+          body.append(row);
+        }
+      } else {
+        headings(['Referenced declaration', 'Target location', 'Usage location', '']);
+        for (const reference of items) {
+          const row = element('tr');
+          interactive(row, () => openDrawer({
+            name: (reference.targetQualifiedName || reference.targetPath).split('.').pop(),
+            qualifiedName: reference.targetQualifiedName || 'Unknown declaration',
+            path: reference.targetPath, line: reference.targetLine, column: reference.targetColumn,
+            kind: 'symbol', language: '—', containingTypeLine: null, containingTypeColumn: null
+          }));
+          row.append(cell(reference.targetQualifiedName || 'Declaration', reference.targetPath, false),
+            element('td', 'code', reference.targetLine + ':' + reference.targetColumn),
+            cell(reference.usagePath, reference.usageLine + ':' + reference.usageColumn, true),
+            element('td', 'arrow', '›'));
+          body.append(row);
+        }
+      }
+    }
+
+    function updatePager(count) {
+      const begin = state.total ? state.offset + 1 : 0;
+      byId('page-label').textContent = number(begin) + '–' + number(state.offset + count) +
+        ' of ' + number(state.total) + ' records';
+      byId('prev').disabled = state.offset === 0;
+      byId('next').disabled = state.offset + count >= state.total;
+    }
+
+    async function loadTable() {
+      const token = ++state.tableToken;
+      const branch = currentBranch();
+      state.total = 0;
+      updateFilterUI();
+      byId('prev').disabled = true;
+      byId('next').disabled = true;
+      if (!branch) {
+        setEmpty('Choose a repository with a published branch snapshot.', false);
+        byId('page-label').textContent = 'No results';
+        return;
+      }
+      setEmpty('Loading saved index records…', false);
+      try {
+        const endpoint = state.tab === 'symbols' ? '/api/symbols' :
+          state.tab === 'files' ? '/api/files' : '/api/references';
+        const extra = { q: state.search, offset: state.offset, limit: state.limit };
+        if (state.tab === 'symbols') {
+          extra.kind = state.kind;
+          extra.file = state.file;
+        }
+        const page = await api(endpoint, params(extra));
+        if (token !== state.tableToken) return;
+        state.total = page.total;
+        byId('empty').hidden = page.items.length > 0;
+        renderRows(page.items);
+        if (!page.items.length) {
+          setEmpty(state.offset > 0 ? 'No records on this page. Try the previous page.' :
+            'No matching records in this snapshot.', false);
+        }
+        updatePager(page.items.length);
+      } catch (error) {
+        if (token === state.tableToken) {
+          setEmpty(error.message, true);
+          byId('page-label').textContent = 'Could not load records';
+        }
+      }
+    }
+
+    function closeDrawer() {
+      ++state.drawerToken;
+      state.drawerSymbol = null;
+      byId('backdrop').hidden = true;
+    }
+
+    function openDrawer(symbol) {
+      state.drawerSymbol = symbol;
+      state.drawerOffset = 0;
+      byId('drawer-title').textContent = symbol.qualifiedName;
+      byId('drawer-path').textContent = symbol.path;
+      byId('drawer-kind').textContent = symbol.kind;
+      byId('drawer-language').textContent = symbol.language;
+      byId('drawer-location').textContent = symbol.line + ' : ' + symbol.column;
+      byId('drawer-container').textContent = symbol.containingTypeLine === null ? '—' :
+        symbol.containingTypeLine + ' : ' + symbol.containingTypeColumn;
+      byId('backdrop').hidden = false;
+      byId('close-drawer').focus();
+      loadDrawerReferences();
+    }
+
+    async function loadDrawerReferences() {
+      const token = ++state.drawerToken;
+      const symbol = state.drawerSymbol;
+      if (!symbol) return;
+      const list = byId('drawer-references');
+      list.replaceChildren(element('p', 'hint', 'Loading occurrences…'));
+      try {
+        const page = await api('/api/references', params({
+          targetPath: symbol.path, line: symbol.line, column: symbol.column,
+          offset: state.drawerOffset, limit: 25
+        }));
+        if (token !== state.drawerToken) return;
+        list.replaceChildren();
+        byId('drawer-ref-count').textContent = '(' + number(page.total) + ')';
+        if (!page.items.length) {
+          list.append(element('p', 'hint', 'No resolved usages recorded for this declaration.'));
+        }
+        for (const reference of page.items) {
+          const row = element('div', 'reference-item');
+          row.append(element('span', 'cell-strong code', reference.usagePath),
+            element('span', 'cell-sub', 'Line ' + reference.usageLine + ', column ' + reference.usageColumn));
+          list.append(row);
+        }
+        byId('drawer-ref-page').textContent = page.total
+          ? number(state.drawerOffset + 1) + '–' + number(state.drawerOffset + page.items.length) +
+            ' of ' + number(page.total) : 'No occurrences';
+        byId('drawer-prev').disabled = state.drawerOffset === 0;
+        byId('drawer-next').disabled = state.drawerOffset + page.items.length >= page.total;
+      } catch (error) {
+        if (token === state.drawerToken) list.replaceChildren(element('p', 'error', error.message));
+      }
+    }
+
+    let searchTimeout;
+    byId('refresh').addEventListener('click', refresh);
+    byId('branch').addEventListener('change', event => {
+      state.branch = event.target.value;
+      state.offset = 0;
+      closeDrawer();
+      renderSelection();
+      loadSummary();
+      loadTable();
+    });
+    byId('kind').addEventListener('change', event => {
+      state.kind = event.target.value;
+      state.offset = 0;
+      loadTable();
+    });
+    byId('search').addEventListener('input', event => {
+      const value = event.target.value;
+      clearTimeout(searchTimeout);
+      searchTimeout = setTimeout(() => {
+        state.search = value;
+        state.offset = 0;
+        loadTable();
+      }, 230);
+    });
+    for (const tab of document.querySelectorAll('[data-tab]')) {
+      tab.addEventListener('click', () => {
+        if (state.tab === tab.dataset.tab) return;
+        state.tab = tab.dataset.tab;
+        state.offset = 0;
+        updateFilterUI();
+        loadTable();
+      });
+    }
+    byId('clear-file').addEventListener('click', () => {
+      state.file = '';
+      state.offset = 0;
+      loadTable();
+    });
+    byId('prev').addEventListener('click', () => {
+      state.offset = Math.max(0, state.offset - state.limit);
+      loadTable();
+    });
+    byId('next').addEventListener('click', () => {
+      state.offset += state.limit;
+      loadTable();
+    });
+    byId('close-drawer').addEventListener('click', closeDrawer);
+    byId('backdrop').addEventListener('click', event => {
+      if (event.target === byId('backdrop')) closeDrawer();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !byId('backdrop').hidden) closeDrawer();
+    });
+    byId('drawer-prev').addEventListener('click', () => {
+      state.drawerOffset = Math.max(0, state.drawerOffset - 25);
+      loadDrawerReferences();
+    });
+    byId('drawer-next').addEventListener('click', () => {
+      state.drawerOffset += 25;
+      loadDrawerReferences();
+    });
+
+    refresh();
+  </script>
+</body>
+</html>

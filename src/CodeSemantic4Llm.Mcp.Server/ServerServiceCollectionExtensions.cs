@@ -24,6 +24,7 @@ internal static class ServerServiceCollectionExtensions
         services.AddSingleton<IRepositorySourceWriter, RepositorySourceWriter>();
         services.AddSingleton(_ => IndexStoragePaths.FromEnvironment());
         services.AddSingleton<IIndexStore, SqliteIndexStore>();
+        services.AddSingleton<IIndexDashboardReader, SqliteIndexDashboardReader>();
         services.AddSingleton<IRepositoryConfigurationLoader, YamlRepositoryConfigurationLoader>();
         services.AddSingleton<IRepositoryConfigurationWriter, YamlRepositoryConfigurationWriter>();
         services.AddSingleton<IRepositoryFileEnumerator, FileSystemRepositoryFileEnumerator>();

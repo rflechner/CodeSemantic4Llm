@@ -91,6 +91,22 @@ dotnet test CodeSemantic4Llm.slnx
 The new functional tests use **Reqnroll (successor to SpecFlow)** with xUnit v3.
 The `.feature` files are executable examples of the intended indexing behavior.
 
+## Browse every cached index in a dashboard
+
+Launch the local, read-only HTTP explorer to inspect all indexed checkouts, Git
+branches, declarations, files, kinds and resolved references:
+
+```shell
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- dashboard --port 5080
+```
+
+Open **http://127.0.0.1:5080/**. The dashboard serves its own offline UI,
+never reads source contents, and does not start the MCP transport or reindex.
+Run `index` on each checkout/branch you want to explore first. It uses the
+same optional `CODESEMANTIC4LLM_INDEX_ROOT` environment setting as MCP.
+See [dashboard documentation](docs/dashboard.md) for exploration features and
+the internal read-only JSON API.
+
 ## Index before starting MCP
 
 After creating the repository YAML, index every matching source file:
@@ -261,7 +277,7 @@ The preview uses the same discovery rules as MCP and exits after displaying its 
 The default limit is 50 and the maximum is 200; the output indicates when more files exist.
 It does not read source contents, execute the target repository, or persist an index.
 Running without a command starts the MCP server and waits for client requests.
-`--help` lists the `init`, `preview`, `index`, and `serve` commands. `serve` explicitly starts
+`--help` lists the `init`, `preview`, `index`, `dashboard`, and `serve` commands. `serve` explicitly starts
 the same MCP server as an invocation without arguments, with optional repository selection.
 
 Console commands use Spectre.Console.Cli settings for argument parsing and generated
