@@ -28,10 +28,10 @@ public sealed class RepositorySourceWriter : IRepositorySourceWriter
         // The source reader supports BOM detection. This initial editor explicitly limits
         // writes to UTF-8, so that other source encodings are never silently converted.
         var utf8Bom = original.AsSpan().StartsWith(Utf8Bom);
-        if (original.AsSpan().StartsWith([0xFF, 0xFE]) ||
-            original.AsSpan().StartsWith([0xFE, 0xFF]) ||
-            original.AsSpan().StartsWith([0x00, 0x00, 0xFE, 0xFF]) ||
-            original.AsSpan().StartsWith([0xFF, 0xFE, 0x00, 0x00]))
+        if (original.AsSpan().StartsWith(new byte[] { 0xFF, 0xFE }) ||
+            original.AsSpan().StartsWith(new byte[] { 0xFE, 0xFF }) ||
+            original.AsSpan().StartsWith(new byte[] { 0x00, 0x00, 0xFE, 0xFF }) ||
+            original.AsSpan().StartsWith(new byte[] { 0xFF, 0xFE, 0x00, 0x00 }))
         {
             throw new NotSupportedException("Method editing currently supports UTF-8 source files only.");
         }
