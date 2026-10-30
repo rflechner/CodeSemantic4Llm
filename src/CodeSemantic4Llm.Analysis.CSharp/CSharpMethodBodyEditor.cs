@@ -32,7 +32,8 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
         return string.Concat(content.AsSpan(0, span.Start), replacement, content.AsSpan(span.End));
     }
 
-    private static MethodDeclarationSyntax FindMethod(SourceDocument document, SourceLocation declaration)
+    internal static MethodDeclarationSyntax FindMethod(
+        SourceDocument document, SourceLocation declaration, string? expectedMethodName = null)
     {
         ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(declaration);
@@ -47,14 +48,15 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
             .SingleOrDefault(candidate =>
             {
                 var position = candidate.Identifier.GetLocation().GetLineSpan().StartLinePosition;
-                return position.Line + 1 == declaration.Line && position.Character + 1 == declaration.Column;
+                return position.Line + 1 == declaration.Line && position.Character + 1 == declaration.Column
+                    && (expectedMethodName is null || candidate.Identifier.ValueText == expectedMethodName);
             });
 
         return method ?? throw new InvalidOperationException(
             "No C# method exists at the selected indexed declaration location. Run index again.");
     }
 
-    private static TextSpan GetBodySpan(MethodDeclarationSyntax method)
+    internal static TextSpan GetBodySpan(MethodDeclarationSyntax method)
     {
         if (method.Body is { } block)
         {
@@ -72,23 +74,40 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
 
     private static string ValidateBody(string newBody)
     {
-        var body = newBody.Trim();
+        var (body, hasValidShape, syntaxErrors) = InspectReplacement(newBody);
 
-        if (body.Length < 2 || body[0] != '{' || body[^1] != '}')
+        if (!hasValidShape)
         {
-            throw new ArgumentException("Supply a complete C# block enclosed in braces, for example '{ return 42; }'.", nameof(newBody));
+            throw new ArgumentException(
+                "Supply a complete C# block enclosed in braces, for example '{ return 42; }'.",
+                nameof(newBody));
         }
 
-        // Parse a single block rather than accepting an entire method or declarations that
-        // could escape the selected body. No target code is compiled or executed.
-        var statement = SyntaxFactory.ParseStatement(body);
-
-        if (statement is not BlockSyntax || statement.FullSpan.Length != body.Length ||
-            statement.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error))
+        if (syntaxErrors.Count > 0)
         {
-            throw new ArgumentException("The replacement must be one syntactically valid C# method body.", nameof(newBody));
+            throw new ArgumentException(
+                "The replacement must be one syntactically valid C# method body.", nameof(newBody));
         }
 
         return body;
+    }
+
+    /// <summary>
+    /// Shares the exact syntax gate between replace_method_body and validate_method_body,
+    /// so preflight cannot approve a block that the writer's syntax gate would reject.
+    /// </summary>
+    internal static (string Body, bool HasValidShape, IReadOnlyList<Diagnostic> SyntaxErrors)
+        InspectReplacement(string newBody)
+    {
+        ArgumentNullException.ThrowIfNull(newBody);
+        var body = newBody.Trim();
+
+        var statement = SyntaxFactory.ParseStatement(body);
+        var isCompleteBlock = body.Length >= 2 && body[0] == '{' && body[^1] == '}'
+            && statement is BlockSyntax && statement.FullSpan.Length == body.Length;
+
+        return (body, isCompleteBlock,
+            statement.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                .ToArray());
     }
 }

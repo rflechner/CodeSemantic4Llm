@@ -15,6 +15,7 @@ public sealed class MethodBodyOperations(
     IRepositorySourceReader sourceReader,
     IRepositorySourceWriter sourceWriter,
     IMethodBodyEditor methodBodyEditor,
+    IMethodSyntaxDiagnostics syntaxDiagnostics,
     RepositoryWriteAccess writeAccess)
 {
     public async Task<MethodBodyReadResult> ReadAsync(
@@ -77,6 +78,79 @@ public sealed class MethodBodyOperations(
         return new MethodBodyWriteResult(declaration, hash, ReindexRequired: true);
     }
 
+    /// <summary>
+    /// Checks a proposed C# block against an unchanged indexed method, entirely in memory.
+    /// This stays available in read-only mode and never attempts a source-file write.
+    /// </summary>
+    public async Task<MethodDiagnosticsResult> ValidateAsync(
+        string repositoryRoot, SourceLocation declaration, long snapshotId,
+        string expectedContentHash, string newBody,
+        int maxDiagnostics = 50, int offset = 0, CancellationToken cancellationToken = default)
+    {
+        ValidatePage(maxDiagnostics, offset);
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedContentHash);
+        ArgumentNullException.ThrowIfNull(newBody);
+
+        var selected = await SelectAsync(repositoryRoot, declaration, snapshotId, cancellationToken);
+
+        if (!string.Equals(selected.Source.ContentHash, expectedContentHash, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "The source file differs from the expected hash. Read the method again before validating.");
+        }
+
+        var diagnostics = syntaxDiagnostics.ValidateReplacement(
+            selected.Source.Document, declaration, newBody);
+
+        return ToPage(declaration, selected.Source.ContentHash, diagnostics, maxDiagnostics, offset);
+    }
+
+    /// <summary>
+    /// Checks the current checkout text without consulting a possibly stale SQLite snapshot.
+    /// This remains usable immediately after a method-body edit, before the next index run.
+    /// </summary>
+    public async Task<MethodDiagnosticsResult> GetDiagnosticsAsync(
+        string repositoryRoot, SourceLocation declaration, string expectedMethodName,
+        int maxDiagnostics = 50, int offset = 0, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(declaration);
+        ArgumentException.ThrowIfNullOrWhiteSpace(expectedMethodName);
+        ValidatePage(maxDiagnostics, offset);
+        ValidateRelativePath(declaration.RelativePath);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var source = await sourceReader.ReadAsync(repositoryRoot, declaration.RelativePath, cancellationToken);
+        var diagnostics = syntaxDiagnostics.GetCurrent(
+            source.Document, declaration, expectedMethodName);
+
+        return ToPage(declaration, source.ContentHash, diagnostics, maxDiagnostics, offset);
+    }
+
+    private static MethodDiagnosticsResult ToPage(
+        SourceLocation declaration, string contentHash,
+        IReadOnlyList<MethodSyntaxDiagnostic> diagnostics, int limit, int offset)
+    {
+        var results = diagnostics.Skip(offset).Take(limit).ToArray();
+        int? nextOffset = diagnostics.Count - offset > limit ? checked(offset + limit) : null;
+
+        return new MethodDiagnosticsResult(
+            declaration, contentHash,
+            diagnostics.All(diagnostic => diagnostic.Severity != "error"),
+            results, diagnostics.Count, nextOffset);
+    }
+
+    private static void ValidatePage(int maxDiagnostics, int offset)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxDiagnostics);
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+
+        if (maxDiagnostics > 200)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(maxDiagnostics), "Limit must not exceed 200.");
+        }
+    }
+
     private async Task<SelectedMethod> SelectAsync(
         string repositoryRoot, SourceLocation declaration, long snapshotId, CancellationToken cancellationToken)
     {
@@ -123,3 +197,15 @@ public sealed record MethodBodyReadResult(
 
 /// <summary>A successful checkout edit; the persisted index intentionally stays unchanged.</summary>
 public sealed record MethodBodyWriteResult(SourceLocation MethodLocation, string ContentHash, bool ReindexRequired);
+
+
+/// <summary>
+/// A bounded page of syntax-only diagnostics, with validity computed across all pages.
+/// ContentHash identifies the original source when validating or the current file when reading.
+/// </summary>
+public sealed record MethodDiagnosticsResult(
+    SourceLocation MethodLocation, string ContentHash, bool IsValid,
+    IReadOnlyList<MethodSyntaxDiagnostic> Diagnostics, int TotalDiagnostics, int? NextOffset)
+{
+    public bool HasMore => NextOffset.HasValue;
+}

@@ -60,6 +60,8 @@ public sealed partial class ServeRepositorySteps
     public void ThenMethodReaderAdvertised()
     {
         Assert.Contains("get_method_body", _advertisedTools);
+        Assert.Contains("validate_method_body", _advertisedTools);
+        Assert.Contains("get_method_diagnostics", _advertisedTools);
         Assert.Contains("find_symbols", _advertisedTools);
         Assert.Contains("get_server_info", _advertisedTools);
     }

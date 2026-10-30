@@ -153,6 +153,28 @@ snapshot; concurrent editing can still race the final check. Queries expose reco
 and reject a changed HEAD, but do not scan source files to prove working-tree freshness.
 See [indexing behavior and limitations](indexing.md).
 
+## Method-local Roslyn syntax diagnostics
+
+`IMethodSyntaxDiagnostics` is the application port for language-specific
+syntax feedback. The C# adapter uses Roslyn parsing to report diagnostics on
+one selected method or on an in-memory proposed method-body replacement.
+It returns error IDs, messages and one-based original/proposed file positions;
+no source copies or diagnostic text are persisted in SQLite. Validation shares
+the same complete-block syntax gate as the method editor.
+
+`validate_method_body` is a read-only preflight that requires a fresh index
+snapshot and source SHA-256, just like the write tool. In contrast,
+`get_method_diagnostics` reads directly from the operator-selected checkout
+and verifies the expected method name and exact identifier position. It
+deliberately does **not** require a current snapshot, allowing an agent to
+validate a method after editing it. Both MCP tools are registered regardless
+of the `--allow-write` switch and bound the response through pagination.
+
+`isValid` means *syntactically valid only*. The adapter does not resolve
+project references, perform type checking, invoke build tools or execute code.
+Missing symbols, incompatible return types and semantic warnings require a
+future project-aware Roslyn compilation workflow.
+
 ## Explicitly authorized source editing
 
 The `serve --allow-write` switch sets an immutable `RepositoryWriteAccess` capability

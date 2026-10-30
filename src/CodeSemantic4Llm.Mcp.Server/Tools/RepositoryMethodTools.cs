@@ -22,6 +22,32 @@ public sealed class RepositoryMethodTools(IConfiguration configuration, MethodBo
         operations.ReadAsync(GetRoot(), new SourceLocation(relativePath, line, column),
             snapshotId, maxCharacters, offset, cancellationToken);
 
+    [McpServerTool, Description("Checks a proposed C# method body using Roslyn syntax diagnostics WITHOUT writing any source file. Available even when server writes are disabled. Call get_method_body first and pass its declaration position, snapshotId and contentHash with a complete proposed C# block. Reports C# syntax errors (IDs, messages and exact line/column) only; it does not type-check or compile the project.")]
+    public Task<MethodDiagnosticsResult> ValidateMethodBodyAsync(
+        [Description("Method declaration's repository-relative location.relativePath.")] string relativePath,
+        [Description("One-based method declaration location.line.")] int line,
+        [Description("One-based method declaration location.column.")] int column,
+        [Description("snapshot.snapshotId from get_method_body.")] long snapshotId,
+        [Description("Exact contentHash returned by get_method_body.")] string expectedContentHash,
+        [Description("Proposed complete C# method block, including '{' and '}'.")] string newBody,
+        [Description("Maximum diagnostics per page, from 1 to 200.")] int maxDiagnostics = 50,
+        [Description("Start at 0; follow nextOffset to read subsequent diagnostics.")] int offset = 0,
+        CancellationToken cancellationToken = default) =>
+        operations.ValidateAsync(GetRoot(), new SourceLocation(relativePath, line, column),
+            snapshotId, expectedContentHash, newBody, maxDiagnostics, offset, cancellationToken);
+
+    [McpServerTool, Description("Returns Roslyn syntax errors and warnings inside an exact C# method CURRENTLY ON DISK, including immediately after editing it. Unlike get_method_body, this tool does NOT require a fresh SQLite index or snapshotId. Supply the declaration line/column and method name from the previously selected symbol. Checks only syntax, not types, imports or compilation; no writes.")]
+    public Task<MethodDiagnosticsResult> GetMethodDiagnosticsAsync(
+        [Description("Method source path relative to the operator-selected repository.")] string relativePath,
+        [Description("One-based identifier line of the method, e.g. from find_symbols.")] int line,
+        [Description("One-based identifier column of the method, e.g. from find_symbols.")] int column,
+        [Description("Expected case-sensitive method name; prevents accidentally selecting a different declaration.")] string expectedMethodName,
+        [Description("Maximum diagnostics per page, from 1 to 200.")] int maxDiagnostics = 50,
+        [Description("Start at 0; follow nextOffset.")] int offset = 0,
+        CancellationToken cancellationToken = default) =>
+        operations.GetDiagnosticsAsync(GetRoot(), new SourceLocation(relativePath, line, column),
+            expectedMethodName, maxDiagnostics, offset, cancellationToken);
+
     private string GetRoot() => configuration["CODESEMANTIC4LLM_REPOSITORY_ROOT"]
         ?? throw new InvalidOperationException(
             "Pass the repository path to serve or set CODESEMANTIC4LLM_REPOSITORY_ROOT.");
