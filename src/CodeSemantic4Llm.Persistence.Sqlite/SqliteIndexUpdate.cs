@@ -67,7 +67,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
             INSERT INTO indexed_files SELECT $snapshot, path, content_hash, analyzer_id, analyzer_version, symbol_count
             FROM indexed_files WHERE snapshot_id = $previous AND path = $path;
             INSERT INTO symbols SELECT $snapshot, path, ordinal, language, kind, name, qualified_name, line, column_number,
-                containing_type_line, containing_type_column
+                containing_type_line, containing_type_column, summary
             FROM symbols WHERE snapshot_id = $previous AND path = $path;
             """, ("$snapshot", _snapshotId), ("$previous", _reusableId), ("$path", file.RelativePath));
         copy.ExecuteNonQuery();
@@ -182,11 +182,11 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     {
         var command = Command("""
             INSERT INTO symbols(snapshot_id, path, ordinal, language, kind, name, qualified_name, line, column_number,
-                containing_type_line, containing_type_column)
-            VALUES ($snapshot, $path, $ordinal, $language, $kind, $name, $qualified, $line, $column, $parentLine, $parentColumn);
+                containing_type_line, containing_type_column, summary)
+            VALUES ($snapshot, $path, $ordinal, $language, $kind, $name, $qualified, $line, $column, $parentLine, $parentColumn, $summary);
             """, ("$snapshot", _snapshotId), ("$path", ""), ("$ordinal", 0), ("$language", ""),
             ("$kind", ""), ("$name", ""), ("$qualified", ""), ("$line", 1), ("$column", 1),
-            ("$parentLine", null), ("$parentColumn", null));
+            ("$parentLine", null), ("$parentColumn", null), ("$summary", null));
         command.Prepare();
         return command;
     }
@@ -231,6 +231,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _insertSymbol.Parameters["$column"].Value = symbol.Location.Column;
         _insertSymbol.Parameters["$parentLine"].Value = (object?)symbol.ContainingType?.Line ?? DBNull.Value;
         _insertSymbol.Parameters["$parentColumn"].Value = (object?)symbol.ContainingType?.Column ?? DBNull.Value;
+        _insertSymbol.Parameters["$summary"].Value = (object?)symbol.Summary ?? DBNull.Value;
         _insertSymbol.ExecuteNonQuery();
     }
 
