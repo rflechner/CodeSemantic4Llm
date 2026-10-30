@@ -8,6 +8,14 @@ public sealed partial class RepositoryIndexingSteps
 {
     private McpCodeClient? _validatedEditClient;
     private string? _invalidDeclaration;
+    private string _quotedEditTool = "";
+    private const string BodyWithInvalidString = """
+        {
+            var separator = ':';
+            errors.MarkupLine('tinyharness:/ ' + Markup.Escape(exception.Message));
+            return 1;
+        }
+        """;
 
     [When(@"""(.*)"" MCP directly replaces Run with a missing semicolon")]
     public async Task WhenDirectEditHasMissingSemicolon(string mode)
@@ -93,6 +101,7 @@ public sealed partial class RepositoryIndexingSteps
         Assert.Contains("retry replace_method.", message);
         Assert.DoesNotContain("retry replace_method_body", message);
         Assert.DoesNotContain("Supply exactly one", message);
+        Assert.DoesNotContain("C# strings use double quotes", message);
         ThenDefaultCodeWriteRejected();
     }
 
@@ -127,6 +136,55 @@ public sealed partial class RepositoryIndexingSteps
         {
             relativePath = "Worker.cs", name = "Run", newMethod
         });
+    }
+
+    [When(@"""(.*)"" MCP attempts ""(.*)"" with a multi-character literal")]
+    public async Task WhenEditHasInvalidStringQuotes(string mode, string tool)
+    {
+        _quotedEditTool = tool;
+        _sourceBeforeCodeWrite = File.ReadAllText(Path.Combine(_root, "Worker.cs"));
+        _validatedEditClient = await StartCodeClientAsync(allowWrite: true, exposeIndexing: mode == "indexing");
+        _codeFailure = await _validatedEditClient.CallAsync(tool, QuotedEditArguments(BodyWithInvalidString));
+    }
+
+    [Then("the edit explains CS1012 with one concise C# quoting hint")]
+    public void ThenEditExplainsStringQuotes()
+    {
+        var message = EditFailureMessage();
+        Assert.Contains("CS1012 Worker.cs:", message);
+        Assert.Contains("Too many characters in character literal", message);
+        Assert.Contains("C# strings use double quotes, e.g. \"text\".", message);
+        Assert.Contains("Single quotes are for one character, e.g. 'x'.", message);
+        Assert.Single(message.Split('\n'), line => line.StartsWith("C# strings", StringComparison.Ordinal));
+        Assert.Contains($"retry {_quotedEditTool}.", message);
+    }
+
+    [When("the same MCP client corrects the string quotes and retries")]
+    public async Task WhenEditStringQuotesAreCorrected()
+    {
+        var corrected = BodyWithInvalidString.Replace("'tinyharness:/ '",
+            "\"[red]tinyharness:[/] \"", StringComparison.Ordinal);
+        await CodeCallAsync(_validatedEditClient!, _quotedEditTool, QuotedEditArguments(corrected));
+    }
+
+    [Then("the corrected string and valid character literal are preserved")]
+    public void ThenValidStringAndCharacterArePreserved()
+    {
+        var source = File.ReadAllText(Path.Combine(_root, "Worker.cs"));
+        Assert.Contains("var separator = ':';", source);
+        Assert.Contains("""errors.MarkupLine("[red]tinyharness:[/] " + Markup.Escape(exception.Message));""", source);
+        Assert.Contains("public int Keep() => 7;", source);
+    }
+
+    private Dictionary<string, object?> QuotedEditArguments(string body)
+    {
+        var wholeMethod = _quotedEditTool == "replace_method";
+        return new Dictionary<string, object?>
+        {
+            ["relativePath"] = "Worker.cs",
+            ["name"] = "Run",
+            [wholeMethod ? "newMethod" : "newBody"] = wholeMethod ? "public int Run()\n" + body : body
+        };
     }
 
     [AfterScenario(Order = -100)]

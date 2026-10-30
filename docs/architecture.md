@@ -183,6 +183,10 @@ reports errors in signatures and bodies precisely, even for unterminated strings
 Invalid input shapes additionally receive `CS4L0002`. The MCP presentation bounds
 feedback to 10 diagnostics, indicates any remaining count, and directs a retry to
 the same editing tool. No build or indexed project code is executed.
+When a returned diagnostic is `CS1012`, the error response adds one concise reminder
+that C# strings use double quotes and character literals use single quotes. This
+failure-only hint does not rewrite submitted literals or add instructions to successful
+responses and unrelated syntax errors.
 `get_method_diagnostics` reads directly from the operator-selected checkout
 and verifies the expected method name and exact identifier position. It
 deliberately does **not** require a current snapshot, allowing an agent to
@@ -275,6 +279,15 @@ MCP queries, without executing project code or storing source contents. It now r
 MSBuild project graphs or generating natural-language text.
 
 ## Project dependency rules
+
+MCP tool-result serialization uses a copy of the SDK's default JSON settings with
+`JavaScriptEncoder.UnsafeRelaxedJsonEscaping`. Results are JSON carried in MCP text,
+not HTML. This preserves C# operators, apostrophes and Unicode characters while still
+escaping quotes, backslashes and control characters as required by JSON. It avoids
+introducing `\u0022`/`\u002B` into model-facing source text, where a model might copy
+them into code. Wire-level JSON and logging keep their own encoding; no source string
+is decoded, repaired or rewritten. Tests inspect the text content before parsing its
+inner JSON and verify exact read/edit round trips, including intentional C# escapes.
 
 The default MCP presentation selects declarations by file path and simple or qualified
 name, optionally narrowed by the identifier position. It has no ephemeral symbol IDs.

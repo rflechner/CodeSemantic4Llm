@@ -146,6 +146,12 @@ public sealed class CodeToolOperations(
             message.Append('\n').Append(exception.Diagnostics.Count - maximumErrors).Append(" more syntax errors.");
         }
 
+        if (exception.Diagnostics.Take(maximumErrors).Any(diagnostic => diagnostic.Id == "CS1012"))
+        {
+            message.Append("\nC# strings use double quotes, e.g. \"text\". " +
+                "Single quotes are for one character, e.g. 'x'. Preserve the intended string content.");
+        }
+
         return message.Append("\nCorrect the proposed code and retry ").Append(toolName).Append('.').ToString();
     }
 }

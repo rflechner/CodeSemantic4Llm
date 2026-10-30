@@ -62,3 +62,18 @@ Feature: Validate and replace methods in a single request
     When MCP directly replaces the Run declaration with 15 syntax errors
     Then the edit reports 10 errors and indicates 5 additional errors
     And the rejected default MCP write leaves the source unchanged
+
+  Scenario Outline: A multi-character literal receives precise quoting guidance
+    When "<mode>" MCP attempts "<tool>" with a multi-character literal
+    Then the edit explains CS1012 with one concise C# quoting hint
+    And the rejected default MCP write leaves the source unchanged
+    When the same MCP client corrects the string quotes and retries
+    Then the corrected string and valid character literal are preserved
+    And code tool replies contain no indexing details
+
+    Examples:
+      | mode     | tool                |
+      | default  | replace_method_body |
+      | default  | replace_method      |
+      | indexing | replace_method_body |
+      | indexing | replace_method      |

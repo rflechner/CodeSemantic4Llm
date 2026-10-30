@@ -134,6 +134,11 @@ parameters and responses hide indexing, snapshot details and file hashes. Select
 by `relativePath` and `name` (simple or qualified), adding the identifier `line` and `column`
 only when needed to distinguish overloads or other ambiguous declarations. No temporary
 symbol token or preliminary search is required.
+Tool-result JSON keeps source punctuation and Unicode readable: quotes use the usual
+JSON `\"` escape, while `+`, `<`, `>`, apostrophes and accented letters remain literal.
+The server does not add HTML-style Unicode escapes such as `\u0022` or `\u002B` to
+represent those characters. Literal escape sequences already present in source remain
+unchanged; clients should parse the JSON rather than decoding source escapes themselves.
 Qualified names may omit leading namespaces or enclosing types: `CliApplication.RunAsync`
 matches `TinyHarness.Cli.CliApplication.RunAsync` when unique in the requested file.
 Matching remains case-sensitive and respects complete dot-separated name segments.
