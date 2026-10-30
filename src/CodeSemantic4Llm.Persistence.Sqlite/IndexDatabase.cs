@@ -5,7 +5,7 @@ namespace CodeSemantic4Llm.Persistence.Sqlite;
 /// <summary>Versioned, regenerable schema for declaration snapshots. It contains no source text.</summary>
 internal static class IndexDatabase
 {
-    private const int SchemaVersion = 2;
+    private const int SchemaVersion = 3;
 
     public static SqliteConnection Open(string path, string repositoryRoot, bool writable)
     {
@@ -61,7 +61,7 @@ internal static class IndexDatabase
         {
             Initialize(connection, root);
         }
-        else if (version is not 1 && version != SchemaVersion)
+        else if (version is not 1 and not 2 && version != SchemaVersion)
         {
             throw new InvalidOperationException($"Unsupported index schema version {version}. Use a new index cache directory.");
         }
@@ -75,14 +75,21 @@ internal static class IndexDatabase
             throw new InvalidOperationException("The index belongs to a different repository root.");
         }
 
-        if (version == 1)
+        if (version == 1 && !writable)
         {
-            if (!writable)
-            {
-                throw new InvalidOperationException("This index needs an upgrade. Run the index command again to record type membership.");
-            }
+            throw new InvalidOperationException("This index needs an upgrade. Run the index command again to record type membership.");
+        }
 
+        // Version two is still readable for declaration queries. Reference queries explicitly
+        // require a version-three snapshot, and read-only operations never migrate a cache.
+        if (writable && version == 1)
+        {
             UpgradeFromVersionOne(connection);
+        }
+
+        if (writable && version is 1 or 2)
+        {
+            UpgradeFromVersionTwo(connection);
         }
     }
 
@@ -97,6 +104,25 @@ internal static class IndexDatabase
             CREATE INDEX ix_symbols_container ON symbols(
                 snapshot_id, path, containing_type_line, containing_type_column, line, column_number, ordinal);
             PRAGMA user_version = 2;
+            """);
+        migration.ExecuteNonQuery();
+        transaction.Commit();
+    }
+
+    private static void UpgradeFromVersionTwo(SqliteConnection connection)
+    {
+        using var transaction = connection.BeginTransaction();
+        using var migration = Command(connection, transaction, """
+            ALTER TABLE snapshots ADD COLUMN reference_index_version INTEGER NOT NULL DEFAULT 0;
+            CREATE TABLE symbol_references(
+                snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+                target_path TEXT NOT NULL, target_line INTEGER NOT NULL, target_column INTEGER NOT NULL,
+                usage_path TEXT NOT NULL, usage_line INTEGER NOT NULL, usage_column INTEGER NOT NULL,
+                PRIMARY KEY(snapshot_id, target_path, target_line, target_column, usage_path, usage_line, usage_column),
+                FOREIGN KEY(snapshot_id, target_path) REFERENCES indexed_files(snapshot_id, path) ON DELETE CASCADE,
+                FOREIGN KEY(snapshot_id, usage_path) REFERENCES indexed_files(snapshot_id, path) ON DELETE CASCADE
+            ) WITHOUT ROWID;
+            PRAGMA user_version = 3;
             """);
         migration.ExecuteNonQuery();
         transaction.Commit();
@@ -129,7 +155,8 @@ internal static class IndexDatabase
             branch TEXT NOT NULL, revision TEXT, configuration_hash TEXT NOT NULL,
             semantic_language TEXT NOT NULL, completed_utc TEXT,
             file_count INTEGER NOT NULL DEFAULT 0, symbol_count INTEGER NOT NULL DEFAULT 0,
-            member_index_version INTEGER NOT NULL DEFAULT 0);
+            member_index_version INTEGER NOT NULL DEFAULT 0,
+            reference_index_version INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE active_branches(
             branch TEXT PRIMARY KEY, snapshot_id INTEGER NOT NULL REFERENCES snapshots(id));
         CREATE TABLE indexed_files(
@@ -144,9 +171,17 @@ internal static class IndexDatabase
             containing_type_line INTEGER, containing_type_column INTEGER,
             PRIMARY KEY(snapshot_id, path, ordinal),
             FOREIGN KEY(snapshot_id, path) REFERENCES indexed_files(snapshot_id, path) ON DELETE CASCADE);
+        CREATE TABLE symbol_references(
+            snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+            target_path TEXT NOT NULL, target_line INTEGER NOT NULL, target_column INTEGER NOT NULL,
+            usage_path TEXT NOT NULL, usage_line INTEGER NOT NULL, usage_column INTEGER NOT NULL,
+            PRIMARY KEY(snapshot_id, target_path, target_line, target_column, usage_path, usage_line, usage_column),
+            FOREIGN KEY(snapshot_id, target_path) REFERENCES indexed_files(snapshot_id, path) ON DELETE CASCADE,
+            FOREIGN KEY(snapshot_id, usage_path) REFERENCES indexed_files(snapshot_id, path) ON DELETE CASCADE
+        ) WITHOUT ROWID;
         CREATE INDEX ix_symbols_name ON symbols(snapshot_id, name, path, line, column_number);
         CREATE INDEX ix_symbols_container ON symbols(
             snapshot_id, path, containing_type_line, containing_type_column, line, column_number, ordinal);
-        PRAGMA user_version = 2;
+        PRAGMA user_version = 3;
         """;
 }

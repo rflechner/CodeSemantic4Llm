@@ -106,8 +106,11 @@ A repository index must be uniquely identified by a checkout and branch. A branc
 analysis, verification and publication through application-owned ports. `IIndexUpdate`
 owns one unpublished generation: disposing it without publication rolls back the update.
 `ISourceAnalyzer.IndexVersion` invalidates reused analysis when the compiled adapter changes.
-The current C# adapter parses syntax independently per file. Future semantic models must
-also include project/dependency state in invalidation before reusing results.
+The C# declaration adapter parses syntax independently per file. A second C# adapter now
+builds a transient repository-wide compilation and uses Roslyn SemanticModel to bind
+explicit references to method and type declarations. This has no MSBuild project graph;
+project boundaries, conditional compilation and external NuGet assemblies still require
+future compilation-context resolution. Unresolved and ambiguous uses are not guessed.
 
 Roslyn records the immediate containing type's declaration location for each extracted
 member. This explicit edge distinguishes nested types and homonymous or generic declarations
@@ -120,7 +123,9 @@ The SQLite adapter maps a canonical Git checkout root to a SHA-256 directory und
 operator-configurable central cache. One database holds a completed snapshot per named
 branch. Snapshot IDs and branch names are database data; no branch name becomes a path.
 Source text is read in place, one file at a time, and is never inserted into SQLite.
-Memory grows with discovered paths and file metadata, not the whole source tree.
+The declaration pass grows with discovered paths and file metadata; the reference pass
+holds Roslyn syntax trees for the selected C# files in memory until binding finishes.
+This increases peak memory on large repositories but never persists source copies.
 
 A single writer transaction builds the new snapshot. Unchanged files reuse derived rows
 from the same branch when hashes, adapter versions and configuration match. New or changed
@@ -129,13 +134,13 @@ the branch pointer and deletes the old generation in the same transaction. WAL a
 readers to keep seeing the previous complete snapshot during the write. Read queries use
 one transaction to keep snapshot metadata and declaration rows consistent.
 
-Schema 2 adds container coordinates to symbol rows and a membership-version marker to each
-snapshot. Version-one caches are upgraded only on the write path, in an additive schema
-transaction; existing snapshots receive a marker of zero and remain readable after migration.
-The next index run cannot reuse rows lacking containment metadata. Failed publication
-preserves the previous declarations, while member navigation asks for reindexing instead of
-silently returning an empty list. A container lookup index supports bounded member pages;
-snapshot IDs guard navigation against replacement between pages.
+Schema 2 added container coordinates and type membership metadata; schema 3 adds a compact
+`symbol_references` table keyed by snapshot and target declaration location. References
+contain usage path and line/column only, with no copied sources. A version marker on each
+snapshot prevents old indexes from falsely reporting no usages. Version-one and version-two
+caches are upgraded on the write path, leaving older snapshots usable for supported reads.
+Failed publication preserves the previous declarations; missing reference data asks for
+reindexing. Reference queries use deterministic bounded pages and snapshot ID guards.
 
 SQLite operations are synchronous because Microsoft.Data.Sqlite executes asynchronous ADO
 operations synchronously. Cancellation is checked between files, declarations and statements,
@@ -184,8 +189,8 @@ The C# parser extracts syntax-level declarations without executing project code.
 The YAML adapter reads project-specific exclusions and extension overrides; the application
 resolves enabled analyzers and their effective extensions during recursive filesystem discovery.
 The `index` command persists all selected declarations and exposes them through bounded
-MCP queries, without executing project code or storing source contents. It does not yet
-resolve semantic references, load project compilations or generate natural-language text.
+MCP queries, without executing project code or storing source contents. It now resolves references with a transient lightweight compilation, without loading
+MSBuild project graphs or generating natural-language text.
 
 ## Project dependency rules
 

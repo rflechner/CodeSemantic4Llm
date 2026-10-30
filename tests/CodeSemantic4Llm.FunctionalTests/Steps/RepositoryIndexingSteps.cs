@@ -414,7 +414,7 @@ public sealed partial class RepositoryIndexingSteps
     private CancellationToken Token => _cancellation?.Token ?? TestContext.Current.CancellationToken;
 
     private IndexRepository CreateIndexer() => new(_stateProvider, new YamlRepositoryConfigurationLoader(),
-        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer]);
+        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer], [new CSharpReferenceAnalyzer()]);
 
     private RepositoryIndexTools CreateMcpTools()
     {
@@ -423,7 +423,8 @@ public sealed partial class RepositoryIndexingSteps
             ["CODESEMANTIC4LLM_REPOSITORY_ROOT"] = _root
         }).Build();
         return new RepositoryIndexTools(configuration, _stateProvider, Store,
-            new FindSymbols(Store, _stateProvider), new GetTypeMembers(Store, _stateProvider));
+            new FindSymbols(Store, _stateProvider), new GetTypeMembers(Store, _stateProvider),
+            new FindUsages(Store, _stateProvider));
     }
 
     private void WriteSource(string path, string content)

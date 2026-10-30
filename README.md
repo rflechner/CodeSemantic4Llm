@@ -3,9 +3,10 @@
 **CodeSemantic4Llm** is an experimental, local-first MCP server for semantic code indexing.
 The goal is to let coding agents retrieve small, relevant slices of a repository instead of repeatedly loading large source files into the LLM context.
 
-> Status: repository-local YAML configuration, full C# declaration indexing into SQLite,
-> and bounded MCP queries against saved branch snapshots. Analysis is syntax-based;
-> semantic references, AI-generated descriptions and TypeScript analysis remain planned.
+> Status: repository-local YAML configuration, C# declaration and Roslyn-resolved reference
+> indexing into SQLite, and bounded MCP queries against saved branch snapshots.
+> Reference binding currently uses a lightweight repository-wide compilation rather than
+> full MSBuild project resolution; AI-generated descriptions and TypeScript analysis remain planned.
 
 ## Architecture
 
@@ -123,7 +124,8 @@ Relative paths are resolved from the process working directory. In Rider, use
 
 The server uses **stdio** for MCP and sends logs to **stderr**.
 It exposes `get_server_info`, `inspect_source`, `get_repository_configuration`,
-`preview_repository_index`, `get_repository_index_status`, `find_symbols`, and `get_type_members`.
+`preview_repository_index`, `get_repository_index_status`, `find_symbols`, `get_type_members`,
+and `find_usages`.
 `find_symbols` returns saved declaration locations by exact, case-sensitive simple name
 (20 results by default, at most 200). Run `index` again after source edits. MCP startup and
 queries do not rebuild the index; preview remains read-only.
@@ -135,9 +137,20 @@ Only members declared directly in the selected type declaration are returned: in
 methods and other parts of a partial type are not merged. See the
 [member navigation example](docs/indexing.md#listing-a-classs-methods).
 
-After upgrading from the first index format, rerun `index` for each branch you need to
-query. It upgrades the cache in place and records containment from Roslyn syntax. Restart
-the MCP server afterward so clients can discover `get_type_members`.
+To find callers of a method or references to a class, first select its declaration with
+`find_symbols`, then call `find_usages` with the same relative path, line, column and
+`snapshotId`. The tool returns bounded, paginated source locations (50 by default,
+200 maximum) from SQLite without parsing code during the MCP request. Unlike simple text
+search, Roslyn distinguishes overloads and same-named methods. References are recalculated
+during indexing when files change; unresolved or ambiguous references are omitted. The
+first implementation does not evaluate project files or external dependency graphs, so
+results may be incomplete for multi-project repositories. See the
+[usage search example](docs/indexing.md#finding-usages-of-a-method-or-type).
+
+When upgrading an older cache, rerun `index` for each branch you need to
+query. Schema 3 adds reference relationships; existing declarations remain readable
+until that branch has been reindexed. Restart the MCP server so clients can discover
+`find_usages`.
 
 ### MCP client configuration
 
@@ -213,7 +226,7 @@ NuGet packages use **Central Package Management**:
 
 ## Planned milestones
 
-1. Add Roslyn semantic models, references and stable symbol identities.
+1. Add project-aware semantic compilation and stable, cross-project symbol identities.
 2. Implement TypeScript/Angular analysis using a validated Tree-sitter integration.
 3. Add source excerpts validated against indexed content hashes and paginated navigation.
 4. Add dependency-aware invalidation and reuse across branches as semantic analysis expands.

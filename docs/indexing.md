@@ -23,12 +23,23 @@ preview. Built-in exclusions always apply; submodules are included unless exclud
 Symlinked files and directories are skipped, and each source path is checked before and
 after reading. The command does not run target builds, restore packages or execute source.
 
-Currently `dotnet-csharp` extracts syntax declarations using Roslyn. Stored results
-include the language, declaration kind, simple and qualified names, relative path and
-one-based line/column. Each member also records the immediate containing type's source
-location, obtained from Roslyn's syntax tree. These are declaration locations, not compiler-backed semantic
-identities. References, cross-file resolution, AI descriptions and embeddings are not
-implemented. `semanticIndexing.language` is recorded for future generated text.
+Currently `dotnet-csharp` extracts declarations using Roslyn syntax trees, including
+language, kind, names, locations and immediate containing types. During indexing,
+an ephemeral `CSharpCompilation` and `SemanticModel` resolve references to indexed
+methods and types across the selected C# files. Only target/usage locations are stored:
+no source text, copied project files or Roslyn syntax trees are persisted. The reference
+pass loads the selected C# files into memory, so its peak memory scales with the size of
+the compilation. References to framework and other external declarations are not saved.
+AI descriptions and embeddings remain planned. `semanticIndexing.language` is recorded
+for future generated text.
+
+**Current limitation:** The reference pass treats all selected C# files as one assembly;
+it does not evaluate `.csproj` boundaries, target frameworks, conditional compilation
+symbols, custom assembly references or NuGet/project graphs. It uses runtime framework
+references only. Roslyn can resolve simple cross-file declarations, overloads, partial
+types and reduced extension methods, but incomplete/ambiguous bindings are omitted rather
+than guessed. Thus a zero-result query does not prove there are no callers in a complex
+multi-project repository.
 
 An interactive terminal displays Spectre progress for discovery, indexing, verification
 and publication. Discovery has an unknown total; indexing and verification show file
@@ -62,13 +73,14 @@ has one completed snapshot; switching branches never merges records. Branch name
 stored in SQLite, not interpolated into paths. Renaming or moving a checkout selects a
 different cache identity. No YAML or source files are copied into the cache.
 
-The versioned schema stores only derived declarations and lookup/invalidation metadata.
-It is a regenerable cache, not a stable interchange format or a source backup. Schema 2
-adds explicit type membership. Running `index` upgrades a version-one cache transactionally
-and reanalyzes its selected branch; no old snapshot is deleted until publication succeeds.
-Other branches retain their declarations but need their own index run before member queries
-can work. An interrupted run after migration preserves the old declarations and leaves
-member navigation explicitly unavailable for that snapshot. MCP reads never migrate storage.
+The versioned schema stores derived declarations, reference locations and
+lookup/invalidation metadata. It is a regenerable cache, not a stable interchange format
+or a source backup. Schema 2 introduced type membership, and schema 3 adds a compact
+reference table indexed by target declaration position. Running `index` upgrades version-one
+and version-two caches on the write path; the old published snapshot remains intact until
+atomic publication. An earlier branch may still return its declarations, but cannot
+answer `find_usages` until reindexed. An interrupted run preserves the older published
+snapshot. MCP reads never migrate storage.
 
 Unsupported schema versions fail without changes; select a fresh cache directory and rerun
 `index`. Deleting an unused cache directory is sufficient to discard its derived data.
@@ -80,6 +92,11 @@ configuration fingerprint decide whether prior declarations can be reused. New a
 changed files are analyzed; deleted files and old rename locations disappear on publication.
 Changes to analyzer selection, extensions, exclusions or semantic language invalidate reuse.
 All selected files are read and hashed even when their declarations can be reused.
+References are global semantic relationships: when any selected file is added, deleted
+or changed, all C# references are resolved again against the new compilation. Only an
+identical, fully reused set of files may copy all reference rows from the previous
+snapshot. This prevents an unchanged caller from retaining a stale edge after its
+target is edited.
 
 One SQLite transaction stages the replacement. Publication switches the branch snapshot
 and removes its old generation atomically. Other branches retain their snapshots. A failed
@@ -114,6 +131,12 @@ relative paths are resolved against the process working directory. See the
   a maximum of 200. Start with `offset: 0` and follow `nextOffset` until it is null.
   `hasMore` reports whether a next page exists. A changed snapshot requires a new lookup,
   preventing pagination across different index generations.
+- `find_usages` accepts an indexed **method or type** declaration's `relativePath`,
+  `line`, `column` and `snapshotId` returned by `find_symbols`. It retrieves Roslyn-resolved
+  occurrences, not text matches, from the published SQLite reference index. Pages default
+  to 50 (maximum 200); follow `nextOffset` and check `hasMore`. Partial class declarations
+  share type references; overloads remain separate. Other declarations (such as fields and
+  properties) are not yet supported. Missing reference metadata requires reindexing.
 
 A missing branch snapshot or a different HEAD produces an error asking the operator to
 run `index`. Queries do not rehash the working tree or reload YAML to establish freshness;
@@ -155,3 +178,29 @@ Selection uses the declaration's exact location, so homonymous or generic types 
 merged by their textual names. Partial types are handled declaration by declaration: query
 each intended part returned by `find_symbols`. Resolving all parts within a compilation,
 inheritance and full method signatures requires future semantic analysis.
+
+
+## Finding usages of a method or type
+
+First call `find_symbols` with `{"name":"Run"}`. Select a method declaration from its
+`symbols` array, using its qualified name, containing type and location to distinguish
+homonyms and overloads. Then call `find_usages` (numbers are illustrative):
+
+```json
+{
+  "relativePath": "src/Worker.cs",
+  "line": 12,
+  "column": 17,
+  "snapshotId": 3,
+  "maxResults": 50,
+  "offset": 0
+}
+```
+
+The result contains `target`, `snapshot`, `usages` (each a relative path, line
+and column), `hasMore` and `nextOffset`. For a class, usages include explicitly
+written type names such as `new Worker()`, type annotations, base classes and
+type arguments when Roslyn resolves them. For a method, overloads and extension
+method calls are matched to the declared method rather than its simple name.
+An unresolvable use, dynamic call or reflective invocation is not inferred.
+No source bodies are read during `find_usages`; indexing must be rerun after edits.

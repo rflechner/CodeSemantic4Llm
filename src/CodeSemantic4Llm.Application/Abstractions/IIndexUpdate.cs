@@ -12,6 +12,12 @@ public interface IIndexUpdate : IDisposable
 
     void AddFile(IndexedSourceFile file, IReadOnlyList<SymbolDefinition> symbols, CancellationToken cancellationToken = default);
 
+    /// <summary>Copies existing references only when every indexed file and the analyzer configuration are unchanged.</summary>
+    bool TryReuseReferences(CancellationToken cancellationToken = default);
+
+    /// <summary>Adds resolved references; none of the referenced source code is persisted.</summary>
+    void AddReferences(IReadOnlyList<SymbolReference> references, CancellationToken cancellationToken = default);
+
     /// <summary>Atomically replaces the branch's active snapshot and removes its superseded derived data.</summary>
     RepositoryIndexSnapshot Publish(CancellationToken cancellationToken = default);
 }

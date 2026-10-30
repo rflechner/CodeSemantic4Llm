@@ -123,6 +123,8 @@ public sealed partial class RepositoryIndexingSteps
 
     [Given("the cache uses the original version-one schema")]
     public void GivenOriginalSchema() => ExecuteSql("""
+        DROP TABLE symbol_references;
+        ALTER TABLE snapshots DROP COLUMN reference_index_version;
         DROP INDEX ix_symbols_container;
         ALTER TABLE symbols DROP COLUMN containing_type_line;
         ALTER TABLE symbols DROP COLUMN containing_type_column;

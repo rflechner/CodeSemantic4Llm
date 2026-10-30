@@ -24,6 +24,11 @@ public interface IIndexStore
         int maxResults,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Returns semantically resolved occurrences of one indexed declaration.</summary>
+    SymbolUsagePage FindUsages(
+        RepositoryScope scope, SourceLocation targetLocation, long snapshotId,
+        int maxResults, int offset, CancellationToken cancellationToken = default);
+
     /// <summary>Lists direct members of one type declaration in the expected published snapshot.</summary>
     TypeMemberPage GetTypeMembers(
         RepositoryScope scope, SourceLocation typeLocation, long snapshotId,
@@ -37,6 +42,14 @@ public sealed record SymbolSearchResult(
 /// <summary>One page of direct members. Partial declarations and inherited members are not combined.</summary>
 public sealed record TypeMemberPage(
     RepositoryIndexSnapshot Snapshot, SymbolDefinition Type, IReadOnlyList<SymbolDefinition> Members, int? NextOffset)
+{
+    public bool HasMore => NextOffset.HasValue;
+}
+
+
+/// <summary>One page of references to an exact type or method; results contain locations only.</summary>
+public sealed record SymbolUsagePage(
+    RepositoryIndexSnapshot Snapshot, SymbolDefinition Target, IReadOnlyList<SourceLocation> Usages, int? NextOffset)
 {
     public bool HasMore => NextOffset.HasValue;
 }

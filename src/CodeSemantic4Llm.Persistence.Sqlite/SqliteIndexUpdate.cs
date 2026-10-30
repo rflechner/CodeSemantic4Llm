@@ -18,6 +18,8 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     private readonly long? _previousId;
     private readonly long? _reusableId;
     private readonly SqliteCommand _insertSymbol;
+    private readonly SqliteCommand _insertReference;
+    private int _reusedFiles;
     private int _files;
     private int _symbols;
     private bool _published;
@@ -31,12 +33,13 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _previousId = SqliteIndexStore.ReadSnapshot(connection, _transaction, state.Scope)?.SnapshotId;
         _reusableId = GetReusableSnapshot(fingerprint);
         using var insert = Command("""
-            INSERT INTO snapshots(branch, revision, configuration_hash, semantic_language, member_index_version)
-            VALUES ($branch, $revision, $configuration, $language, 1) RETURNING id;
+            INSERT INTO snapshots(branch, revision, configuration_hash, semantic_language, member_index_version, reference_index_version)
+            VALUES ($branch, $revision, $configuration, $language, 1, 1) RETURNING id;
             """, ("$branch", state.Scope.BranchName), ("$revision", state.Revision),
             ("$configuration", fingerprint), ("$language", language));
         _snapshotId = Convert.ToInt64(insert.ExecuteScalar());
         _insertSymbol = CreateSymbolInsert();
+        _insertReference = CreateReferenceInsert();
     }
 
     public bool TryReuse(IndexedSourceFile file, CancellationToken cancellationToken = default)
@@ -69,8 +72,55 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
             """, ("$snapshot", _snapshotId), ("$previous", _reusableId), ("$path", file.RelativePath));
         copy.ExecuteNonQuery();
         _files++;
+        _reusedFiles++;
         _symbols += Convert.ToInt32(symbolCount);
         return true;
+    }
+
+    public bool TryReuseReferences(CancellationToken cancellationToken = default)
+    {
+        EnsureWritable(cancellationToken);
+
+        if (_reusableId is null || _reusedFiles != _files)
+        {
+            return false;
+        }
+
+        using var find = Command("""
+            SELECT file_count FROM snapshots WHERE id = $previous AND reference_index_version = 1;
+            """, ("$previous", _reusableId));
+
+        if (find.ExecuteScalar() is not long previousFileCount || previousFileCount != _files)
+        {
+            return false;
+        }
+
+        using var copy = Command("""
+            INSERT INTO symbol_references(
+                snapshot_id, target_path, target_line, target_column, usage_path, usage_line, usage_column)
+            SELECT $snapshot, target_path, target_line, target_column, usage_path, usage_line, usage_column
+            FROM symbol_references WHERE snapshot_id = $previous;
+            """, ("$snapshot", _snapshotId), ("$previous", _reusableId));
+        copy.ExecuteNonQuery();
+        return true;
+    }
+
+    public void AddReferences(IReadOnlyList<SymbolReference> references, CancellationToken cancellationToken = default)
+    {
+        EnsureWritable(cancellationToken);
+        ArgumentNullException.ThrowIfNull(references);
+
+        foreach (var reference in references)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _insertReference.Parameters["$targetPath"].Value = reference.Target.RelativePath;
+            _insertReference.Parameters["$targetLine"].Value = reference.Target.Line;
+            _insertReference.Parameters["$targetColumn"].Value = reference.Target.Column;
+            _insertReference.Parameters["$usagePath"].Value = reference.Usage.RelativePath;
+            _insertReference.Parameters["$usageLine"].Value = reference.Usage.Line;
+            _insertReference.Parameters["$usageColumn"].Value = reference.Usage.Column;
+            _insertReference.ExecuteNonQuery();
+        }
     }
 
     public void AddFile(IndexedSourceFile file, IReadOnlyList<SymbolDefinition> symbols, CancellationToken cancellationToken = default)
@@ -116,6 +166,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     public void Dispose()
     {
         _insertSymbol.Dispose();
+        _insertReference.Dispose();
         _transaction.Dispose();
         _connection.Dispose();
     }
@@ -136,6 +187,24 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
             """, ("$snapshot", _snapshotId), ("$path", ""), ("$ordinal", 0), ("$language", ""),
             ("$kind", ""), ("$name", ""), ("$qualified", ""), ("$line", 1), ("$column", 1),
             ("$parentLine", null), ("$parentColumn", null));
+        command.Prepare();
+        return command;
+    }
+
+    private SqliteCommand CreateReferenceInsert()
+    {
+        var command = Command("""
+            INSERT OR IGNORE INTO symbol_references(
+                snapshot_id, target_path, target_line, target_column, usage_path, usage_line, usage_column)
+            SELECT $snapshot, $targetPath, $targetLine, $targetColumn, $usagePath, $usageLine, $usageColumn
+            WHERE EXISTS (
+                SELECT 1 FROM symbols
+                WHERE snapshot_id = $snapshot AND path = $targetPath
+                    AND line = $targetLine AND column_number = $targetColumn)
+            AND EXISTS (
+                SELECT 1 FROM indexed_files WHERE snapshot_id = $snapshot AND path = $usagePath);
+            """, ("$snapshot", _snapshotId), ("$targetPath", ""), ("$targetLine", 1),
+            ("$targetColumn", 1), ("$usagePath", ""), ("$usageLine", 1), ("$usageColumn", 1));
         command.Prepare();
         return command;
     }
