@@ -12,6 +12,7 @@ public sealed class ServerInformationTools
         "CodeSemantic4Llm: MCP stdio host available. " +
         "The index command persists branch-scoped C# declarations and references. " +
         "Use find_symbols, get_type_members, find_usages and get_method_body to navigate source. " +
+        "Use validate_method_body and get_method_diagnostics for syntax-only feedback without writing. " +
         "Method editing is available only with 'serve --allow-write'. " +
         "Generated descriptions and TypeScript/Angular parsing are not yet implemented.";
 }

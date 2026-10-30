@@ -215,6 +215,46 @@ An unresolvable use, dynamic call or reflective invocation is not inferred.
 No source bodies are read during `find_usages`; indexing must be rerun after edits.
 
 
+## Checking a method's syntax
+
+Two read-only MCP tools use Roslyn's C# parser without starting MSBuild, running
+application code or writing any files:
+
+- `validate_method_body` takes the declaration's `relativePath`, `line`,
+  `column`, `snapshotId`, the `expectedContentHash` from `get_method_body`,
+  and a proposed complete `newBody` (including braces). It validates syntax
+  **in memory**, including the proposed block in the context of the method.
+  Invalid/incomplete block shapes return a structured `CS4L0001` error.
+  Changes to the index or file since the last read are rejected.
+- `get_method_diagnostics` takes `relativePath`, `line`, `column`, and
+  `expectedMethodName` from a previous symbol lookup. It parses **current
+  disk contents** directly and does not require any SQLite snapshot. This
+  makes it useful immediately after `replace_method_body` (which leaves the
+  index stale) or an external editor change. It refuses to silently select
+  another method if the name or identifier location no longer match.
+
+Both tools return `isValid`, `diagnostics` (each with `id`, `severity`,
+`message` and one-based `location`), `contentHash`, `totalDiagnostics`,
+`hasMore` and `nextOffset`. They return 50 diagnostics per page by default,
+with a maximum of 200; `isValid` is calculated from **all** diagnostics,
+not just the requested page. Only errors and warnings within the chosen
+method are reported, not diagnostics from unrelated methods.
+
+These tools perform **syntax validation only**. For example,
+`return Unknown.Customer.Name;` can be syntactically valid despite missing
+names or a return-type mismatch. Such issues require project-aware semantic
+compilation, which remains a separate planned capability.
+
+Recommended agent workflow:
+
+```text
+find_symbols → get_method_body
+             → validate_method_body (no source write)
+             → replace_method_body (only with serve --allow-write)
+             → get_method_diagnostics (current file, no snapshot)
+             → inspect git diff → index
+```
+
 ## Reading and replacing a method body
 
 By default the server is read-only. Pass `--allow-write` explicitly to `serve`
@@ -236,12 +276,15 @@ server is always read-only. `get_method_body` works in either mode.
 2. Call `get_method_body` with the method's `relativePath`, `line`, `column`,
    and `snapshotId`. The response contains `body.text`, `contentHash`,
    `totalCharacters` and `nextOffset`; page if the body is large.
-3. Call `replace_method_body` with the same location/snapshot, the exact
+3. Optionally call `validate_method_body` with the proposed block to get syntax
+   errors before any write, even in read-only mode.
+4. Call `replace_method_body` with the same location/snapshot, the exact
    `expectedContentHash` obtained above, and `newBody` containing only a valid
    C# block *including braces*. The replacement can convert an expression-bodied
    method into a block body. It cannot rewrite the signature, attributes or adjacent
    methods, and will not add an implementation to an abstract or interface method.
-4. Inspect the local Git diff and rerun `index`. The old index and its source
+5. Call `get_method_diagnostics` to check the written method without an index refresh,
+   then inspect the local Git diff and rerun `index`. The old index and its source
    locations are deliberately not altered by the write tool; the reply sets
    `reindexRequired: true`.
 

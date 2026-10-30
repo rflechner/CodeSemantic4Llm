@@ -170,6 +170,14 @@ when `--allow-write` is set. It accepts the method's exact indexed location and
 including braces. It changes **only that method's executable body**, without requiring
 a whole-file text replacement by the agent.
 
+For faster feedback, `validate_method_body` accepts the same declaration,
+`snapshotId`, `contentHash`, and proposed block, then reports Roslyn syntax errors
+**without writing anything**. After an edit, `get_method_diagnostics` can inspect the
+current method directly on disk, even before reindexing. Pass the declaration path,
+line, column and expected method name; no snapshot is required. Both tools are available
+in read-only mode and return bounded diagnostics with C# error IDs and source locations.
+**These are syntax checks, not compilation or semantic type checks.**
+
 The write is rejected if the index or working-tree file is stale, the syntax is invalid,
 or the method has no body. Writes are restricted to the operator-selected checkout;
 symlinks and traversal are rejected. This is a local source edit, not an index update:
