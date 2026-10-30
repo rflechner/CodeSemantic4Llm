@@ -9,6 +9,26 @@ namespace CodeSemantic4Llm.Analysis.CSharp;
 /// <summary>Maps parser diagnostics to stable, physical source locations, optionally within a declaration.</summary>
 internal static class CSharpSyntaxDiagnosticReader
 {
+    /// <summary>Maps detached replacement-node errors into physical positions in the proposed file.</summary>
+    public static IReadOnlyList<SyntaxDiagnostic> ReadReplacementErrors(
+        IEnumerable<Diagnostic> diagnostics, string relativePath, SourceText proposedSource, int replacementStart) =>
+        diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .Select(diagnostic =>
+            {
+                var offset = diagnostic.Location.IsInSource ? diagnostic.Location.SourceSpan.Start : 0;
+                var position = Math.Clamp(replacementStart + offset, 0, proposedSource.Length);
+                var line = proposedSource.Lines.GetLinePosition(position);
+
+                return new SyntaxDiagnostic(diagnostic.Id, "error", diagnostic.GetMessage(CultureInfo.InvariantCulture),
+                    new SourceLocation(relativePath, line.Line + 1, line.Character + 1));
+            })
+            .Distinct()
+            .OrderBy(diagnostic => diagnostic.Location.Line)
+            .ThenBy(diagnostic => diagnostic.Location.Column)
+            .ThenBy(diagnostic => diagnostic.Id, StringComparer.Ordinal)
+            .ThenBy(diagnostic => diagnostic.Message, StringComparer.Ordinal)
+            .ToArray();
+
     public static IReadOnlyList<SyntaxDiagnostic> Read(
         SyntaxTree tree, TextSpan? declarationSpan = null, CancellationToken cancellationToken = default)
     {

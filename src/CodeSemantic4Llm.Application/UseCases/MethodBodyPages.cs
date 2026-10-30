@@ -11,22 +11,24 @@ public sealed class MethodBodyPages
     private readonly Queue<long> _order = [];
     private long _nextId = Random.Shared.NextInt64(1L << 40, 1L << 50);
 
-    internal MethodBodyContinuation Select(string root, DeclarationSelector selector, long offset)
+    internal MethodBodyContinuation Select(
+        string root, DeclarationSelector selector, long offset, MethodReadScope scope = MethodReadScope.Body)
     {
         if (offset == 0)
         {
-            return new MethodBodyContinuation(root, selector, 0, null);
+            return new MethodBodyContinuation(root, selector, scope, 0, null);
         }
 
         lock (_gate)
         {
-            if (_pages.TryGetValue(offset, out var page) && page.Root == root && page.Selector == selector)
+            if (_pages.TryGetValue(offset, out var page) && page.Root == root && page.Selector == selector
+                && page.Scope == scope)
             {
                 return page;
             }
         }
 
-        throw new CodeRequestException("This method body page is unavailable. Start again at offset 0.");
+        throw new CodeRequestException("This method source page is unavailable. Start again at offset 0.");
     }
 
     internal long? Continue(MethodBodyContinuation page, MethodReadObservation observation, int? nextOffset)
@@ -52,4 +54,4 @@ public sealed class MethodBodyPages
 }
 
 internal sealed record MethodBodyContinuation(
-    string Root, DeclarationSelector Selector, int Offset, MethodReadObservation? Observation);
+    string Root, DeclarationSelector Selector, MethodReadScope Scope, int Offset, MethodReadObservation? Observation);

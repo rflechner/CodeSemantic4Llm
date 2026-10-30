@@ -4,7 +4,7 @@ using Xunit;
 
 namespace CodeSemantic4Llm.FunctionalTests.Steps;
 
-/// <summary>Exercises the default and detailed presentations against the same persisted checkout over stdio.</summary>
+/// <summary>Exercises code tools and optional administration against the same checkout over stdio.</summary>
 public sealed partial class RepositoryIndexingSteps
 {
     private readonly List<JsonElement> _codeReplies = [];
@@ -44,10 +44,10 @@ public sealed partial class RepositoryIndexingSteps
     }
 
     [When(@"default MCP replaces Run with ""(.*)""")]
+    [When("default MCP replaces Run with:")]
     public async Task WhenDefaultCodeWrites(string newBody)
     {
         await using var client = await StartCodeClientAsync(allowWrite: true);
-        var body = await CodeCallAsync(client, "get_method_body", new { relativePath = "Worker.cs", name = "Run" });
         var written = await CodeCallAsync(client, "replace_method_body", new
         {
             relativePath = "Worker.cs", name = "Run", newBody
@@ -67,25 +67,40 @@ public sealed partial class RepositoryIndexingSteps
         Assert.True(validation.GetProperty("isValid").GetBoolean());
         Assert.Equal(source, File.ReadAllText(Path.Combine(_root, "Worker.cs")));
 
-        await CodeCallAsync(client, "get_method_body", new { arguments.relativePath, arguments.name });
         await CodeCallAsync(client, "replace_method_body", arguments);
         var diagnostics = await CodeCallAsync(client, "get_file_diagnostics", new { arguments.relativePath });
         Assert.True(diagnostics.GetProperty("isValid").GetBoolean());
         Assert.Contains("public int Call() => Run();", File.ReadAllText(Path.Combine(_root, "Worker.cs")));
     }
 
-    [When(@"default MCP attempts to edit a selected method after ""(.*)""")]
+    [When(@"default MCP edits the current method after ""(.*)""")]
     public async Task WhenDefaultCodeSelectionChanges(string change)
     {
         await using var client = await StartCodeClientAsync(allowWrite: true);
         var body = await CodeCallAsync(client, "get_method_body", new { relativePath = "Worker.cs", name = "Run" });
         await ChangeCodeSelectionAsync(change);
-        _sourceBeforeCodeWrite = File.ReadAllText(Path.Combine(_root, "Worker.cs"));
-        _codeFailure = await client.CallAsync("replace_method_body", new
+        await CodeCallAsync(client, "replace_method_body", new
         {
             relativePath = "Worker.cs", name = "Run",
-            newBody = "{ return 999; }"
+            newBody = "{ return 42; }"
         });
+    }
+
+    [When(@"""(.*)"" MCP replaces Run after ""(.*)""")]
+    public async Task WhenBodyEditNeedsNoRead(string mode, string readTool)
+    {
+        await using var client = await StartCodeClientAsync(allowWrite: true, exposeIndexing: mode == "indexing");
+        var address = new { relativePath = "Worker.cs", name = "Run" };
+        if (readTool != "no read")
+        {
+            await CodeCallAsync(client, readTool, address);
+        }
+
+        await CodeCallAsync(client, "replace_method_body", new
+        {
+            address.relativePath, address.name, newBody = "return 42;"
+        });
+        Assert.Contains("public int Call() => Run();", File.ReadAllText(Path.Combine(_root, "Worker.cs")));
     }
 
     [When("default MCP searches an unprepared repository")]
@@ -115,6 +130,10 @@ public sealed partial class RepositoryIndexingSteps
     public void ThenDefaultCodeWriteSucceeded() =>
         Assert.Contains("return 42;", File.ReadAllText(Path.Combine(_root, "Worker.cs")));
 
+    [Then(@"source file ""(.*)"" is exactly:")]
+    public void ThenSourceFileIsExactly(string relativePath, string expected) =>
+        Assert.Equal(expected, File.ReadAllText(Path.Combine(_root, relativePath)));
+
     [Then("default MCP refuses the stale selection without exposing indexing details")]
     public void ThenDefaultCodeFailure()
     {
@@ -128,10 +147,10 @@ public sealed partial class RepositoryIndexingSteps
     public void ThenDefaultCodeWriteRejected() =>
         Assert.Equal(_sourceBeforeCodeWrite, File.ReadAllText(Path.Combine(_root, "Worker.cs")));
 
-    [Then("the detailed MCP reply includes snapshot metadata")]
+    [Then("only the administration replies include indexing metadata")]
     public void ThenDetailedCodeReply()
     {
-        Assert.True(_codeReplies[0].GetProperty("snapshot").GetProperty("snapshotId").GetInt64() > 0);
+        AssertCodeReplyHasNoStorageDetails(_codeReplies[0].GetRawText());
         Assert.True(_codeReplies[1].TryGetProperty("snapshot", out _));
         Assert.True(_codeReplies[2].TryGetProperty("semanticIndexingLanguage", out _));
     }

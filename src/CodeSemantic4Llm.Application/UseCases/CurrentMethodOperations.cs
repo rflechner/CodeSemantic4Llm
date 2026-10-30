@@ -7,7 +7,7 @@ namespace CodeSemantic4Llm.Application.UseCases;
 
 /// <summary>
 /// Reads, validates and edits current methods by source address, independently of the derived index.
-/// Read observations retain only metadata and protect later writes against source and branch changes.
+/// Each edit selects current source and checks for source and branch changes during that call.
 /// </summary>
 public sealed class CurrentMethodOperations(
     IRepositoryConfigurationLoader configurationLoader,
@@ -16,22 +16,42 @@ public sealed class CurrentMethodOperations(
     IRepositorySourceReader sourceReader,
     IRepositorySourceWriter sourceWriter,
     IMethodBodyEditor editor,
+    IMethodDeclarationEditor declarationEditor,
     IMethodSyntaxDiagnostics syntaxDiagnostics,
-    MethodReadHistory reads,
     MethodBodyPages pages,
     RepositoryWriteAccess writeAccess)
 {
     private readonly IReadOnlyList<ISourceAnalyzer> _analyzers = analyzers.ToArray();
 
-    /// <summary>Reads a stable body page and remembers its source version for a subsequent edit.</summary>
+    /// <summary>Reads a body page, retaining its source version only for pagination.</summary>
     public async Task<CurrentMethodBodyResult> ReadAsync(
         string root, DeclarationSelector selector, int maxCharacters, long offset, CancellationToken cancellationToken)
     {
         ValidatePage(maxCharacters, 0, 20000);
+        var read = await ReadSelectionAsync(root, selector, offset, MethodReadScope.Body, cancellationToken);
+        var body = editor.Read(read.Selected.Source.Document, read.Selected.Method.Location);
+        var page = Slice(body.Text, read, maxCharacters);
+        return new CurrentMethodBodyResult(read.Selected.Method,
+            new MethodBody(page.Text, body.IsExpressionBodied), page.TotalCharacters, page.NextOffset);
+    }
+
+    /// <summary>Reads attributes, signature and body with source-consistent pagination.</summary>
+    public async Task<CurrentMethodDeclarationResult> ReadDeclarationAsync(
+        string root, DeclarationSelector selector, int maxCharacters, long offset, CancellationToken cancellationToken)
+    {
+        ValidatePage(maxCharacters, 0, 20000);
+        var read = await ReadSelectionAsync(root, selector, offset, MethodReadScope.Declaration, cancellationToken);
+        var text = declarationEditor.Read(read.Selected.Source.Document, read.Selected.Method.Location);
+        var page = Slice(text, read, maxCharacters);
+        return new CurrentMethodDeclarationResult(read.Selected.Method, page.Text, page.TotalCharacters, page.NextOffset);
+    }
+
+    private async Task<ObservedMethod> ReadSelectionAsync(
+        string root, DeclarationSelector selector, long offset, MethodReadScope scope, CancellationToken cancellationToken)
+    {
         var state = await stateProvider.GetStateAsync(root, cancellationToken);
-        var page = pages.Select(state.Scope.RootPath, selector, offset);
+        var page = pages.Select(state.Scope.RootPath, selector, offset, scope);
         var selected = await SelectAsync(state.Scope.RootPath, selector, cancellationToken);
-        var body = editor.Read(selected.Source.Document, selected.Method.Location);
         var finalState = await stateProvider.GetStateAsync(root, cancellationToken);
 
         if (state != finalState)
@@ -46,15 +66,18 @@ public sealed class CurrentMethodOperations(
             throw new CodeRequestException("The source changed while reading the method body. Start again at offset 0.");
         }
 
-        reads.Remember(observation);
-        var start = Math.Min(page.Offset, body.Text.Length);
-        var length = Math.Min(maxCharacters, body.Text.Length - start);
-        return new CurrentMethodBodyResult(selected.Method,
-            new MethodBody(body.Text.Substring(start, length), body.IsExpressionBodied), body.Text.Length,
-            pages.Continue(page, observation, start + length < body.Text.Length ? start + length : null));
+        return new ObservedMethod(selected, page, observation);
     }
 
-    /// <summary>Checks proposed syntax against current source without creating an editing observation.</summary>
+    private MethodTextPage Slice(string text, ObservedMethod read, int maxCharacters)
+    {
+        var start = Math.Min(read.Continuation.Offset, text.Length);
+        var length = Math.Min(maxCharacters, text.Length - start);
+        return new MethodTextPage(text.Substring(start, length), text.Length,
+            pages.Continue(read.Continuation, read.Observation, start + length < text.Length ? start + length : null));
+    }
+
+    /// <summary>Checks proposed syntax against current source without writing.</summary>
     public async Task<MethodDiagnosticsResult> ValidateAsync(
         string root, DeclarationSelector selector, string newBody, int maxDiagnostics, int offset,
         CancellationToken cancellationToken)
@@ -67,9 +90,37 @@ public sealed class CurrentMethodOperations(
             diagnostics.Count, diagnostics.Count - offset > maxDiagnostics ? checked(offset + maxDiagnostics) : null);
     }
 
-    /// <summary>Replaces one body only when the checkout and source still match the last body read.</summary>
-    public async Task<SourceLocation> ReplaceAsync(
-        string root, DeclarationSelector selector, string newBody, CancellationToken cancellationToken)
+    /// <summary>Validates and replaces the current body in one call, without requiring a preceding read.</summary>
+    public Task<SourceLocation> ReplaceAsync(
+        string root, DeclarationSelector selector, string newBody, CancellationToken cancellationToken) =>
+        ReplaceSelectedAsync(root, selector,
+            (document, location) => ValidateAndReplaceBody(document, location, newBody),
+            cancellationToken);
+
+    private MethodDeclarationEdit ValidateAndReplaceBody(SourceDocument document, SourceLocation location, string newBody)
+    {
+        var errors = syntaxDiagnostics.ValidateReplacement(document, location, newBody)
+            .Where(diagnostic => diagnostic.Severity == "error").ToArray();
+
+        if (errors.Length > 0)
+        {
+            throw new MethodEditValidationException(errors);
+        }
+
+        // Validation and replacement use the same source snapshot. The writer still rejects
+        // concurrent file changes before publishing the replacement.
+        return new MethodDeclarationEdit(editor.Replace(document, location, newBody), location);
+    }
+
+    /// <summary>Replaces the current complete declaration without requiring a preceding read.</summary>
+    public Task<SourceLocation> ReplaceDeclarationAsync(
+        string root, DeclarationSelector selector, string newMethod, CancellationToken cancellationToken) =>
+        ReplaceSelectedAsync(root, selector,
+            (document, location) => declarationEditor.Replace(document, location, newMethod), cancellationToken);
+
+    private async Task<SourceLocation> ReplaceSelectedAsync(
+        string root, DeclarationSelector selector,
+        Func<SourceDocument, SourceLocation, MethodDeclarationEdit> replace, CancellationToken cancellationToken)
     {
         if (!writeAccess.Enabled)
         {
@@ -78,29 +129,21 @@ public sealed class CurrentMethodOperations(
 
         var state = await stateProvider.GetStateAsync(root, cancellationToken);
         var selected = await SelectAsync(state.Scope.RootPath, selector, cancellationToken);
-        var observation = reads.Get(state.Scope.RootPath, selected.Method.Location);
+        var replacement = replace(selected.Source.Document, selected.Method.Location);
 
-        if (observation.State != state || observation.Method != selected.Method ||
-            observation.ContentHash != selected.Source.ContentHash)
+        if (replacement.Content == selected.Source.Document.Content)
         {
-            throw new CodeRequestException("The source changed since the last read. Read this method again before editing.");
-        }
-
-        var replacement = editor.Replace(selected.Source.Document, selected.Method.Location, newBody);
-
-        if (replacement == selected.Source.Document.Content)
-        {
-            throw new CodeRequestException("The replacement is identical to the current method body.");
+            throw new CodeRequestException("The replacement is identical to the current method.");
         }
 
         if (await stateProvider.GetStateAsync(root, cancellationToken) != state)
         {
-            throw new CodeRequestException("The checkout changed during editing. Read the method again.");
+            throw new CodeRequestException("The checkout changed during editing. Retry when it is stable.");
         }
 
         await sourceWriter.ReplaceAsync(state.Scope.RootPath, selector.RelativePath,
-            observation.ContentHash, replacement, cancellationToken);
-        return selected.Method.Location;
+            selected.Source.ContentHash, replacement.Content, cancellationToken);
+        return replacement.MethodLocation;
     }
 
     private async Task<CurrentMethod> SelectAsync(
@@ -141,7 +184,15 @@ public sealed class CurrentMethodOperations(
     }
 
     private sealed record CurrentMethod(SourceFileSnapshot Source, SymbolDefinition Method);
+
+    private sealed record ObservedMethod(
+        CurrentMethod Selected, MethodBodyContinuation Continuation, MethodReadObservation Observation);
+
+    private sealed record MethodTextPage(string Text, int TotalCharacters, long? NextOffset);
 }
 
 /// <summary>A current method body page with no caller-managed version or identity tokens.</summary>
 public sealed record CurrentMethodBodyResult(SymbolDefinition Method, MethodBody Body, int TotalCharacters, long? NextOffset);
+
+/// <summary>A bounded current declaration, including attributes and signature but excluding surrounding comments.</summary>
+public sealed record CurrentMethodDeclarationResult(SymbolDefinition Method, string Text, int TotalCharacters, long? NextOffset);

@@ -1,8 +1,11 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
+using ModelContextProtocol;
 using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Mcp.Server.Logging;
 using CodeSemantic4Llm.Mcp.Server.Presentation;
@@ -46,12 +49,21 @@ internal static class McpServerHost
         builder.Services.AddSingleton<DiagnosticPages>();
         builder.Services.AddSingleton<CodeDiagnosticOperations>();
 
+        // Tool results are JSON inside MCP text, not HTML. Keep C# punctuation and Unicode
+        // readable for models; quotes, backslashes and control characters still use JSON escaping.
+        var toolJsonOptions = new JsonSerializerOptions(McpJsonUtilities.DefaultOptions)
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        };
+
         // Explicit registration keeps the editing tool undiscoverable in read-only mode.
         // A client cannot enable this capability through tool arguments or YAML settings.
         var mcp = builder.Services.AddMcpServer()
             .WithStdioServerTransport()
             .WithRequestFilters(filters => filters.AddCallToolFilter(McpToolCallLogging.Wrap))
-            .WithTools<ServerInformationTools>();
+            .WithTools<ServerInformationTools>(toolJsonOptions)
+            .WithTools<RepositoryCodeTools>(toolJsonOptions)
+            .WithTools<RepositoryCodeDiagnosticsTools>(toolJsonOptions);
             // .WithTools<InspectSourceTools>()
 
         if (fileLogger is not null)
@@ -64,25 +76,13 @@ internal static class McpServerHost
 
         if (exposeIndexing)
         {
-            mcp.WithTools<RepositoryConfigurationTools>()
-                .WithTools<RepositoryDiagnosticsTools>()
-                .WithTools<RepositoryIndexTools>()
-                .WithTools<RepositoryMethodTools>();
-
-            if (allowWrite)
-            {
-                mcp.WithTools<RepositoryWriteTools>();
-            }
+            mcp.WithTools<RepositoryConfigurationTools>(toolJsonOptions)
+                .WithTools<RepositoryIndexTools>(toolJsonOptions);
         }
-        else
-        {
-            mcp.WithTools<RepositoryCodeTools>()
-                .WithTools<RepositoryCodeDiagnosticsTools>();
 
-            if (allowWrite)
-            {
-                mcp.WithTools<RepositoryCodeWriteTools>();
-            }
+        if (allowWrite)
+        {
+            mcp.WithTools<RepositoryCodeWriteTools>(toolJsonOptions);
         }
 
         using var host = builder.Build();

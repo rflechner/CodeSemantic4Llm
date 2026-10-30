@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Domain.Symbols;
 using Microsoft.Extensions.Configuration;
@@ -54,6 +55,10 @@ public sealed class CodeToolOperations(
         DeclarationSelector selector, int maxCharacters, long offset, CancellationToken cancellationToken) =>
         PresentAsync(() => currentMethods.ReadAsync(Root, selector, maxCharacters, offset, cancellationToken));
 
+    public Task<CurrentMethodDeclarationResult> ReadMethodDeclarationAsync(
+        DeclarationSelector selector, int maxCharacters, long offset, CancellationToken cancellationToken) =>
+        PresentAsync(() => currentMethods.ReadDeclarationAsync(Root, selector, maxCharacters, offset, cancellationToken));
+
     public Task<CodeMethodDiagnosticsResult> ValidateMethodAsync(
         DeclarationSelector selector, string newBody, int maxDiagnostics, long offset, CancellationToken cancellationToken) =>
         PresentAsync(async () =>
@@ -66,10 +71,28 @@ public sealed class CodeToolOperations(
             return diagnosticPages.Present(continuation, result);
         });
 
-    public Task<CodeMethodWriteResult> ReplaceMethodAsync(
+    public Task<CodeMethodWriteResult> ReplaceMethodBodyAsync(
         DeclarationSelector selector, string newBody, CancellationToken cancellationToken) =>
-        PresentAsync(async () => new CodeMethodWriteResult(
-            await currentMethods.ReplaceAsync(Root, selector, newBody, cancellationToken)));
+        PresentEditAsync(() => currentMethods.ReplaceAsync(Root, selector, newBody, cancellationToken),
+            "replace_method_body");
+
+    public Task<CodeMethodWriteResult> ReplaceMethodAsync(
+        DeclarationSelector selector, string newMethod, CancellationToken cancellationToken) =>
+        PresentEditAsync(() => currentMethods.ReplaceDeclarationAsync(Root, selector, newMethod, cancellationToken),
+            "replace_method");
+
+    private Task<CodeMethodWriteResult> PresentEditAsync(Func<Task<SourceLocation>> operation, string toolName) =>
+        PresentAsync(async () =>
+        {
+            try
+            {
+                return new CodeMethodWriteResult(await operation());
+            }
+            catch (MethodEditValidationException exception)
+            {
+                throw new McpException(DescribeInvalidEdit(exception, toolName));
+            }
+        });
 
     public Task<CodeMethodDiagnosticsResult> GetMethodDiagnosticsAsync(
         SourceLocation location, string expectedMethodName, int maxDiagnostics, long offset,
@@ -104,6 +127,32 @@ public sealed class CodeToolOperations(
             logger.LogWarning(exception, "A code tool could not use the requested repository source information.");
             throw new McpException("Source information is unavailable. Check the source path or ask the server operator to refresh it.");
         }
+    }
+
+    private static string DescribeInvalidEdit(MethodEditValidationException exception, string toolName)
+    {
+        const int maximumErrors = 10;
+        var message = new StringBuilder("No edit applied. Syntax errors in the proposed file:");
+        foreach (var diagnostic in exception.Diagnostics.Take(maximumErrors))
+        {
+            var location = diagnostic.Location;
+            message.Append('\n').Append(diagnostic.Id).Append(' ')
+                .Append(location.RelativePath).Append(':').Append(location.Line).Append(':').Append(location.Column)
+                .Append(' ').Append(diagnostic.Message);
+        }
+
+        if (exception.Diagnostics.Count > maximumErrors)
+        {
+            message.Append('\n').Append(exception.Diagnostics.Count - maximumErrors).Append(" more syntax errors.");
+        }
+
+        if (exception.Diagnostics.Take(maximumErrors).Any(diagnostic => diagnostic.Id == "CS1012"))
+        {
+            message.Append("\nC# strings use double quotes, e.g. \"text\". " +
+                "Single quotes are for one character, e.g. 'x'. Preserve the intended string content.");
+        }
+
+        return message.Append("\nCorrect the proposed code and retry ").Append(toolName).Append('.').ToString();
     }
 }
 

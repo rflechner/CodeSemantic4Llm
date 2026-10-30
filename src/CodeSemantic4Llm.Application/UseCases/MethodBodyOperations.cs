@@ -15,6 +15,7 @@ public sealed class MethodBodyOperations(
     IRepositorySourceReader sourceReader,
     IRepositorySourceWriter sourceWriter,
     IMethodBodyEditor methodBodyEditor,
+    IMethodDeclarationEditor declarationEditor,
     IMethodSyntaxDiagnostics syntaxDiagnostics,
     RepositoryWriteAccess writeAccess)
 {
@@ -43,9 +44,40 @@ public sealed class MethodBodyOperations(
             body.Text.Length, nextOffset);
     }
 
-    public async Task<MethodBodyWriteResult> ReplaceAsync(
+    /// <summary>Reads one indexed method's attributes, signature and implementation.</summary>
+    public async Task<MethodDeclarationReadResult> ReadDeclarationAsync(
         string repositoryRoot, SourceLocation declaration, long snapshotId,
-        string expectedContentHash, string newBody, CancellationToken cancellationToken = default)
+        int maxCharacters = 12000, int offset = 0, CancellationToken cancellationToken = default)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxCharacters);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(maxCharacters, 20000);
+        ArgumentOutOfRangeException.ThrowIfNegative(offset);
+        var selected = await SelectAsync(repositoryRoot, declaration, snapshotId, cancellationToken);
+        var text = declarationEditor.Read(selected.Source.Document, declaration);
+        var start = Math.Min(offset, text.Length);
+        var length = Math.Min(maxCharacters, text.Length - start);
+        return new MethodDeclarationReadResult(selected.Method.Snapshot, selected.Method.Method,
+            selected.Source.ContentHash, text.Substring(start, length), text.Length,
+            start + length < text.Length ? start + length : null);
+    }
+
+    public Task<MethodBodyWriteResult> ReplaceAsync(
+        string repositoryRoot, SourceLocation declaration, long snapshotId,
+        string expectedContentHash, string newBody, CancellationToken cancellationToken = default) =>
+        ReplaceSelectedAsync(repositoryRoot, declaration, snapshotId, expectedContentHash,
+            document => new MethodDeclarationEdit(methodBodyEditor.Replace(document, declaration, newBody), declaration),
+            cancellationToken);
+
+    /// <summary>Replaces an entire indexed method while preserving hash and snapshot checks.</summary>
+    public Task<MethodBodyWriteResult> ReplaceDeclarationAsync(
+        string repositoryRoot, SourceLocation declaration, long snapshotId,
+        string expectedContentHash, string newMethod, CancellationToken cancellationToken = default) =>
+        ReplaceSelectedAsync(repositoryRoot, declaration, snapshotId, expectedContentHash,
+            document => declarationEditor.Replace(document, declaration, newMethod), cancellationToken);
+
+    private async Task<MethodBodyWriteResult> ReplaceSelectedAsync(
+        string repositoryRoot, SourceLocation declaration, long snapshotId, string expectedContentHash,
+        Func<SourceDocument, MethodDeclarationEdit> replace, CancellationToken cancellationToken)
     {
         if (!writeAccess.Enabled)
         {
@@ -54,7 +86,6 @@ public sealed class MethodBodyOperations(
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedContentHash);
-        ArgumentNullException.ThrowIfNull(newBody);
 
         var selected = await SelectAsync(repositoryRoot, declaration, snapshotId, cancellationToken);
 
@@ -64,18 +95,18 @@ public sealed class MethodBodyOperations(
                 "The source file differs from the expected hash. Read the method again before editing.");
         }
 
-        var source = methodBodyEditor.Replace(selected.Source.Document, declaration, newBody);
+        var edit = replace(selected.Source.Document);
 
-        if (string.Equals(source, selected.Source.Document.Content, StringComparison.Ordinal))
+        if (string.Equals(edit.Content, selected.Source.Document.Content, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("The replacement body is identical to the current body.");
+            throw new InvalidOperationException("The replacement is identical to the current method.");
         }
 
         var hash = await sourceWriter.ReplaceAsync(
             selected.Method.Snapshot.Scope.RootPath, declaration.RelativePath,
-            expectedContentHash, source, cancellationToken);
+            expectedContentHash, edit.Content, cancellationToken);
 
-        return new MethodBodyWriteResult(declaration, hash, ReindexRequired: true);
+        return new MethodBodyWriteResult(edit.MethodLocation, hash, ReindexRequired: true);
     }
 
     /// <summary>
@@ -193,6 +224,11 @@ public sealed class MethodBodyOperations(
 /// <summary>One method's current body and the optimistic-concurrency token for an edit.</summary>
 public sealed record MethodBodyReadResult(
     RepositoryIndexSnapshot Snapshot, SymbolDefinition Method, string ContentHash, MethodBody Body,
+    int TotalCharacters, int? NextOffset);
+
+/// <summary>One complete indexed declaration and the source version needed for editing.</summary>
+public sealed record MethodDeclarationReadResult(
+    RepositoryIndexSnapshot Snapshot, SymbolDefinition Method, string ContentHash, string Text,
     int TotalCharacters, int? NextOffset);
 
 /// <summary>A successful checkout edit; the persisted index intentionally stays unchanged.</summary>

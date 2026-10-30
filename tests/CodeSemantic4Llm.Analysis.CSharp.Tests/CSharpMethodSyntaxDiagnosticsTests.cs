@@ -59,7 +59,7 @@ public sealed class CSharpMethodSyntaxDiagnosticsTests
 
         var error = Assert.Single(diagnostics, item => item.Id == "CS1002");
         Assert.Equal(2, error.Location.Line);
-        Assert.Equal(10, error.Location.Column);
+        Assert.Equal(14, error.Location.Column);
         Assert.Throws<ArgumentException>(() => new CSharpMethodBodyEditor().Replace(document, location, "return 42"));
     }
 
@@ -84,7 +84,7 @@ public sealed class CSharpMethodSyntaxDiagnosticsTests
 
         Assert.Empty(new CSharpMethodSyntaxDiagnostics().ValidateReplacement(document, location, body));
         var result = new CSharpMethodBodyEditor().Replace(document, location, body);
-        Assert.Contains("{\n" + body + "\n}", result);
+        Assert.Contains("{\n" + string.Join("\n", body.Split('\n').Select(line => "    " + line)) + "\n}", result);
     }
 
     [Fact]

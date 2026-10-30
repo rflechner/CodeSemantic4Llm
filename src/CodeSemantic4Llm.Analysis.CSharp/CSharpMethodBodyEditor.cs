@@ -11,6 +11,10 @@ namespace CodeSemantic4Llm.Analysis.CSharp;
 /// <summary>Uses Roslyn to select a precise C# method and replace only its executable body.</summary>
 public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
 {
+    internal const string BodyInputHelp = "Supply only C# statements or one complete body block, with balanced braces. "
+        + "Do not include the method signature; use replace_method for a complete declaration or signature changes. "
+        + "Wrap an intentional single local function in outer body braces.";
+
     public MethodBody Read(SourceDocument document, SourceLocation declaration)
     {
         var method = FindMethod(document, declaration);
@@ -24,7 +28,7 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
         ArgumentNullException.ThrowIfNull(newBody);
         var method = FindMethod(document, declaration);
         var span = GetBodySpan(method);
-        var replacement = ValidateBody(document, newBody);
+        var replacement = ValidateBody(document, method, newBody);
 
         // Replace a TextSpan, not the whole Roslyn node: preserve the signature, attributes,
         // comments and byte-for-byte source outside the targeted body (including CRLF).
@@ -72,14 +76,14 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
             "The selected method has no executable body (for example, an interface or abstract declaration).");
     }
 
-    private static string ValidateBody(SourceDocument document, string newBody)
+    private static string ValidateBody(SourceDocument document, MethodDeclarationSyntax method, string newBody)
     {
-        var (body, hasValidShape, syntaxErrors) = InspectReplacement(document, newBody);
+        var (body, hasValidShape, syntaxErrors) = InspectReplacement(document, method, newBody);
 
         if (!hasValidShape)
         {
             throw new ArgumentException(
-                "Supply C# statements or one complete block, with balanced braces and no surrounding declarations.",
+                BodyInputHelp,
                 nameof(newBody));
         }
 
@@ -97,15 +101,23 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
     /// is treated as explicit; otherwise statements are enclosed without repairing unmatched braces.
     /// </summary>
     internal static (string Body, bool HasValidShape, IReadOnlyList<Diagnostic> SyntaxErrors)
-        InspectReplacement(SourceDocument document, string newBody)
+        InspectReplacement(SourceDocument document, MethodDeclarationSyntax method, string newBody)
     {
         ArgumentNullException.ThrowIfNull(newBody);
-        var body = newBody.Trim();
+        var body = TrimBlankLines(newBody);
         var newLine = document.Content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var statement = SyntaxFactory.ParseStatement(body);
 
         if (statement is not BlockSyntax)
         {
+            // A complete method is also a legal local-function statement. Do not silently nest
+            // an accidentally supplied declaration inside the method that the caller meant to edit.
+            if (SyntaxFactory.ParseMemberDeclaration(body, consumeFullText: true) is MethodDeclarationSyntax member
+                && !member.ContainsDiagnostics)
+            {
+                return (body, false, []);
+            }
+
             // Separate the closing brace from trailing // comments and preprocessor directives.
             body = "{" + newLine + body + newLine + "}";
             statement = SyntaxFactory.ParseStatement(body);
@@ -121,8 +133,33 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
             && !block.OpenBraceToken.IsMissing && !block.CloseBraceToken.IsMissing
             && statement.FullSpan.Length == body.Length;
 
+        if (isCompleteBlock)
+        {
+            body = CSharpMethodIndentation.AdjustBody(method, (BlockSyntax)statement, body, newLine);
+            statement = SyntaxFactory.ParseStatement(body);
+        }
+
         return (body, isCompleteBlock,
             statement.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
                 .ToArray());
+    }
+
+    internal static string TrimBlankLines(string body)
+    {
+        var trimmed = body.TrimEnd();
+        var firstContent = 0;
+        while (firstContent < trimmed.Length && char.IsWhiteSpace(trimmed[firstContent]))
+        {
+            firstContent++;
+        }
+
+        // Keep horizontal indentation on the first content line so it participates in rebasing.
+        var start = firstContent;
+        while (start > 0 && trimmed[start - 1] is not '\r' and not '\n')
+        {
+            start--;
+        }
+
+        return trimmed[start..];
     }
 }

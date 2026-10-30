@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 
 namespace CodeSemantic4Llm.Mcp.Server.Tools;
 
-/// <summary>Provides syntax feedback from current files, including edits that invalidate indexed locations.</summary>
+/// <summary>Versioned diagnostics adapter for direct callers; MCP hosts use RepositoryCodeDiagnosticsTools instead.</summary>
 [McpServerToolType]
 public sealed class RepositoryDiagnosticsTools(IConfiguration configuration, GetSourceDiagnostics operations)
 {

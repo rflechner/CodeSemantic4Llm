@@ -71,6 +71,7 @@ public sealed partial class ServeRepositorySteps
     public void ThenMethodReaderAdvertised()
     {
         Assert.Contains("get_method_body", _advertisedTools);
+        Assert.Contains("get_method", _advertisedTools);
         Assert.Contains("validate_method_body", _advertisedTools);
         Assert.Contains("get_method_diagnostics", _advertisedTools);
         Assert.Contains("get_file_diagnostics", _advertisedTools);
@@ -85,12 +86,28 @@ public sealed partial class ServeRepositorySteps
         if (state == "available")
         {
             Assert.Contains("replace_method_body", _advertisedTools);
+            Assert.Contains("replace_method", _advertisedTools);
+            AssertMethodEditContracts();
         }
         else
         {
             Assert.Equal("absent", state);
             Assert.DoesNotContain("replace_method_body", _advertisedTools);
+            Assert.DoesNotContain("replace_method", _advertisedTools);
         }
+    }
+
+    private void AssertMethodEditContracts()
+    {
+        var tools = _toolDefinitions.GetProperty("tools").EnumerateArray();
+        var body = tools.Single(tool => tool.GetProperty("name").GetString() == "replace_method_body");
+        var declaration = tools.Single(tool => tool.GetProperty("name").GetString() == "replace_method");
+        Assert.Contains("NEVER a complete method declaration", body.GetProperty("description").GetString());
+        Assert.Contains("replace_method", body.GetProperty("description").GetString());
+        Assert.True(body.GetProperty("inputSchema").GetProperty("properties").TryGetProperty("newBody", out _));
+        Assert.Contains("No prior read is required", body.GetProperty("description").GetString());
+        Assert.Contains("No prior read is required", declaration.GetProperty("description").GetString());
+        Assert.True(declaration.GetProperty("inputSchema").GetProperty("properties").TryGetProperty("newMethod", out _));
     }
 
     [Then(@"MCP indexing details are ""(.*)""")]
@@ -100,6 +117,17 @@ public sealed partial class ServeRepositorySteps
         var methodTool = _toolDefinitions.GetProperty("tools").EnumerateArray()
             .Single(tool => tool.GetProperty("name").GetString() == "get_method_body");
         var properties = methodTool.GetProperty("inputSchema").GetProperty("properties");
+        Assert.True(properties.TryGetProperty("relativePath", out _));
+        Assert.True(properties.TryGetProperty("name", out _));
+        Assert.False(properties.TryGetProperty("snapshotId", out _));
+        Assert.DoesNotContain("contentHash", _toolDefinitions.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("expectedContentHash", _toolDefinitions.GetRawText(), StringComparison.OrdinalIgnoreCase);
+
+        var codeTools = _toolDefinitions.GetProperty("tools").EnumerateArray()
+            .Where(tool => !administrationTools.Contains(tool.GetProperty("name").GetString())
+                && tool.GetProperty("name").GetString() != "get_server_info");
+        Assert.All(codeTools, tool => AssertNoIndexingDetails(tool.GetRawText()));
+        Assert.Equal(_advertisedTools.Length, _advertisedTools.Distinct(StringComparer.Ordinal).Count());
 
         if (state == "hidden")
         {
@@ -115,7 +143,6 @@ public sealed partial class ServeRepositorySteps
         {
             Assert.Equal("exposed", state);
             Assert.All(administrationTools, tool => Assert.Contains(tool, _advertisedTools));
-            Assert.True(properties.TryGetProperty("snapshotId", out _));
             Assert.False(properties.TryGetProperty("symbolId", out _));
             Assert.Contains("snapshot", _serverInformation, StringComparison.OrdinalIgnoreCase);
         }

@@ -65,15 +65,14 @@ public sealed partial class RepositoryIndexingSteps
         });
     }
 
-    [When("default MCP validates a method then attempts to edit it without reading")]
+    [When("default MCP validates a method then edits it without reading")]
     public async Task WhenValidateThenWriteWithoutRead()
     {
         await using var client = await StartCodeClientAsync(allowWrite: true);
         var arguments = new { relativePath = "Worker.cs", name = "Run", newBody = "{ return 42; }" };
         var report = await CodeCallAsync(client, "validate_method_body", arguments);
         Assert.True(report.GetProperty("isValid").GetBoolean());
-        _sourceBeforeCodeWrite = File.ReadAllText(Path.Combine(_root, "Worker.cs"));
-        _codeFailure = await client.CallAsync("replace_method_body", arguments);
+        await CodeCallAsync(client, "replace_method_body", arguments);
     }
 
     [Then("default MCP refuses the changed diagnostic page")]
@@ -83,15 +82,6 @@ public sealed partial class RepositoryIndexingSteps
         Assert.True(_codeFailure.GetProperty("isError").GetBoolean());
         var message = _codeFailure.GetProperty("content")[0].GetProperty("text").GetString()!;
         Assert.Contains("offset 0", message);
-        AssertCodeReplyHasNoStorageDetails(message);
-    }
-
-    [Then("default MCP asks to read the method before editing")]
-    public void ThenMethodReadRequired()
-    {
-        Assert.True(_codeFailure.GetProperty("isError").GetBoolean());
-        var message = _codeFailure.GetProperty("content")[0].GetProperty("text").GetString()!;
-        Assert.Contains("get_method_body", message);
         AssertCodeReplyHasNoStorageDetails(message);
     }
 

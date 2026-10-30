@@ -117,7 +117,8 @@ public sealed partial class RepositoryIndexingSteps
 
     private MethodBodyOperations CreateMethodOperations(bool enabled) =>
         new(_stateProvider, Store, new RepositorySourceReader(), new RepositorySourceWriter(),
-            new CSharpMethodBodyEditor(), new CSharpMethodSyntaxDiagnostics(), new RepositoryWriteAccess(enabled));
+            new CSharpMethodBodyEditor(), new CSharpMethodDeclarationEditor(),
+            new CSharpMethodSyntaxDiagnostics(), new RepositoryWriteAccess(enabled));
 
     private IConfiguration MethodConfiguration() => new ConfigurationBuilder()
         .AddInMemoryCollection(new Dictionary<string, string?> { ["CODESEMANTIC4LLM_REPOSITORY_ROOT"] = _root })

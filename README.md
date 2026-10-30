@@ -144,12 +144,17 @@ To retain logs for investigating failed tool calls, add
 The file includes complete tool parameters and responses, including source snippets.
 See [file logging and troubleshooting](docs/logging.md) for examples and log fields.
 By default it exposes code-focused tools: `get_server_info`,
-`find_symbols`, `get_type_members`, `find_usages`, `get_method_body`,
+`find_symbols`, `get_type_members`, `find_usages`, `get_method`, `get_method_body`,
 `validate_method_body`, and the file/type/method diagnostic tools. Tool descriptions,
 parameters and responses hide indexing, snapshot details and file hashes. Select declarations
 by `relativePath` and `name` (simple or qualified), adding the identifier `line` and `column`
 only when needed to distinguish overloads or other ambiguous declarations. No temporary
 symbol token or preliminary search is required.
+Tool-result JSON keeps source punctuation and Unicode readable: quotes use the usual
+JSON `\"` escape, while `+`, `<`, `>`, apostrophes and accented letters remain literal.
+The server does not add HTML-style Unicode escapes such as `\u0022` or `\u002B` to
+represent those characters. Literal escape sequences already present in source remain
+unchanged; clients should parse the JSON rather than decoding source escapes themselves.
 Qualified names may omit leading namespaces or enclosing types: `CliApplication.RunAsync`
 matches `TinyHarness.Cli.CliApplication.RunAsync` when unique in the requested file.
 Matching remains case-sensitive and respects complete dot-separated name segments.
@@ -164,9 +169,9 @@ omit unresolved bindings and do not evaluate project dependency graphs.
 
 Indexing remains an operator responsibility: run `index` after source changes.
 MCP startup and queries do not rebuild the index. Internal branch, snapshot and
-file-hash safeguards remain active in the default interface. To expose the detailed
-interface, including `get_repository_configuration`, `preview_repository_index`,
-`get_repository_index_status`, `snapshotId` parameters and snapshot metadata, use:
+file-version checks remain internal. To add operator tools
+`get_repository_configuration`, `preview_repository_index` and
+`get_repository_index_status`, use:
 
 ```shell
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
@@ -174,7 +179,8 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
 ```
 
 `--expose-indexing` does not enable source writes and can be combined with
-`--allow-write`. The argument-free server always uses the code-focused interface.
+`--allow-write`. Code tool arguments and results remain the same in both modes:
+no file hashes or snapshot IDs are required. Index status alone exposes snapshot metadata.
 Restart the server and refresh the client's tool list when changing modes.
 See the [MCP interface documentation](docs/indexing.md#querying-through-mcp).
 
@@ -185,8 +191,8 @@ until that branch has been reindexed. Restart the MCP server so clients can disc
 
 ### Optional method-level source editing
 
-The MCP server is **read-only by default**. To allow a connected agent to change an
-C# method body, explicitly start this server process with:
+The MCP server is **read-only by default**. To allow a connected agent to change a
+C# method, explicitly start this server process with:
 
 ```shell
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
@@ -195,14 +201,30 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
 
 `get_method_body` is always available and reads current source directly, even without
 navigation data or a previous search. It returns only the selected method's body (12,000 characters per page by default) and
-keeps the file version internally. Pass each returned `nextOffset` unchanged to continue. `replace_method_body` is **advertised only**
-when `--allow-write` is set. After reading the method, pass the same file path and method name, with a replacement C# body
+keeps the file version internally for pagination. Pass each returned `nextOffset` unchanged to continue. `replace_method_body` is **advertised only**
+when `--allow-write` is set. Pass the file path and method name, with a replacement C# body
 with or without outer braces: `return 42;` and `{ return 42; }` are both accepted.
+The server adjusts indentation to the target method, preserving relative indentation inside
+the supplied body and whitespace inside multiline strings. Code line endings follow the file.
 It changes **only that method's executable body**, without requiring
 a whole-file text replacement by the agent.
 
-For faster feedback, `validate_method_body` accepts the file path, method name and proposed body in either format,
-then reports Roslyn syntax errors **without writing anything** or requiring a prior body read.
+**No prior read is required for editing.** `get_method` and `get_method_body` are optional
+inspection tools, not prerequisites. `replace_method` accepts a complete declaration
+including attributes, signature and body, selected by its current path and name.
+Both write tools work without navigation data, after a server restart, and with
+`--expose-indexing`, using the same arguments and no caller-managed version metadata.
+
+**Call `replace_method_body` or `replace_method` directly to edit.** Both run syntax
+validation before writing, in the same request. If validation fails, the file is unchanged and
+the MCP error returns up to 10 diagnostics with C# error IDs, messages and positions in
+the proposed file, plus the number of remaining errors. Correct the body and retry that
+same tool; a separate validation call is unnecessary. Full-method errors include malformed
+signatures and unterminated strings, such as `CS1010: Newline in constant`, instead of
+generic declaration-shape guidance. Successful replies stay compact.
+
+Use `validate_method_body` only when you want diagnostics **without attempting a write**,
+including on read-only servers. It accepts the same proposed body and supports pagination.
 After an edit, `get_method_diagnostics` can inspect the
 current method directly on disk, even before reindexing. Pass the declaration path,
 line, column and expected method name; no snapshot is required. Both tools are available
@@ -220,13 +242,13 @@ and rejects continuations after an edit. Restart the MCP server and refresh the 
 
 **These are syntax checks, not compilation or semantic type checks.**
 
-The write is rejected if the branch, revision or file changed since the last body read, the syntax is invalid,
-or the method has no body. Writes are restricted to the operator-selected checkout;
+Each write targets the source currently on disk. It rejects branch, revision or file
+changes detected during the write, invalid syntax, and body edits on methods without bodies.
+It does not compare the source to any earlier model read; changes made before the call
+are part of the current source being replaced. Writes are restricted to the operator-selected checkout;
 symlinks and traversal are rejected. This is a local source edit, not an index update:
 **run `index` again after any successful edit**, and review your Git diff before committing.
-Only UTF-8 source files are supported for editing in this first version. Refreshing navigation
-data does not invalidate a read of unchanged source. After restarting the server, read the
-method again before editing; there is no symbol selection to recreate.
+Only UTF-8 source files are supported for editing in this first version.
 See [the editing workflow](docs/indexing.md#reading-and-replacing-a-method-body).
 
 ### MCP client configuration
