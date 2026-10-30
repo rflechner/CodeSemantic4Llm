@@ -29,6 +29,11 @@ public interface IIndexStore
         RepositoryScope scope, SourceLocation targetLocation, long snapshotId,
         int maxResults, int offset, CancellationToken cancellationToken = default);
 
+    /// <summary>Finds one exact indexed method and its source-file hash in a published snapshot.</summary>
+    IndexedMethod GetIndexedMethod(
+        RepositoryScope scope, SourceLocation methodLocation, long snapshotId,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Lists direct members of one type declaration in the expected published snapshot.</summary>
     TypeMemberPage GetTypeMembers(
         RepositoryScope scope, SourceLocation typeLocation, long snapshotId,
@@ -53,3 +58,7 @@ public sealed record SymbolUsagePage(
 {
     public bool HasMore => NextOffset.HasValue;
 }
+
+/// <summary>One method declaration with the exact original bytes' hash, scoped to a branch snapshot.</summary>
+public sealed record IndexedMethod(
+    RepositoryIndexSnapshot Snapshot, SymbolDefinition Method, string ContentHash);

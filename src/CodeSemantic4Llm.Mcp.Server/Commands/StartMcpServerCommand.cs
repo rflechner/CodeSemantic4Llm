@@ -9,5 +9,5 @@ public sealed class StartMcpServerCommand : AsyncCommand
 {
     /// <inheritdoc />
     public override Task<int> ExecuteAsync(CommandContext context, CancellationToken cancellationToken) =>
-        McpServerHost.RunAsync(null, cancellationToken);
+        McpServerHost.RunAsync(null, allowWrite: false, cancellationToken);
 }

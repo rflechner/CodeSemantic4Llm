@@ -53,7 +53,7 @@ public static class CommandLineApplication
 
             configuration.AddCommand<ServeMcpServerCommand>("serve")
                 .WithDescription("Start the stdio MCP server, optionally selecting a repository.")
-                .WithExample("serve", "./repository");
+                .WithExample("serve", "./repository", "--allow-write");
         });
 
         return application.RunAsync(arguments, cancellationToken);
