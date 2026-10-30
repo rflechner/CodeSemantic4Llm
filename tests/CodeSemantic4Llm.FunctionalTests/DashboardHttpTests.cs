@@ -1,0 +1,107 @@
+using System.Diagnostics;
+using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
+using CodeSemantic4Llm.Mcp.Server.Commands;
+using CodeSemantic4Llm.Persistence.Sqlite;
+using Xunit;
+
+namespace CodeSemantic4Llm.FunctionalTests;
+
+/// <summary>Runs the real dashboard executable to cover HTTP startup, embedded UI and endpoint boundaries.</summary>
+public sealed class DashboardHttpTests
+{
+    [Fact]
+    public async Task DashboardHostsAnOfflineReadOnlyUiOnTheSelectedLoopbackPort()
+    {
+        var port = FindFreeLoopbackPort();
+        var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
+        {
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            WorkingDirectory = Path.GetTempPath()
+        };
+
+        startInfo.ArgumentList.Add(typeof(StartMcpServerCommand).Assembly.Location);
+        startInfo.ArgumentList.Add("dashboard");
+        startInfo.ArgumentList.Add("--port");
+        startInfo.ArgumentList.Add(port.ToString(CultureInfo.InvariantCulture));
+        startInfo.Environment[IndexStoragePaths.EnvironmentVariable] =
+            Path.Combine(Path.GetTempPath(), "dashboard-empty-" + Guid.NewGuid().ToString("N"));
+
+        using var process = Process.Start(startInfo)!;
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false })
+        {
+            BaseAddress = new Uri($"http://127.0.0.1:{port}/"),
+            Timeout = TimeSpan.FromSeconds(2)
+        };
+
+        try
+        {
+            var ready = false;
+
+            for (var attempt = 0; attempt < 80 && !process.HasExited; attempt++)
+            {
+                timeout.Token.ThrowIfCancellationRequested();
+
+                try
+                {
+                    using var response = await client.GetAsync("/", timeout.Token);
+                    ready = response.StatusCode == HttpStatusCode.OK;
+
+                    if (ready)
+                    {
+                        break;
+                    }
+                }
+                catch (HttpRequestException)
+                {
+                    // Server may still be starting.
+                }
+                catch (TaskCanceledException) when (!timeout.IsCancellationRequested)
+                {
+                    // A transient connection timeout may occur during startup.
+                }
+
+                await Task.Delay(100, timeout.Token);
+            }
+
+            Assert.True(ready, "The dashboard did not start on the requested loopback port.");
+
+            var html = await client.GetStringAsync("/", timeout.Token);
+            Assert.Contains("INDEX EXPLORER", html);
+            Assert.Contains("Declaration breakdown", html);
+
+            using var projects = await client.GetAsync("/api/projects", timeout.Token);
+            Assert.Equal(HttpStatusCode.OK, projects.StatusCode);
+            Assert.Equal("[]", await projects.Content.ReadAsStringAsync(timeout.Token));
+
+            using var missingScope = await client.GetAsync("/api/symbols", timeout.Token);
+            Assert.Equal(HttpStatusCode.BadRequest, missingScope.StatusCode);
+
+            using var hostileHost = new HttpRequestMessage(HttpMethod.Get, "/");
+            hostileHost.Headers.Host = "untrusted.example";
+            using var denied = await client.SendAsync(hostileHost, timeout.Token);
+            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+
+            await process.WaitForExitAsync(CancellationToken.None);
+        }
+    }
+
+    private static int FindFreeLoopbackPort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
+    }
+}

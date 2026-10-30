@@ -82,7 +82,9 @@ public sealed partial class ServeRepositorySteps
         Assert.NotNull(_console);
         Assert.Equal(0, _console.ExitCode);
         Assert.Empty(_console.Error);
-        Assert.Contains("serve [repository-path]", _console.Output);
+        // Spectre may insert an options group between the command and its positional argument.
+        Assert.Contains("serve", _console.Output);
+        Assert.Contains("[repository-path]", _console.Output);
         Assert.Contains("--expose-indexing", _console.Output);
         Assert.Contains("--log-file", _console.Output);
         Assert.Contains("CODESEMANTIC4LLM_REPOSITORY_ROOT", _console.Output);

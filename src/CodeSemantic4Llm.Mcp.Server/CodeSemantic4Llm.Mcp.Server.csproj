@@ -16,4 +16,8 @@
     <PackageReference Include="Spectre.Console" />
     <PackageReference Include="Spectre.Console.Cli" />
   </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <EmbeddedResource Include="Dashboard/index.html" LogicalName="CodeSemantic4Llm.Dashboard.Index" />
+  </ItemGroup>
 </Project>

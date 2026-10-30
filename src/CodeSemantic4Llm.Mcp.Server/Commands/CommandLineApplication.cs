@@ -51,6 +51,10 @@ public static class CommandLineApplication
                 .WithDescription("Index every configured source file into a persistent branch snapshot.")
                 .WithExample("index", "./repository");
 
+            configuration.AddCommand<IndexDashboardCommand>("dashboard")
+                .WithDescription("Explore all locally indexed repositories and branches in a read-only HTTP UI.")
+                .WithExample("dashboard", "--port", "5080");
+
             configuration.AddCommand<ServeMcpServerCommand>("serve")
                 .WithDescription("Start the stdio MCP server, optionally selecting a repository.")
                 .WithExample("serve", "./repository", "--allow-write");
