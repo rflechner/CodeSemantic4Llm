@@ -106,7 +106,9 @@ public sealed class CSharpMethodBodyEditorTests
 
         var result = new CSharpMethodBodyEditor().Replace(document, target.Location, statements);
 
-        Assert.Equal(prefix + "{\n" + statements + "\n}" + suffix, result);
+        var indentedStatements = string.Join("\n", statements.Split('\n')
+            .Select(line => line.Length == 0 ? "" : "    " + line));
+        Assert.Equal(prefix + "{\n" + indentedStatements + "\n}" + suffix, result);
         Assert.Empty(new CSharpMethodSyntaxDiagnostics().ValidateReplacement(document, target.Location, statements));
     }
 
@@ -119,7 +121,7 @@ public sealed class CSharpMethodBodyEditorTests
 
         var result = new CSharpMethodBodyEditor().Replace(document, target.Location, "return 42; // final comment");
 
-        Assert.Equal("class Worker\r\n{\r\n    int Run() {\r\nreturn 42; // final comment\r\n}\r\n}\r\n", result);
+        Assert.Equal("class Worker\r\n{\r\n    int Run() {\r\n        return 42; // final comment\r\n    }\r\n}\r\n", result);
     }
 
     [Fact]

@@ -16,6 +16,7 @@ internal static class ServerServiceCollectionExtensions
         services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
         services.AddSingleton<ISourceReferenceAnalyzer, CSharpReferenceAnalyzer>();
         services.AddSingleton<IMethodBodyEditor, CSharpMethodBodyEditor>();
+        services.AddSingleton<IMethodDeclarationEditor, CSharpMethodDeclarationEditor>();
         services.AddSingleton<IMethodSyntaxDiagnostics, CSharpMethodSyntaxDiagnostics>();
         services.AddSingleton<ISourceSyntaxDiagnostics, CSharpSourceSyntaxDiagnostics>();
         services.AddSingleton<IGitBranchProvider, GitBranchProvider>();
@@ -35,7 +36,6 @@ internal static class ServerServiceCollectionExtensions
         services.AddSingleton<GetTypeMembers>();
         services.AddSingleton<MethodBodyOperations>();
         services.AddSingleton<CurrentMethodOperations>();
-        services.AddSingleton<MethodReadHistory>();
         services.AddSingleton<MethodBodyPages>();
         services.AddSingleton<SelectCodeDeclaration>();
         services.AddSingleton<GetSourceDiagnostics>();

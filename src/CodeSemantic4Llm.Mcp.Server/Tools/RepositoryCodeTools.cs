@@ -50,11 +50,23 @@ public sealed class RepositoryCodeTools(CodeToolOperations operations)
         CancellationToken cancellationToken = default) =>
         operations.ReadMethodAsync(new DeclarationSelector(relativePath, name, line, column), maxCharacters, offset, cancellationToken);
 
-    [McpServerTool, Description("Checks a proposed C# method body without writing. Adds omitted outer braces. Returns syntax diagnostics, not type or compilation errors. Follow nextOffset for more.")]
+    [McpServerTool, Description("Reads one complete C# method: attributes, signature and body, excluding surrounding comments. Follow nextOffset for more characters.")]
+    public Task<CurrentMethodDeclarationResult> GetMethodAsync(
+        [Description("Repository-relative source path.")] string relativePath,
+        [Description("Current case-sensitive simple or qualified method name. Must be unambiguous.")] string name,
+        [Description("Current identifier line, only needed to disambiguate.")] int? line = null,
+        [Description("Current identifier column, only needed to disambiguate.")] int? column = null,
+        [Description("Maximum characters, 1–20000.")] int maxCharacters = 12000,
+        [Description("Start at 0; pass nextOffset unchanged.")] long offset = 0,
+        CancellationToken cancellationToken = default) =>
+        operations.ReadMethodDeclarationAsync(new DeclarationSelector(relativePath, name, line, column),
+            maxCharacters, offset, cancellationToken);
+
+    [McpServerTool, Description("Checks a proposed C# body only when no write is wanted. To edit, call replace_method_body directly: it validates and returns syntax errors itself. Send statements or a body block, without a method signature. Adjusts indentation; does not type-check. Follow nextOffset for more diagnostics.")]
     public Task<CodeMethodDiagnosticsResult> ValidateMethodBodyAsync(
         [Description("Repository-relative source path.")] string relativePath,
         [Description("Case-sensitive simple or qualified method name, e.g. CliApplication.RunAsync. Must be unambiguous.")] string name,
-        [Description("C# body with or without outer braces, e.g. 'return 42;' or '{ return 42; }'. Omit the method signature.")] string newBody,
+        [Description("Only C# statements or a body block, e.g. 'return 42;' or '{ return 42; }'. No method signature, modifiers or attributes.")] string newBody,
         [Description("One-based identifier line, only needed to disambiguate.")] int? line = null,
         [Description("One-based identifier column, only needed to disambiguate.")] int? column = null,
         [Description("Maximum diagnostics, 1–200.")] int maxDiagnostics = 50,

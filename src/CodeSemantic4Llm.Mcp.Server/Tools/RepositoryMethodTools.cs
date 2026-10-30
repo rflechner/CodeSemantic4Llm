@@ -6,7 +6,7 @@ using ModelContextProtocol.Server;
 
 namespace CodeSemantic4Llm.Mcp.Server.Tools;
 
-/// <summary>Reads a selected C# method body from the checkout, without returning the whole file.</summary>
+/// <summary>Snapshot-based adapter for direct callers; MCP hosts use RepositoryCodeTools instead.</summary>
 [McpServerToolType]
 public sealed class RepositoryMethodTools(IConfiguration configuration, MethodBodyOperations operations)
 {
@@ -22,14 +22,26 @@ public sealed class RepositoryMethodTools(IConfiguration configuration, MethodBo
         operations.ReadAsync(GetRoot(), new SourceLocation(relativePath, line, column),
             snapshotId, maxCharacters, offset, cancellationToken);
 
-    [McpServerTool, Description("Checks a proposed C# method body using Roslyn syntax diagnostics WITHOUT writing any source file. Available even when server writes are disabled. Call get_method_body first and pass its declaration position, snapshotId and contentHash with a C# body with or without outer braces. Reports C# syntax errors (IDs, messages and exact line/column) only; it does not type-check or compile the project.")]
+    [McpServerTool, Description("Reads one complete indexed C# method: attributes, signature and body, excluding surrounding comments. Call before replace_method; keep the returned contentHash and snapshotId. Follow nextOffset for more characters. Requires the indexed file to be unchanged.")]
+    public Task<MethodDeclarationReadResult> GetMethodAsync(
+        [Description("Indexed declaration's repository-relative source path.")] string relativePath,
+        [Description("One-based identifier line.")] int line,
+        [Description("One-based identifier column.")] int column,
+        [Description("snapshot.snapshotId from find_symbols.")] long snapshotId,
+        [Description("Maximum characters, 1–20000.")] int maxCharacters = 12000,
+        [Description("Start at 0; follow nextOffset.")] int offset = 0,
+        CancellationToken cancellationToken = default) =>
+        operations.ReadDeclarationAsync(GetRoot(), new SourceLocation(relativePath, line, column),
+            snapshotId, maxCharacters, offset, cancellationToken);
+
+    [McpServerTool, Description("Checks proposed C# body statements or a body block using Roslyn without writing. Do not send a method signature or complete declaration. Call get_method_body first and pass its declaration position, snapshotId and contentHash. Adds omitted outer braces and adjusts indentation. Reports syntax errors only; does not type-check or compile.")]
     public Task<MethodDiagnosticsResult> ValidateMethodBodyAsync(
         [Description("Method declaration's repository-relative location.relativePath.")] string relativePath,
         [Description("One-based method declaration location.line.")] int line,
         [Description("One-based method declaration location.column.")] int column,
         [Description("snapshot.snapshotId from get_method_body.")] long snapshotId,
         [Description("Exact contentHash returned by get_method_body.")] string expectedContentHash,
-        [Description("C# body with or without outer braces, e.g. 'return 42;' or '{ return 42; }'. Omit the method signature.")] string newBody,
+        [Description("Only C# statements or a body block, e.g. 'return 42;' or '{ return 42; }'. No method signature, modifiers or attributes.")] string newBody,
         [Description("Maximum diagnostics per page, from 1 to 200.")] int maxDiagnostics = 50,
         [Description("Start at 0; follow nextOffset to read subsequent diagnostics.")] int offset = 0,
         CancellationToken cancellationToken = default) =>

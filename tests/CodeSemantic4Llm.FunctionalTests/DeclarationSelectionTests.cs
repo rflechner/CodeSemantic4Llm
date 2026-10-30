@@ -1,5 +1,3 @@
-using CodeSemantic4Llm.Application.UseCases;
-using CodeSemantic4Llm.Domain.Repositories;
 using CodeSemantic4Llm.Domain.Symbols;
 using Xunit;
 
@@ -49,18 +47,6 @@ public sealed class DeclarationSelectionTests
         Assert.False(new DeclarationSelector("Other.cs", name).Matches(method));
         Assert.False(new DeclarationSelector("CliApplication.cs", name, 8, 26).Matches(method));
         Assert.False(new DeclarationSelector("CliApplication.cs", name, 7, 27).Matches(method));
-    }
-
-    [Fact]
-    public void Read_history_requires_a_read_and_is_scoped_to_the_checkout()
-    {
-        var history = new MethodReadHistory();
-        var state = new RepositoryState(new RepositoryScope(Path.GetTempPath(), "main"), "revision");
-        var observation = new MethodReadObservation(state, Method(3), "hash");
-        history.Remember(observation);
-        Assert.Equal(observation, history.Get(state.Scope.RootPath, observation.Method.Location));
-        Assert.Throws<CodeRequestException>(() => history.Get(Path.Combine(Path.GetTempPath(), "other"), observation.Method.Location));
-        Assert.Throws<CodeRequestException>(() => new MethodReadHistory().Get(state.Scope.RootPath, observation.Method.Location));
     }
 
     private static SymbolDefinition Method(int line) => new(

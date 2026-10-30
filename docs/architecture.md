@@ -167,8 +167,22 @@ line comments from the closing brace. Unbalanced braces and malformed control fl
 are rejected. Diagnostic positions refer to the normalized proposed file. Source text
 outside the original body span remains unchanged.
 
-`validate_method_body` is a read-only preflight that requires a fresh index
-snapshot and source SHA-256, just like the write tool. In contrast,
+`validate_method_body` is a standalone read-only check on current source, selected by
+file path and method name, without a prior read or client-managed version metadata.
+The body-edit use case runs this same diagnostic contract against the source snapshot
+it will edit, before publishing. A `MethodEditValidationException` carries syntax errors
+to the MCP presentation, which returns a bounded error response with IDs, messages and
+proposed-file positions. This removes a separate validation round trip and a second
+transmission of the replacement body. Successful writes retain their compact location
+response; the standalone validator remains useful when no write is wanted.
+
+The full-declaration editor uses the same diagnostic exception contract. It retains
+Roslyn's recovered method tree while adjusting indentation, then maps parser errors
+from the detached replacement into physical positions in the proposed file. This
+reports errors in signatures and bodies precisely, even for unterminated strings.
+Invalid input shapes additionally receive `CS4L0002`. The MCP presentation bounds
+feedback to 10 diagnostics, indicates any remaining count, and directs a retry to
+the same editing tool. No build or indexed project code is executed.
 `get_method_diagnostics` reads directly from the operator-selected checkout
 and verifies the expected method name and exact identifier position. It
 deliberately does **not** require a current snapshot, allowing an agent to
@@ -188,12 +202,29 @@ request parameters. Read-only hosts register `get_method_body` but do not advert
 `replace_method_body`. This is deliberate explicit tool registration rather than
 assembly-wide automatic discovery; the use case independently checks write permission.
 
-The `MethodBodyOperations` application use case selects a method by its precise
-published declaration location and snapshot ID through `IIndexStore`, checks the
-recorded HEAD and the indexed file's SHA-256 hash, then delegates C# parsing to
+The `CurrentMethodOperations` application use case selects the current method by
+file path and name, with an optional identifier position to disambiguate overloads.
+It reads source within each write call and delegates C# parsing to
 `IMethodBodyEditor`. Roslyn locates the exact `MethodDeclarationSyntax` and validates
 the replacement as one executable C# block. It replaces the body's character span,
-not the whole declaration or file, preserving unrelated source text.
+not the whole declaration or file, preserving unrelated source text. Full-method
+replacement uses `IMethodDeclarationEditor` to replace attributes, signature and body.
+
+Writes have no read-history prerequisite and accept no client-supplied file or method
+hash. This deliberately permits direct edits and edits after a server restart. The
+trade-off is that source changes made before the write call are accepted, even if the
+model previously read a different version. The use case checks checkout state again
+before publishing, and the writer checks the file version captured during that same
+call. Those internal checks catch ordinary concurrent modifications during the edit;
+they do not establish that the model saw the current source.
+
+Indentation belongs to the C# editing adapter rather than the MCP caller. The shared
+replacement preparation used by writing and syntax validation rebases the body's common
+indentation to the selected declaration, inferring a local indent step from existing
+statements or enclosing declarations. It preserves relative inner indentation and inline
+formatting, and uses Roslyn token/trivia boundaries to leave multiline literals, comment
+contents and inactive preprocessor text intact. This avoids whole-file formatting and an
+additional workspace dependency; it does not implement `.editorconfig` formatting rules.
 
 `IRepositorySourceWriter` owns the actual checkout edit. Its filesystem implementation
 rejects path traversal and symbolic links, checks the expected hash again just before
@@ -248,10 +279,8 @@ MSBuild project graphs or generating natural-language text.
 The default MCP presentation selects declarations by file path and simple or qualified
 name, optionally narrowed by the identifier position. It has no ephemeral symbol IDs.
 `CurrentMethodOperations` resolves methods from current Roslyn analysis, independently
-of index generations. `MethodReadHistory` retains bounded branch/revision/declaration/hash
-observations for writes, without retaining source. Searches cannot evict those reads;
-reindexing unchanged source does not invalidate them. Restarting requires a fresh body
-read before writing, but never a new search merely to obtain a token. Ambiguous names
+of index generations. Method read observations retain only metadata for consistent
+pagination; writes do not consume them or require a preceding read. Ambiguous names
 require a position instead of an arbitrary overload selection.
 `DeclarationSelector` also accepts abbreviated qualified names as literal dot-delimited
 suffixes. Current-source selection and SQLite navigation apply the same case-sensitive
@@ -262,10 +291,11 @@ literal suffix comparison rather than wildcard matching, with no schema change.
 
 Navigation resolves addresses through `IIndexStore` and verifies the target source hash.
 Navigation and diagnostic continuations retain independent query/version metadata to
-prevent mixing pages. No default request or response exposes file hashes or snapshots.
-`serve --expose-indexing` restores the detailed tools and snapshot arguments independently
-of write permission. Index refresh remains an operator operation. Both presentations
-share domain, parsing and persistence contracts; technical errors go to stderr and
+prevent mixing pages. Code requests and responses never expose file hashes or snapshots.
+`serve --expose-indexing` adds configuration, preview and index-status tools independently
+of write permission, leaving the code contracts unchanged. Index refresh remains an
+operator operation. Internal snapshot-based application APIs remain available for
+direct callers and tests; they are not advertised as MCP code tools. Technical errors go to stderr and
 optionally the configured log file.
 
 1. `Domain` references nothing in this solution.

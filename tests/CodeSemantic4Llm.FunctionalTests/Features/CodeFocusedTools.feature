@@ -30,11 +30,61 @@ Feature: Keep storage lifecycle out of the default model interface
       | { return 42; } |
       | return 42;     |
 
-  Scenario Outline: Hidden provenance still protects edits against stale selections
+  Scenario: A relative replacement body inherits the method indentation
+    Given indexing source "Worker.cs" is:
+      """
+      class Worker
+      {
+          public async Task<int> Run()
+          {
+              return 1;
+          }
+
+          public int Keep() => 7;
+      }
+      """
+    When default MCP replaces Run with:
+      """
+      // Start execution.
+      // Preserve the current context.
+      {
+          var previous = GetContext();
+
+          try {
+              return await Execute();
+          }
+          finally {
+              RestoreContext(previous);
+          }
+      }
+      """
+    Then source file "Worker.cs" is exactly:
+      """
+      class Worker
+      {
+          public async Task<int> Run()
+          // Start execution.
+          // Preserve the current context.
+          {
+              var previous = GetContext();
+
+              try {
+                  return await Execute();
+              }
+              finally {
+                  RestoreContext(previous);
+              }
+          }
+
+          public int Keep() => 7;
+      }
+      """
+
+  Scenario Outline: Direct edits select current source independently of earlier reads
     Given the checkout has a completed index
-    When default MCP attempts to edit a selected method after "<change>"
-    Then default MCP refuses the stale selection without exposing indexing details
-    And the rejected default MCP write leaves the source unchanged
+    When default MCP edits the current method after "<change>"
+    Then the default MCP write changes the method body
+    And code tool replies contain no indexing details
 
     Examples:
       | change       |
@@ -46,10 +96,10 @@ Feature: Keep storage lifecycle out of the default model interface
     Then default MCP refuses the stale selection without exposing indexing details
     And no index database was created
 
-  Scenario: Explicit exposure preserves the detailed operator interface
+  Scenario: Indexing exposure adds administration without changing code tool contracts
     Given the checkout has a completed index
     When MCP searches with indexing exposure enabled
-    Then the detailed MCP reply includes snapshot metadata
+    Then only the administration replies include indexing metadata
 
   Scenario Outline: Read all syntax diagnostics without supplying file metadata
     Given the checkout has a completed index
@@ -72,11 +122,26 @@ Feature: Keep storage lifecycle out of the default model interface
     When default MCP uses a file diagnostic continuation for a type
     Then default MCP refuses the changed diagnostic page
 
-  Scenario: Validation does not replace the read required before editing
-    Given the checkout has a completed index
-    When default MCP validates a method then attempts to edit it without reading
-    Then default MCP asks to read the method before editing
-    And the rejected default MCP write leaves the source unchanged
+  Scenario: Validation can be followed by a direct edit without reading
+    When default MCP validates a method then edits it without reading
+    Then the default MCP write changes the method body
+    And code tool replies contain no indexing details
+    And no index database was created
+
+  Scenario Outline: Body edits do not depend on which reading tool was used
+    When "<mode>" MCP replaces Run after "<read>"
+    Then the default MCP write changes the method body
+    And code tool replies contain no indexing details
+    And no index database was created
+
+    Examples:
+      | mode     | read            |
+      | default  | no read         |
+      | default  | get_method      |
+      | default  | get_method_body |
+      | indexing | no read         |
+      | indexing | get_method      |
+      | indexing | get_method_body |
 
   Scenario: Refreshing navigation data does not invalidate a method read
     Given the checkout has a completed index

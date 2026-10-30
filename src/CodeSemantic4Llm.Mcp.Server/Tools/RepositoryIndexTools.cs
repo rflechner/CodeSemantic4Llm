@@ -8,7 +8,7 @@ using ModelContextProtocol.Server;
 
 namespace CodeSemantic4Llm.Mcp.Server.Tools;
 
-/// <summary>Reads published indexes for the operator-selected checkout; never triggers indexing.</summary>
+/// <summary>Exposes operator index status and provides direct indexed queries for application callers.</summary>
 [McpServerToolType]
 public sealed class RepositoryIndexTools(
     IConfiguration configuration, IRepositoryStateProvider stateProvider, IIndexStore indexStore,
@@ -21,13 +21,13 @@ public sealed class RepositoryIndexTools(
         return new RepositoryIndexStatus(state, indexStore.GetSnapshot(state.Scope, cancellationToken));
     }
 
-    [McpServerTool, Description("Finds declarations by exact, case-sensitive simple name in the saved branch snapshot. Returns locations and snapshot identity, not source text. To list a class's methods, find the class here, then call get_type_members with its location and snapshotId. Run index again after edits.")]
+    /// <summary>Queries the published snapshot directly; MCP search uses the source-addressed presentation.</summary>
     public Task<SymbolSearchResult> FindSymbolsAsync(
         string name, [Description("Maximum results, from 1 to 200.")] int maxResults = 20,
         CancellationToken cancellationToken = default) =>
         findSymbols.ExecuteAsync(GetRepositoryRoot(), name, maxResults, cancellationToken);
 
-    [McpServerTool, Description("Lists direct members of one indexed type declaration. First use find_symbols for the type, then pass its location and snapshot.snapshotId. Set kind to method for methods or omit it for all members. Does not include inherited members or combine partial declarations; query each returned type declaration separately. Follow nextOffset for more results.")]
+    /// <summary>Queries members against an explicit snapshot for direct application callers.</summary>
     public Task<TypeMemberPage> GetTypeMembersAsync(
         [Description("Type declaration's location.relativePath from find_symbols.")] string relativePath,
         [Description("Type declaration's one-based location.line.")] int line,
@@ -40,7 +40,7 @@ public sealed class RepositoryIndexTools(
         getTypeMembers.ExecuteAsync(GetRepositoryRoot(), new SourceLocation(relativePath, line, column),
             snapshotId, kind, maxResults, offset, cancellationToken);
 
-    [McpServerTool, Description("Finds references to one exact indexed method or type using Roslyn-resolved symbol identities. First call find_symbols, then pass the declaration's location and snapshot.snapshotId. Returns repository-relative reference positions, not source text. Results are paginated with nextOffset. C# project references are not yet evaluated; unresolved references are omitted. Run index again after source edits.")]
+    /// <summary>Queries references against an explicit snapshot for direct application callers.</summary>
     public Task<SymbolUsagePage> FindUsagesAsync(
         [Description("Declaration's location.relativePath from find_symbols.")] string relativePath,
         [Description("Declaration's one-based location.line.")] int line,

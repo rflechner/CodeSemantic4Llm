@@ -19,7 +19,7 @@ public sealed class ServeMcpServerSettings : CommandSettings
 
     /// <summary>Exposes operator-facing indexing tools and explicit snapshot metadata to MCP clients.</summary>
     [CommandOption("--expose-indexing")]
-    [Description("Expose indexing tools, snapshot parameters and metadata to MCP clients. Hidden by default.")]
+    [Description("Add configuration, preview and index-status tools. Code tool arguments stay unchanged. Hidden by default.")]
     public bool ExposeIndexing { get; init; }
 
     /// <summary>Writes diagnostics and complete tool parameters/replies to a rotated JSON-lines log.</summary>

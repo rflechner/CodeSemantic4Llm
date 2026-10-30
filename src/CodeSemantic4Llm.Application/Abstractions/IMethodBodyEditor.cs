@@ -12,6 +12,8 @@ public interface IMethodBodyEditor
     /// <summary>
     /// Replaces only the selected body's source span, leaving the surrounding source unchanged.
     /// C# accepts a complete block or its inner statements; omitted outer braces are added before syntax checking.
+    /// Replacement indentation is rebased to the declaration while preserving relative inner indentation
+    /// and significant whitespace in literals. Code line endings follow the source document.
     /// </summary>
     string Replace(SourceDocument document, SourceLocation declaration, string newBody);
 }

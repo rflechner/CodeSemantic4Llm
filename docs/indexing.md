@@ -127,8 +127,8 @@ SQLite details, file hashes and reindexing instructions.
 
 - `find_symbols` returns `symbols` and `hasMore`. Declarations contain their name,
   qualified name, kind and source location, with no temporary identity token.
-- `get_type_members`, `find_usages`, `get_method_body`, `validate_method_body` and
-  `replace_method_body` select code with `relativePath` and `name` (simple or qualified).
+- `get_type_members`, `find_usages`, `get_method`, `get_method_body`,
+  `validate_method_body`, `replace_method` and `replace_method_body` select code with `relativePath` and `name` (simple or qualified).
   Optional `line` and `column` identify the declaration when names are ambiguous.
   Ambiguous requests fail rather than selecting an arbitrary overload.
   Qualified names can omit leading namespace or enclosing-type segments:
@@ -144,11 +144,23 @@ SQLite details, file hashes and reindexing instructions.
 - `get_method_body` reads current source without an index or preceding search. It accepts
   `maxCharacters` and `offset` and returns `method`, `body` and character pagination.
   Copy `nextOffset` unchanged when continuing; the source version is retained internally
-  for consistent pagination and later writes.
-- `validate_method_body` accepts `newBody` with or without outer braces and diagnostic pagination. It checks current
-  source without requiring a prior read. `replace_method_body` accepts `newBody` after
-  a `get_method_body` call and checks the file version recorded during that read.
-  Its response contains only `methodLocation`. No default tool accepts or returns hashes.
+  for consistent pagination only.
+- `get_method` reads attributes, signature and body, excluding surrounding comments,
+  with the same pagination rules as `get_method_body`.
+- `validate_method_body` accepts `newBody` with or without outer braces and diagnostic
+  pagination. Use it when only diagnostics are wanted, without attempting a write.
+- `replace_method_body` accepts `newBody`; `replace_method` accepts a complete `newMethod`
+  declaration. Neither requires a preceding read. Each selects current source and checks
+  for changes during that call. Write responses contain only `methodLocation`.
+  No MCP tool accepts or returns file or method hashes.
+- `replace_method_body` and `replace_method` include validation in their write request. Invalid syntax leaves
+  the source unchanged and returns an MCP error with up to 10 syntax diagnostics and the
+  count of any additional errors. Each error includes its ID, message and one-based
+  location in the proposed file after indentation adjustment. Correct the proposed code
+  and retry the same tool. Full-method edits preserve Roslyn diagnostics for malformed
+  declarations, including `CS1010` for an unterminated string. `CS4L0002` separately
+  explains wrong input shapes such as a class or multiple members; it does not replace
+  compiler syntax errors with generic guidance.
 - File/type/method diagnostic tools keep their current-file path/position arguments.
   Start diagnostics at `offset: 0`, then copy `nextOffset` unchanged into the next request.
   Each continuation retains its query and file version, including the proposed body
@@ -156,12 +168,13 @@ SQLite details, file hashes and reindexing instructions.
   Navigation, method bodies and diagnostics each retain at most 4,096 continuations,
   with no source text.
 
-Method addresses do not expire and work across server restarts. Read observations are
-server-local metadata, keyed by checkout and declaration location, separately from search
-results. A write checks the observed branch, revision, declaration and actual file bytes.
-After a restart or eviction of one of the 4,096 read observations, read the method again
-before writing. Reindexing unchanged source does not invalidate the read, and sequential
-edits with a fresh read need no index refresh between writes.
+Method addresses work across server restarts and do not depend on search or read history.
+Each write reads the current file, resolves the requested declaration, and checks the
+branch, revision and file bytes during that call. Earlier reads do not authorize or
+invalidate an edit. Sequential writes need no read or index refresh between calls.
+Changes made before a write call are accepted as current source, even when the model
+previously read a different version. Pagination retains its own bounded source metadata;
+continuations still reject changes between pages.
 
 This presentation does not add automatic indexing. Navigation still uses derived data;
 missing/stale information produces a short error requesting operator assistance.
@@ -170,50 +183,29 @@ Technical failures are logged to stderr and optionally through [`serve --log-fil
 Continue running the operator's CLI `index` command after source/configuration changes
 when fresh navigation results are needed.
 
-### Detailed interface with explicit indexing exposure
+### Optional indexing administration
 
-Start `serve /path/to/repository --expose-indexing` to expose the following original
-interface and the configuration/preview tools. This is independent of `--allow-write`;
-neither a tool argument nor repository YAML can enable either capability. In this mode,
-explicit declaration location and `snapshotId` are required for navigation and editing, and
-responses include their original snapshot metadata and `reindexRequired` write flag.
-Only this detailed interface exposes `contentHash` and `expectedContentHash`; its
-diagnostic offsets remain numeric row positions with explicit version checks.
+Start `serve /path/to/repository --expose-indexing` to add configuration, preview and
+index-status tools. This flag is independent of `--allow-write`; neither a tool argument
+nor repository YAML can enable either capability. The code tools keep exactly the same
+source-addressed arguments and compact responses in both modes. No MCP tool accepts or
+returns file or method hashes, and code tools do not require snapshot IDs.
 
+- `get_repository_configuration` reads the selected checkout's YAML configuration.
+- `preview_repository_index` returns a bounded, read-only preview of candidate source paths.
 - `get_repository_index_status` returns observed Git state and the last saved snapshot
   for that branch, or `null` when no snapshot exists. Reading status does not create a cache.
-- `find_symbols` accepts `name` and optional `maxResults` (default 20, range 1–200).
-  It matches the exact, case-sensitive simple name and returns declaration metadata,
-  snapshot identity and `hasMore`. Ordering is deterministic by path, line, column and
-  declaration order. It does not return source text or perform substring/semantic search.
-- `get_type_members` lists direct members of one type declaration by its relative path,
-  line, column and snapshot ID from `find_symbols`. The optional `kind` filter selects
-  `method`, `constructor`, `property`, `field`, `event`, or another supported declaration
-  kind; omission returns all indexed direct members. Pages default to 50 results, with
-  a maximum of 200. Start with `offset: 0` and follow `nextOffset` until it is null.
-  `hasMore` reports whether a next page exists. A changed snapshot requires a new lookup,
-  preventing pagination across different index generations.
-- `find_usages` accepts an indexed **method or type** declaration's `relativePath`,
-  `line`, `column` and `snapshotId` returned by `find_symbols`. It retrieves Roslyn-resolved
-  occurrences, not text matches, from the published SQLite reference index. Pages default
-  to 50 (maximum 200); follow `nextOffset` and check `hasMore`. Partial class declarations
-  share type references; overloads remain separate. Other declarations (such as fields and
-  properties) are not yet supported. Missing reference metadata requires reindexing.
-- `get_method_body` reads only one indexed C# method body using its exact declaration
-  location and snapshot ID. It verifies that the current file's bytes match the published
-  source hash. By default it returns at most 12,000 characters; follow `nextOffset` to
-  read more (maximum 20,000 per request). Results include `contentHash` and whether the
-  method is expression-bodied.
-- `replace_method_body` changes only that method's executable body on disk. It is
-  registered only when the operator uses `serve --allow-write`. It requires a matching
-  `contentHash` from `get_method_body` and a C# body with or without outer braces. No tool call or
-  repository YAML setting can enable write access once the server starts.
+  This operator response includes snapshot metadata; code responses do not.
 
-A missing branch snapshot or a different HEAD produces an error asking the operator to
-run `index`. Queries do not rehash the working tree or reload YAML to establish freshness;
-rerun `index` after source/configuration changes, even if HEAD has not changed. Locations
-refer to the recorded snapshot and can become stale after edits. Existing preview tools
-remain bounded and read-only.
+This replaces the earlier detailed MCP code contracts. Clients using that interface
+must refresh their tool list and select code by path and name instead of passing
+`snapshotId` or `expectedContentHash`. Internal snapshot-based application APIs remain
+available for direct callers; they are not exposed as MCP code tools.
+
+Navigation uses the published branch snapshot and can become stale after edits.
+Rerun the operator's `index` command after source/configuration changes, even if HEAD has
+not changed. Direct method operations and syntax diagnostics use current source and
+remain available without an index.
 
 ## Listing a class's methods
 
@@ -286,13 +278,14 @@ application code or writing any files:
   declarations are excluded. Both name and position must match; if edits moved or damaged
   the declaration, fall back to `get_file_diagnostics` rather than guessing a new target.
 - `validate_method_body` takes `relativePath`, `name` and a proposed `newBody`
-  (a complete block or its inner statements), without a prior read or a client-supplied file hash. The detailed
-  mode retains location, `snapshotId` and `expectedContentHash` arguments. It validates syntax
+  (a complete block or its inner statements), without a prior read or version metadata. It validates syntax
   **in memory**, including the proposed block in the context of the method.
+  This standalone tool is for analysis without writing; edits should call
+  `replace_method_body` directly, which includes the same validation.
   Invalid/incomplete block shapes return a structured `CS4L0001` error.
   Omitted outer braces are added by the same normalization used for writing;
   diagnostic locations refer to the proposed file with those braces in place.
-  The default interface analyzes the current file; detailed mode checks supplied provenance.
+  Both startup modes analyze the current file with the same arguments.
 - `get_method_diagnostics` takes `relativePath`, `line`, `column`, and
   `expectedMethodName` from a previous symbol lookup. It parses **current
   disk contents** directly and does not require any SQLite snapshot. This
@@ -316,10 +309,8 @@ not block an explicit diagnostic request. Paths cannot leave the selected reposi
 traverse symlinks. Results describe the current file text; its version is tracked
 internally for continuation requests. No source text is returned or persisted.
 
-In the default interface, follow `nextOffset` without supplying any file-version
-metadata. A changed file rejects the continuation; start again at offset 0.
-With `--expose-indexing` only, responses include `contentHash` and file/type diagnostic
-continuations require it as `expectedContentHash`.
+Follow `nextOffset` without supplying any file-version metadata, including with
+`--expose-indexing`. A changed file rejects the continuation; start again at offset 0.
 For example, call `get_file_diagnostics` with:
 
 ```json
@@ -343,12 +334,10 @@ preprocessor regions are not checked as active C# code.
 Recommended agent workflow:
 
 ```text
-find_symbols → get_method_body
-             → validate_method_body (no source write)
-             → replace_method_body (only with serve --allow-write)
-             → get_file_diagnostics (all current-file syntax, no snapshot)
-               or get_type_diagnostics / get_method_diagnostics (focused scope)
-             → inspect git diff → index
+get_method or get_method_body (optional inspection; search is optional)
+    → replace_method_body or replace_method (only with serve --allow-write)
+    → get_file_diagnostics (current-file syntax)
+    → inspect git diff → index (operator refresh for navigation)
 ```
 
 ## Reading and replacing a method body
@@ -368,21 +357,26 @@ server is always read-only. `get_method_body` works in either mode.
 
 1. Select the method with its `relativePath` and `name`. Add its identifier `line` and
    `column` for overloads. Search is optional if the address is already known.
-2. Call `get_method_body` with that source address. The response contains `body.text`,
+2. Optionally call `get_method_body` to inspect the body or `get_method` for the whole
+   declaration. A body read contains `body.text`,
    `totalCharacters` and `nextOffset`; page if the body is large.
-3. Optionally call `validate_method_body` with the proposed body to get syntax
-   errors before any write, even in read-only mode.
-4. Call `replace_method_body` with the same source address and `newBody` containing only a valid
+3. Call `replace_method_body` with the same source address and `newBody` containing only a valid
    C# block or its inner statements. Omitted outer braces are added automatically.
+   Indentation is adjusted to the method automatically, including comments before an
+   explicit opening brace. Preserve relative indentation inside the supplied body;
+   the caller does not need to reproduce the containing class or namespace indentation.
    An explicit leading block must already be complete; unbalanced braces and invalid
    control flow are rejected. The replacement can convert an expression-bodied
    method into a block body. It cannot rewrite the signature, attributes or adjacent
    methods, and will not add an implementation to an abstract or interface method.
-5. Call `get_file_diagnostics` to check the whole current file without an index refresh
+   Validation is included: on failure, no write occurs and the tool returns up to 10
+   syntax errors with IDs and proposed-file locations. Correct the body and retry
+   `replace_method_body`; no standalone validation call is needed.
+4. Call `get_file_diagnostics` to check the whole current file without an index refresh
    (or `get_method_diagnostics` for only the written method),
    then inspect the local Git diff and rerun `index`. The old index and its source
-   locations are deliberately not altered by the write tool. Only the detailed mode
-   exposes `reindexRequired: true`; the default reply contains the method location.
+   locations are deliberately not altered by the write tool. Both startup modes return
+   only the new method location, without indexing metadata.
 
 Default edit arguments:
 
@@ -397,8 +391,18 @@ Default edit arguments:
 `"newBody": "return 42;"` is also accepted and is enclosed in a block before
 validation and writing. Supply only body content, without the method signature.
 
-The application validates the branch, revision, file bytes and exact Roslyn declaration
-against the preceding body read. Detailed mode also validates the active index generation. The workspace adapter
+Indentation comes from the existing declaration and its statements, or from enclosing
+declarations when the method is empty or expression-bodied (four spaces when no style
+can be inferred). Relative indentation, blank lines and inline brace placement are retained;
+this is not a full formatter and does not read `.editorconfig`. Multiline string contents,
+multiline comment contents and inactive preprocessor text are preserved. Other line endings
+follow the file. Syntax validation applies the same adjustment so diagnostic positions match
+the proposed edit.
+
+The application resolves the exact Roslyn declaration from current source during the
+write call, then checks the branch, revision and file bytes for changes during that call.
+No previous read, file hash or snapshot ID is required from the caller. There is no
+comparison with an earlier model read. The workspace adapter
 rejects relative-path traversal and symlinks, rejects non-UTF-8 source files and writes
 through a temporary sibling file followed by replacement. It preserves a UTF-8 BOM and
 the untouched source text outside the body. The write does **not** compile, run tests,

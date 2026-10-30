@@ -1,7 +1,6 @@
 using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Domain.Source;
 using CodeSemantic4Llm.Domain.Symbols;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Text;
 
 namespace CodeSemantic4Llm.Analysis.CSharp;
@@ -28,7 +27,7 @@ public sealed class CSharpMethodSyntaxDiagnostics : IMethodSyntaxDiagnostics
         ArgumentNullException.ThrowIfNull(newBody);
         var method = CSharpMethodBodyEditor.FindMethod(document, declaration);
         var span = CSharpMethodBodyEditor.GetBodySpan(method);
-        var (replacement, hasValidShape, syntaxErrors) = CSharpMethodBodyEditor.InspectReplacement(document, newBody);
+        var (replacement, hasValidShape, syntaxErrors) = CSharpMethodBodyEditor.InspectReplacement(document, method, newBody);
 
         if (!hasValidShape)
         {
@@ -36,7 +35,7 @@ public sealed class CSharpMethodSyntaxDiagnostics : IMethodSyntaxDiagnostics
             [
                 new SyntaxDiagnostic(
                     "CS4L0001", "error",
-                    "Supply C# statements or one complete block, with balanced braces and no surrounding declarations.",
+                    CSharpMethodBodyEditor.BodyInputHelp,
                     declaration)
             ];
         }
@@ -49,31 +48,12 @@ public sealed class CSharpMethodSyntaxDiagnostics : IMethodSyntaxDiagnostics
         {
             // Diagnostics from ParseStatement are relative to the proposed block.
             // Convert them to the file positions the agent would see after replacing it.
-            var proposedText = SourceText.From(proposed);
-            return syntaxErrors
-                .Select(diagnostic => ToProposedDiagnostic(
-                    diagnostic, document.RelativePath, proposedText, span.Start))
-                .Distinct()
-                .OrderBy(diagnostic => diagnostic.Location.Line)
-                .ThenBy(diagnostic => diagnostic.Location.Column)
-                .ThenBy(diagnostic => diagnostic.Id, StringComparer.Ordinal)
-                .ToArray();
+            return CSharpSyntaxDiagnosticReader.ReadReplacementErrors(
+                syntaxErrors, document.RelativePath, SourceText.From(proposed), span.Start);
         }
 
         var updated = new SourceDocument(document.RelativePath, proposed);
         return GetCurrent(updated, declaration, method.Identifier.ValueText);
     }
 
-    private static SyntaxDiagnostic ToProposedDiagnostic(
-        Diagnostic diagnostic, string relativePath, SourceText source, int bodyStart)
-    {
-        var blockPosition = diagnostic.Location.IsInSource ? diagnostic.Location.SourceSpan.Start : 0;
-        var position = Math.Clamp(bodyStart + blockPosition, 0, source.Length);
-        var line = source.Lines.GetLinePosition(position);
-
-        return new SyntaxDiagnostic(
-            diagnostic.Id, diagnostic.Severity.ToString().ToLowerInvariant(),
-            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            new SourceLocation(relativePath, line.Line + 1, line.Character + 1));
-    }
 }

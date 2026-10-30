@@ -51,7 +51,9 @@ internal static class McpServerHost
         var mcp = builder.Services.AddMcpServer()
             .WithStdioServerTransport()
             .WithRequestFilters(filters => filters.AddCallToolFilter(McpToolCallLogging.Wrap))
-            .WithTools<ServerInformationTools>();
+            .WithTools<ServerInformationTools>()
+            .WithTools<RepositoryCodeTools>()
+            .WithTools<RepositoryCodeDiagnosticsTools>();
             // .WithTools<InspectSourceTools>()
 
         if (fileLogger is not null)
@@ -65,24 +67,12 @@ internal static class McpServerHost
         if (exposeIndexing)
         {
             mcp.WithTools<RepositoryConfigurationTools>()
-                .WithTools<RepositoryDiagnosticsTools>()
-                .WithTools<RepositoryIndexTools>()
-                .WithTools<RepositoryMethodTools>();
-
-            if (allowWrite)
-            {
-                mcp.WithTools<RepositoryWriteTools>();
-            }
+                .WithTools<RepositoryIndexTools>();
         }
-        else
-        {
-            mcp.WithTools<RepositoryCodeTools>()
-                .WithTools<RepositoryCodeDiagnosticsTools>();
 
-            if (allowWrite)
-            {
-                mcp.WithTools<RepositoryCodeWriteTools>();
-            }
+        if (allowWrite)
+        {
+            mcp.WithTools<RepositoryCodeWriteTools>();
         }
 
         using var host = builder.Build();
