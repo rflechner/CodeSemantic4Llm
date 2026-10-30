@@ -9,6 +9,8 @@ namespace CodeSemantic4Llm.FunctionalTests.Steps;
 public sealed partial class ServeRepositorySteps
 {
     private string[] _advertisedTools = [];
+    private JsonElement _toolDefinitions;
+    private string _serverInformation = "";
 
     [When(@"I list MCP tools with ""(.*)"" server startup")]
     public async Task WhenListMcpTools(string mode)
@@ -17,6 +19,8 @@ public sealed partial class ServeRepositorySteps
         {
             "write-enabled" => ["serve", SelectedRoot, "--allow-write"],
             "read-only" => ["serve", SelectedRoot],
+            "indexing" => ["serve", SelectedRoot, "--expose-indexing"],
+            "indexing-write" => ["serve", SelectedRoot, "--expose-indexing", "--allow-write"],
             "default" => [],
             _ => throw new ArgumentException($"Unknown mode '{mode}'.")
         };
@@ -40,9 +44,16 @@ public sealed partial class ServeRepositorySteps
             await SendAsync(process, """{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}""", timeout.Token);
 
             var listed = await ReceiveAsync(process, 2, timeout.Token);
+            _toolDefinitions = listed.Clone();
             _advertisedTools = listed.GetProperty("tools").EnumerateArray()
                 .Select(item => item.GetProperty("name").GetString()!)
                 .OrderBy(name => name, StringComparer.Ordinal).ToArray();
+
+            await SendAsync(process,
+                """{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_server_info","arguments":{}}}""",
+                timeout.Token);
+            var information = await ReceiveAsync(process, 3, timeout.Token);
+            _serverInformation = information.GetProperty("content")[0].GetProperty("text").GetString()!;
         }
         finally
         {
@@ -62,6 +73,8 @@ public sealed partial class ServeRepositorySteps
         Assert.Contains("get_method_body", _advertisedTools);
         Assert.Contains("validate_method_body", _advertisedTools);
         Assert.Contains("get_method_diagnostics", _advertisedTools);
+        Assert.Contains("get_file_diagnostics", _advertisedTools);
+        Assert.Contains("get_type_diagnostics", _advertisedTools);
         Assert.Contains("find_symbols", _advertisedTools);
         Assert.Contains("get_server_info", _advertisedTools);
     }
@@ -77,6 +90,42 @@ public sealed partial class ServeRepositorySteps
         {
             Assert.Equal("absent", state);
             Assert.DoesNotContain("replace_method_body", _advertisedTools);
+        }
+    }
+
+    [Then(@"MCP indexing details are ""(.*)""")]
+    public void ThenIndexingVisibility(string state)
+    {
+        string[] administrationTools = ["get_repository_index_status", "get_repository_configuration", "preview_repository_index"];
+        var methodTool = _toolDefinitions.GetProperty("tools").EnumerateArray()
+            .Single(tool => tool.GetProperty("name").GetString() == "get_method_body");
+        var properties = methodTool.GetProperty("inputSchema").GetProperty("properties");
+
+        if (state == "hidden")
+        {
+            Assert.All(administrationTools, tool => Assert.DoesNotContain(tool, _advertisedTools));
+            Assert.True(properties.TryGetProperty("relativePath", out _));
+            Assert.True(properties.TryGetProperty("name", out _));
+            Assert.False(properties.TryGetProperty("symbolId", out _));
+            Assert.False(properties.TryGetProperty("snapshotId", out _));
+            AssertNoIndexingDetails(_toolDefinitions.GetRawText());
+            AssertNoIndexingDetails(_serverInformation);
+        }
+        else
+        {
+            Assert.Equal("exposed", state);
+            Assert.All(administrationTools, tool => Assert.Contains(tool, _advertisedTools));
+            Assert.True(properties.TryGetProperty("snapshotId", out _));
+            Assert.False(properties.TryGetProperty("symbolId", out _));
+            Assert.Contains("snapshot", _serverInformation, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static void AssertNoIndexingDetails(string text)
+    {
+        foreach (var term in new[] { "index", "snapshot", "sqlite", "recordedRevision", "semanticLanguage", "contentHash", "checksum", "fingerprint", "symbolId" })
+        {
+            Assert.DoesNotContain(term, text, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

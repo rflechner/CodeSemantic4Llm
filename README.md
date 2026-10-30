@@ -123,29 +123,44 @@ Relative paths are resolved from the process working directory. In Rider, use
 `serve /path/to/repository` as the program arguments. Startup does not index the project.
 
 The server uses **stdio** for MCP and sends logs to **stderr**.
-It exposes `get_server_info`, `inspect_source`, `get_repository_configuration`,
-`preview_repository_index`, `get_repository_index_status`, `find_symbols`, `get_type_members`,
-and `find_usages`.
-`find_symbols` returns saved declaration locations by exact, case-sensitive simple name
-(20 results by default, at most 200). Run `index` again after source edits. MCP startup and
-queries do not rebuild the index; preview remains read-only.
+To retain logs for investigating failed tool calls, add
+`--log-file /absolute/path/to/codesemantic4llm.jsonl` to `serve`.
+The file includes complete tool parameters and responses, including source snippets.
+See [file logging and troubleshooting](docs/logging.md) for examples and log fields.
+By default it exposes code-focused tools: `get_server_info`,
+`find_symbols`, `get_type_members`, `find_usages`, `get_method_body`,
+`validate_method_body`, and the file/type/method diagnostic tools. Tool descriptions,
+parameters and responses hide indexing, snapshot details and file hashes. Select declarations
+by `relativePath` and `name` (simple or qualified), adding the identifier `line` and `column`
+only when needed to distinguish overloads or other ambiguous declarations. No temporary
+symbol token or preliminary search is required.
+Qualified names may omit leading namespaces or enclosing types: `CliApplication.RunAsync`
+matches `TinyHarness.Cli.CliApplication.RunAsync` when unique in the requested file.
+Matching remains case-sensitive and respects complete dot-separated name segments.
 
-To ask for a class's methods, first locate its declaration with `find_symbols`, then call
-`get_type_members` with that declaration's relative path, line, column, snapshot ID and
-`kind: "method"`. Results include overloads as separate locations and support pagination.
-Only members declared directly in the selected type declaration are returned: inherited
-methods and other parts of a partial type are not merged. See the
-[member navigation example](docs/indexing.md#listing-a-classs-methods).
+`find_symbols` matches exact, case-sensitive simple names (20 results by default,
+at most 200). To list a class's methods, pass its file path and name to `get_type_members`
+with `kind: "method"`. To find callers or type references, use the same source-address
+arguments with `find_usages`. Both support pagination, defaulting to
+50 results with a maximum of 200. Overloads stay distinct, partial declarations
+are selected separately, and inherited members are not included. Reference results
+omit unresolved bindings and do not evaluate project dependency graphs.
 
-To find callers of a method or references to a class, first select its declaration with
-`find_symbols`, then call `find_usages` with the same relative path, line, column and
-`snapshotId`. The tool returns bounded, paginated source locations (50 by default,
-200 maximum) from SQLite without parsing code during the MCP request. Unlike simple text
-search, Roslyn distinguishes overloads and same-named methods. References are recalculated
-during indexing when files change; unresolved or ambiguous references are omitted. The
-first implementation does not evaluate project files or external dependency graphs, so
-results may be incomplete for multi-project repositories. See the
-[usage search example](docs/indexing.md#finding-usages-of-a-method-or-type).
+Indexing remains an operator responsibility: run `index` after source changes.
+MCP startup and queries do not rebuild the index. Internal branch, snapshot and
+file-hash safeguards remain active in the default interface. To expose the detailed
+interface, including `get_repository_configuration`, `preview_repository_index`,
+`get_repository_index_status`, `snapshotId` parameters and snapshot metadata, use:
+
+```shell
+dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
+  serve /path/to/repository --expose-indexing
+```
+
+`--expose-indexing` does not enable source writes and can be combined with
+`--allow-write`. The argument-free server always uses the code-focused interface.
+Restart the server and refresh the client's tool list when changing modes.
+See the [MCP interface documentation](docs/indexing.md#querying-through-mcp).
 
 When upgrading an older cache, rerun `index` for each branch you need to
 query. Schema 3 adds reference relationships; existing declarations remain readable
@@ -155,34 +170,47 @@ until that branch has been reindexed. Restart the MCP server so clients can disc
 ### Optional method-level source editing
 
 The MCP server is **read-only by default**. To allow a connected agent to change an
-indexed method body, explicitly start this server process with:
+C# method body, explicitly start this server process with:
 
 ```shell
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
   serve /path/to/repository --allow-write
 ```
 
-`get_method_body` is always available: after `find_symbols` or `get_type_members`,
-it reads only the selected method's body (12,000 characters per page by default) and
-returns the source-file `contentHash`. `replace_method_body` is **advertised only**
-when `--allow-write` is set. It accepts the method's exact indexed location and
-`snapshotId`, the `contentHash` from `get_method_body`, and a replacement C# block
-including braces. It changes **only that method's executable body**, without requiring
+`get_method_body` is always available and reads current source directly, even without
+navigation data or a previous search. It returns only the selected method's body (12,000 characters per page by default) and
+keeps the file version internally. Pass each returned `nextOffset` unchanged to continue. `replace_method_body` is **advertised only**
+when `--allow-write` is set. After reading the method, pass the same file path and method name, with a replacement C# body
+with or without outer braces: `return 42;` and `{ return 42; }` are both accepted.
+It changes **only that method's executable body**, without requiring
 a whole-file text replacement by the agent.
 
-For faster feedback, `validate_method_body` accepts the same declaration,
-`snapshotId`, `contentHash`, and proposed block, then reports Roslyn syntax errors
-**without writing anything**. After an edit, `get_method_diagnostics` can inspect the
+For faster feedback, `validate_method_body` accepts the file path, method name and proposed body in either format,
+then reports Roslyn syntax errors **without writing anything** or requiring a prior body read.
+After an edit, `get_method_diagnostics` can inspect the
 current method directly on disk, even before reindexing. Pass the declaration path,
 line, column and expected method name; no snapshot is required. Both tools are available
 in read-only mode and return bounded diagnostics with C# error IDs and source locations.
+
+To catch errors **anywhere in the current file**, call `get_file_diagnostics` with just
+`{"relativePath":"src/Worker.cs"}`. No index, declaration position or proposed code is
+needed, so it also works when syntax errors prevent selecting a method. For a single
+class or other type, `get_type_diagnostics` accepts the current identifier's `relativePath`,
+`line`, `column` and `expectedTypeName`; it includes members and nested types in that
+declaration. Both tools use the repository YAML's analyzer and extension settings and
+return up to 50 diagnostics by default (maximum 200). Pass each returned `nextOffset`
+unchanged as `offset` to retrieve more. The server tracks the file version internally
+and rejects continuations after an edit. Restart the MCP server and refresh the client's tool list to discover these tools.
+
 **These are syntax checks, not compilation or semantic type checks.**
 
-The write is rejected if the index or working-tree file is stale, the syntax is invalid,
+The write is rejected if the branch, revision or file changed since the last body read, the syntax is invalid,
 or the method has no body. Writes are restricted to the operator-selected checkout;
 symlinks and traversal are rejected. This is a local source edit, not an index update:
 **run `index` again after any successful edit**, and review your Git diff before committing.
-Only UTF-8 source files are supported for editing in this first version.
+Only UTF-8 source files are supported for editing in this first version. Refreshing navigation
+data does not invalidate a read of unchanged source. After restarting the server, read the
+method again before editing; there is no symbol selection to recreate.
 See [the editing workflow](docs/indexing.md#reading-and-replacing-a-method-body).
 
 ### MCP client configuration

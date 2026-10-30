@@ -10,9 +10,12 @@ Feature: Explicitly opt in to source editing when starting MCP
     When I list MCP tools with "<mode>" server startup
     Then MCP advertises the method body reader
     And MCP writing tools are "<state>"
+    And MCP indexing details are "<details>"
 
     Examples:
-      | mode           | state     |
-      | read-only      | absent    |
-      | write-enabled  | available |
-      | default        | absent    |
+      | mode           | state     | details |
+      | read-only      | absent    | hidden  |
+      | write-enabled  | available | hidden  |
+      | default        | absent    | hidden  |
+      | indexing       | absent    | exposed |
+      | indexing-write | available | exposed |

@@ -11,7 +11,7 @@ public sealed partial class RepositoryIndexingSteps
 {
     private MethodDiagnosticsResult? _syntaxReport;
     private Exception? _syntaxFailure;
-    private readonly List<MethodSyntaxDiagnostic> _allSyntaxDiagnostics = [];
+    private readonly List<SyntaxDiagnostic> _allSyntaxDiagnostics = [];
     private int _syntaxPageCount;
 
     [When(@"I validate proposed method body ""(.*)""")]

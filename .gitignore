@@ -47,6 +47,10 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
+# Local MCP diagnostics and rotated archives
+/logs
+/logs.[1-3]
+
 # Build results on 'Bin' directories
 **/[Bb]in/*
 # Uncomment if you have tasks that rely on *.refresh files to move binaries

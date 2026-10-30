@@ -87,8 +87,8 @@ public sealed class MethodBodyOperations(
         string expectedContentHash, string newBody,
         int maxDiagnostics = 50, int offset = 0, CancellationToken cancellationToken = default)
     {
-        ValidatePage(maxDiagnostics, offset);
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedContentHash);
+        ValidatePage(maxDiagnostics, offset);
         ArgumentNullException.ThrowIfNull(newBody);
 
         var selected = await SelectAsync(repositoryRoot, declaration, snapshotId, cancellationToken);
@@ -128,7 +128,7 @@ public sealed class MethodBodyOperations(
 
     private static MethodDiagnosticsResult ToPage(
         SourceLocation declaration, string contentHash,
-        IReadOnlyList<MethodSyntaxDiagnostic> diagnostics, int limit, int offset)
+        IReadOnlyList<SyntaxDiagnostic> diagnostics, int limit, int offset)
     {
         var results = diagnostics.Skip(offset).Take(limit).ToArray();
         int? nextOffset = diagnostics.Count - offset > limit ? checked(offset + limit) : null;
@@ -205,7 +205,7 @@ public sealed record MethodBodyWriteResult(SourceLocation MethodLocation, string
 /// </summary>
 public sealed record MethodDiagnosticsResult(
     SourceLocation MethodLocation, string ContentHash, bool IsValid,
-    IReadOnlyList<MethodSyntaxDiagnostic> Diagnostics, int TotalDiagnostics, int? NextOffset)
+    IReadOnlyList<SyntaxDiagnostic> Diagnostics, int TotalDiagnostics, int? NextOffset)
 {
     public bool HasMore => NextOffset.HasValue;
 }

@@ -59,9 +59,25 @@ Feature: Edit only one indexed C# method body through MCP
     When I index the checkout
     And I select indexed "Run" declaration number 1
     And I read the selected method body
-    When I attempt to replace its body with "return 2;"
-    Then the method body request fails with "complete C# block"
+    When I attempt to replace its body with "return 2"
+    Then the method body request fails with "syntactically valid"
     And the source file contains "return 1;"
+
+  Scenario: Validation and editing accept statements without outer braces
+    Given indexing source "Worker.cs" is:
+      """
+      class Worker { public int Run() { return 1; } public int Keep() => 7; }
+      """
+    When I index the checkout
+    And I select indexed "Run" declaration number 1
+    And I read the selected method body
+    And I validate proposed method body "var value = 21; return value * 2;"
+    Then method syntax diagnostics are valid
+    And the source file contains "return 1;"
+    When I replace the selected method body with "var value = 21; return value * 2;"
+    Then the method body replacement succeeds and requires reindexing
+    And the source file contains "var value = 21; return value * 2;"
+    And the source file contains "public int Keep() => 7;"
 
   Scenario: An earlier index generation cannot authorize a write
     Given indexing source "Worker.cs" is:

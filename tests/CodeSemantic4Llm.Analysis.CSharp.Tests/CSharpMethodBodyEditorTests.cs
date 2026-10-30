@@ -68,7 +68,12 @@ public sealed class CSharpMethodBodyEditorTests
     }
 
     [Theory]
-    [InlineData("return 42;")]
+    [InlineData("return 42")]
+    [InlineData("return 42; }")]
+    [InlineData("{ return 42;")]
+    [InlineData("public int Inject() { return 42; }")]
+    [InlineData("return 42; } public void Inject() {}")]
+    [InlineData("using (var scope = Open()) {} finally {}")]
     [InlineData("{ return 42; } public void Inject() {}")]
     [InlineData("{ if (true) {")]
     [InlineData("{ return ; invalid @@@; }")]
@@ -80,6 +85,55 @@ public sealed class CSharpMethodBodyEditorTests
 
         Assert.Throws<ArgumentException>(() => new CSharpMethodBodyEditor().Replace(
             document, target.Location, body));
+    }
+
+    [Theory]
+    [InlineData("return 42;")]
+    [InlineData("var value = 21;\nreturn value * 2;")]
+    [InlineData("// Keep the opening comment.\nreturn 42; // Keep the final comment.")]
+    [InlineData("var text = \"{}\"; /* } */ return text.Length;")]
+    [InlineData("if (ready) { return 42; } else { return 0; }")]
+    [InlineData("try { return 42; } finally { Cleanup(); }")]
+    [InlineData("int Local() => 42; return Local();")]
+    [InlineData("")]
+    public async Task Accepts_inner_statements_and_preserves_surrounding_source(string statements)
+    {
+        const string prefix = "class Worker { int Run() ";
+        const string suffix = " int Keep() => 7; }";
+        var document = new SourceDocument("Worker.cs", prefix + "{ return 1; }" + suffix);
+        var target = Assert.Single(await new CSharpSourceAnalyzer().AnalyzeAsync(
+            document, TestContext.Current.CancellationToken), symbol => symbol.Name == "Run");
+
+        var result = new CSharpMethodBodyEditor().Replace(document, target.Location, statements);
+
+        Assert.Equal(prefix + "{\n" + statements + "\n}" + suffix, result);
+        Assert.Empty(new CSharpMethodSyntaxDiagnostics().ValidateReplacement(document, target.Location, statements));
+    }
+
+    [Fact]
+    public async Task Added_braces_use_the_source_line_endings()
+    {
+        var document = new SourceDocument("Worker.cs", "class Worker\r\n{\r\n    int Run() => 1;\r\n}\r\n");
+        var target = Assert.Single(await new CSharpSourceAnalyzer().AnalyzeAsync(
+            document, TestContext.Current.CancellationToken), symbol => symbol.Kind == "method");
+
+        var result = new CSharpMethodBodyEditor().Replace(document, target.Location, "return 42; // final comment");
+
+        Assert.Equal("class Worker\r\n{\r\n    int Run() {\r\nreturn 42; // final comment\r\n}\r\n}\r\n", result);
+    }
+
+    [Fact]
+    public async Task An_explicit_block_with_comments_is_not_wrapped_again()
+    {
+        var document = new SourceDocument("Worker.cs", "class Worker { int Run() { return 1; } int Keep() => 7; }");
+        var target = Assert.Single(await new CSharpSourceAnalyzer().AnalyzeAsync(
+            document, TestContext.Current.CancellationToken), symbol => symbol.Name == "Run");
+        const string body = "// leading comment\n{ return 42; } // trailing comment";
+
+        var result = new CSharpMethodBodyEditor().Replace(document, target.Location, body);
+
+        Assert.Equal("class Worker { int Run() " + body + "\n int Keep() => 7; }", result);
+        Assert.Empty(new CSharpMethodSyntaxDiagnostics().ValidateReplacement(document, target.Location, body));
     }
 
     [Fact]

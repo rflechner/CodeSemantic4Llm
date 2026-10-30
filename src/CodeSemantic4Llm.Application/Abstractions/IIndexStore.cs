@@ -24,6 +24,14 @@ public interface IIndexStore
         int maxResults,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Matches simple, full or abbreviated qualified names using DeclarationSelector's source-address rules.
+    /// Returns up to two candidates so callers can reject ambiguous declarations.
+    /// </summary>
+    IReadOnlyList<IndexedDeclaration> SelectDeclarations(
+        RepositoryScope scope, DeclarationSelector selector, bool typesOnly,
+        CancellationToken cancellationToken = default);
+
     /// <summary>Returns semantically resolved occurrences of one indexed declaration.</summary>
     SymbolUsagePage FindUsages(
         RepositoryScope scope, SourceLocation targetLocation, long snapshotId,
@@ -62,3 +70,7 @@ public sealed record SymbolUsagePage(
 /// <summary>One method declaration with the exact original bytes' hash, scoped to a branch snapshot.</summary>
 public sealed record IndexedMethod(
     RepositoryIndexSnapshot Snapshot, SymbolDefinition Method, string ContentHash);
+
+/// <summary>A declaration and its source provenance, used internally for navigation.</summary>
+public sealed record IndexedDeclaration(
+    RepositoryIndexSnapshot Snapshot, SymbolDefinition Symbol, string ContentHash);

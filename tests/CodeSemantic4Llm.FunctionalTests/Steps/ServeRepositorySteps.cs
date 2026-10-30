@@ -13,7 +13,7 @@ public sealed partial class ServeRepositorySteps
 {
     private readonly string _workspace = Path.Combine(ResolveDirectoryPath(Path.GetTempPath()), "CodeSemantic4Llm.ServeTests", Guid.NewGuid().ToString("N"));
     private ConsoleCommandResult? _console;
-    private JsonElement _preview;
+    private JsonElement _repositoryDiagnostics;
 
     private string SelectedRoot => Path.Combine(_workspace, "selected project [cli]");
     private string EnvironmentRoot => Path.Combine(_workspace, "environment project");
@@ -30,12 +30,12 @@ public sealed partial class ServeRepositorySteps
     public Task WhenServeProject(string pathKind, string environment)
     {
         var path = pathKind == "relative" ? Path.GetRelativePath(_workspace, SelectedRoot) : SelectedRoot;
-        return PreviewThroughMcpAsync(["serve", path], environment == "conflicting" ? EnvironmentRoot : null);
+        return DiagnoseRepositoryThroughMcpAsync(["serve", path], environment == "conflicting" ? EnvironmentRoot : null, "Selected.cs");
     }
 
     [When("I start MCP using \"(.*)\" and the environment repository")]
     public Task WhenUseEnvironment(string invocation) =>
-        PreviewThroughMcpAsync(invocation == "serve" ? ["serve"] : [], EnvironmentRoot);
+        DiagnoseRepositoryThroughMcpAsync(invocation == "serve" ? ["serve"] : [], EnvironmentRoot, "Environment.cs");
 
     [When("I request serve command help")]
     public async Task WhenRequestHelp() =>
@@ -55,6 +55,10 @@ public sealed partial class ServeRepositorySteps
             "file path" => ["serve", file],
             "extra argument" => ["serve", _workspace, "extra"],
             "unknown option" => ["serve", _workspace, "--unknown"],
+            "empty log path" => ["serve", _workspace, "--log-file", ""],
+            "missing log path" => ["serve", _workspace, "--log-file"],
+            "log is directory" => ["serve", _workspace, "--log-file", _workspace],
+            "log parent is file" => ["serve", _workspace, "--log-file", Path.Combine(file, "server.jsonl")],
             _ => throw new ArgumentException(problem)
         };
 
@@ -63,11 +67,11 @@ public sealed partial class ServeRepositorySteps
         _console = await ConsoleCommandRunner.RunAsync(arguments, new ServiceCollection(), timeout.Token);
     }
 
-    [Then("MCP previews the project selected by the argument")]
-    public void ThenArgumentSelected() => AssertPreview(SelectedRoot, "fr", "Selected.cs");
+    [Then("MCP inspects the project selected by the argument")]
+    public void ThenArgumentSelected() => AssertSelectedFile(SelectedRoot, "Selected.cs");
 
-    [Then("MCP previews the project selected by the environment")]
-    public void ThenEnvironmentSelected() => AssertPreview(EnvironmentRoot, "en", "Environment.cs");
+    [Then("MCP inspects the project selected by the environment")]
+    public void ThenEnvironmentSelected() => AssertSelectedFile(EnvironmentRoot, "Environment.cs");
 
     [Then("MCP startup creates no index cache")]
     public void ThenNoCache() => Assert.False(Directory.Exists(CacheRoot));
@@ -79,6 +83,8 @@ public sealed partial class ServeRepositorySteps
         Assert.Equal(0, _console.ExitCode);
         Assert.Empty(_console.Error);
         Assert.Contains("serve [repository-path]", _console.Output);
+        Assert.Contains("--expose-indexing", _console.Output);
+        Assert.Contains("--log-file", _console.Output);
         Assert.Contains("CODESEMANTIC4LLM_REPOSITORY_ROOT", _console.Output);
     }
 
@@ -100,7 +106,7 @@ public sealed partial class ServeRepositorySteps
         }
     }
 
-    private async Task PreviewThroughMcpAsync(string[] arguments, string? environmentRoot)
+    private async Task DiagnoseRepositoryThroughMcpAsync(string[] arguments, string? environmentRoot, string relativePath)
     {
         var start = CreateStartInfo(arguments, environmentRoot);
         using var process = Process.Start(start)!;
@@ -119,12 +125,13 @@ public sealed partial class ServeRepositorySteps
 
             await SendAsync(process, """{"jsonrpc":"2.0","method":"notifications/initialized"}""", timeout.Token);
             await SendAsync(process,
-                """{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"preview_repository_index","arguments":{"maxFiles":10}}}""",
+                JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 2, method = "tools/call",
+                    @params = new { name = "get_file_diagnostics", arguments = new { relativePath } } }),
                 timeout.Token);
             var result = await ReceiveAsync(process, 2, timeout.Token);
             Assert.False(result.TryGetProperty("isError", out var isError) && isError.GetBoolean(), result.ToString());
             using var content = JsonDocument.Parse(result.GetProperty("content")[0].GetProperty("text").GetString()!);
-            _preview = content.RootElement.Clone();
+            _repositoryDiagnostics = content.RootElement.Clone();
         }
         finally
         {
@@ -179,13 +186,12 @@ public sealed partial class ServeRepositorySteps
         return response.RootElement.GetProperty("result").Clone();
     }
 
-    private void AssertPreview(string root, string language, string path)
+    private void AssertSelectedFile(string root, string path)
     {
-        Assert.Equal(root, _preview.GetProperty("repositoryRoot").GetString());
-        Assert.Equal(language, _preview.GetProperty("semanticIndexingLanguage").GetString());
-        Assert.Equal(Path.GetFileName(root), _preview.GetProperty("projectName").GetString());
-        var file = Assert.Single(_preview.GetProperty("files").EnumerateArray());
-        Assert.Equal(path, file.GetProperty("relativePath").GetString());
+        Assert.Equal(path, _repositoryDiagnostics.GetProperty("relativePath").GetString());
+        Assert.True(_repositoryDiagnostics.GetProperty("isValid").GetBoolean());
+        Assert.True(File.Exists(Path.Combine(root, path)));
+        AssertNoIndexingDetails(_repositoryDiagnostics.GetRawText());
     }
 
     private static void CreateProject(string root, string language, string file)

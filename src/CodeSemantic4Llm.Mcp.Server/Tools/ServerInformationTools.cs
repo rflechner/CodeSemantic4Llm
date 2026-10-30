@@ -1,18 +1,25 @@
 using System.ComponentModel;
+using CodeSemantic4Llm.Application.UseCases;
 using ModelContextProtocol.Server;
 
 namespace CodeSemantic4Llm.Mcp.Server.Tools;
 
 /// <summary>Provides a truthful description of the currently implemented bootstrap.</summary>
 [McpServerToolType]
-public sealed class ServerInformationTools
+public sealed class ServerInformationTools(McpToolExposure exposure, RepositoryWriteAccess writeAccess)
 {
     [McpServerTool, Description("Returns the server name and the current implementation status.")]
-    public static string GetServerInfo() =>
-        "CodeSemantic4Llm: MCP stdio host available. " +
-        "The index command persists branch-scoped C# declarations and references. " +
-        "Use find_symbols, get_type_members, find_usages and get_method_body to navigate source. " +
-        "Use validate_method_body and get_method_diagnostics for syntax-only feedback without writing. " +
-        "Method editing is available only with 'serve --allow-write'. " +
-        "Generated descriptions and TypeScript/Angular parsing are not yet implemented.";
+    public string GetServerInfo()
+    {
+        var capabilities = "CodeSemantic4Llm: C# symbol search, navigation and syntax diagnostics. " +
+            (writeAccess.Enabled ? "Method body editing is enabled." : "Source access is read-only.");
+
+        return exposure.ExposeIndexing
+            ? capabilities + " Indexing tools and snapshot metadata are exposed. " +
+              "Run the index command after source changes. Queries use saved branch-scoped declarations and references."
+            : capabilities;
+    }
 }
+
+/// <summary>Operator-selected tool presentation; requests and repository YAML cannot enable it.</summary>
+public sealed record McpToolExposure(bool ExposeIndexing);

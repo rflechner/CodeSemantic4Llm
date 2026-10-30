@@ -41,12 +41,50 @@ public sealed class CSharpMethodSyntaxDiagnosticsTests
         var location = await GetMethodAsync(document, "Run");
 
         var diagnostics = new CSharpMethodSyntaxDiagnostics()
-            .ValidateReplacement(document, location, "return 42;");
+            .ValidateReplacement(document, location, "{ return 42;");
 
         var error = Assert.Single(diagnostics);
         Assert.Equal("CS4L0001", error.Id);
         Assert.Equal("error", error.Severity);
         Assert.Equal(location, error.Location);
+    }
+
+    [Fact]
+    public async Task Inner_statements_report_positions_in_the_normalized_proposed_file()
+    {
+        var document = new SourceDocument("Worker.cs", "class Worker { int Run() { return 1; } }");
+        var location = await GetMethodAsync(document, "Run");
+
+        var diagnostics = new CSharpMethodSyntaxDiagnostics().ValidateReplacement(document, location, "return 42");
+
+        var error = Assert.Single(diagnostics, item => item.Id == "CS1002");
+        Assert.Equal(2, error.Location.Line);
+        Assert.Equal(10, error.Location.Column);
+        Assert.Throws<ArgumentException>(() => new CSharpMethodBodyEditor().Replace(document, location, "return 42"));
+    }
+
+    [Fact]
+    public async Task Async_statements_and_finally_blocks_are_validated_with_added_braces()
+    {
+        var document = new SourceDocument("Worker.cs", "class Worker { async Task<int> Run() { return 1; } }");
+        var location = await GetMethodAsync(document, "Run");
+        const string body = """
+            // Preserve the previous context.
+            var previous = GetContext();
+            using var scope = OpenScope();
+            try
+            {
+                return await RunLocalizedAsync();
+            }
+            finally
+            {
+                RestoreContext(previous);
+            }
+            """;
+
+        Assert.Empty(new CSharpMethodSyntaxDiagnostics().ValidateReplacement(document, location, body));
+        var result = new CSharpMethodBodyEditor().Replace(document, location, body);
+        Assert.Contains("{\n" + body + "\n}", result);
     }
 
     [Fact]

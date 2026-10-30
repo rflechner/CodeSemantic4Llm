@@ -73,6 +73,47 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         return new SymbolSearchResult(snapshot, symbols.Take(maxResults).ToArray(), hasMore);
     }
 
+    public IReadOnlyList<IndexedDeclaration> SelectDeclarations(
+        RepositoryScope scope, DeclarationSelector selector, bool typesOnly,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var path = paths.GetDatabasePath(scope.RootPath);
+
+        if (!File.Exists(path))
+        {
+            throw MissingIndex();
+        }
+
+        using var connection = IndexDatabase.Open(path, scope.RootPath, writable: false);
+        using var transaction = connection.BeginTransaction(deferred: true);
+        var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
+        using var command = IndexDatabase.Command(connection, transaction, """
+            SELECT s.language, s.kind, s.name, s.qualified_name, s.path, s.line, s.column_number,
+                   s.containing_type_line, s.containing_type_column, f.content_hash
+            FROM symbols s JOIN indexed_files f ON f.snapshot_id = s.snapshot_id AND f.path = s.path
+            WHERE s.snapshot_id = $snapshot AND s.path = $path
+                AND (s.name = $name COLLATE BINARY OR s.qualified_name = $name COLLATE BINARY
+                     OR substr(s.qualified_name, -length($qualifiedSuffix)) = $qualifiedSuffix COLLATE BINARY)
+                AND ($line IS NULL OR s.line = $line) AND ($column IS NULL OR s.column_number = $column)
+                AND (s.kind IN ('class', 'struct', 'interface', 'record', 'enum', 'delegate')
+                     OR ($typesOnly = 0 AND s.kind = 'method'))
+            ORDER BY s.line, s.column_number, s.ordinal LIMIT 2;
+            """, ("$snapshot", snapshot.SnapshotId), ("$path", selector.RelativePath), ("$name", selector.Name),
+            ("$qualifiedSuffix", selector.QualifiedNameSuffix),
+            ("$line", selector.Line), ("$column", selector.Column), ("$typesOnly", typesOnly ? 1 : 0));
+        using var reader = command.ExecuteReader();
+        var declarations = new List<IndexedDeclaration>();
+
+        while (reader.Read())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            declarations.Add(new IndexedDeclaration(snapshot, ReadSymbol(reader), reader.GetString(9)));
+        }
+
+        return declarations;
+    }
+
     public SymbolUsagePage FindUsages(
         RepositoryScope scope, SourceLocation targetLocation, long snapshotId,
         int maxResults, int offset, CancellationToken cancellationToken = default)

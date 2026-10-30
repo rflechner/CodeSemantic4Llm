@@ -160,7 +160,12 @@ syntax feedback. The C# adapter uses Roslyn parsing to report diagnostics on
 one selected method or on an in-memory proposed method-body replacement.
 It returns error IDs, messages and one-based original/proposed file positions;
 no source copies or diagnostic text are persisted in SQLite. Validation shares
-the same complete-block syntax gate as the method editor.
+the same body normalization and syntax gate as the method editor. Both accept an explicit
+block or its inner statements. A leading block is treated as explicit; otherwise a pair
+of outer braces is added, using the source file's line endings and separating trailing
+line comments from the closing brace. Unbalanced braces and malformed control flow
+are rejected. Diagnostic positions refer to the normalized proposed file. Source text
+outside the original body span remains unchanged.
 
 `validate_method_body` is a read-only preflight that requires a fresh index
 snapshot and source SHA-256, just like the write tool. In contrast,
@@ -239,6 +244,29 @@ MCP queries, without executing project code or storing source contents. It now r
 MSBuild project graphs or generating natural-language text.
 
 ## Project dependency rules
+
+The default MCP presentation selects declarations by file path and simple or qualified
+name, optionally narrowed by the identifier position. It has no ephemeral symbol IDs.
+`CurrentMethodOperations` resolves methods from current Roslyn analysis, independently
+of index generations. `MethodReadHistory` retains bounded branch/revision/declaration/hash
+observations for writes, without retaining source. Searches cannot evict those reads;
+reindexing unchanged source does not invalidate them. Restarting requires a fresh body
+read before writing, but never a new search merely to obtain a token. Ambiguous names
+require a position instead of an arbitrary overload selection.
+`DeclarationSelector` also accepts abbreviated qualified names as literal dot-delimited
+suffixes. Current-source selection and SQLite navigation apply the same case-sensitive
+rule, scoped to the requested file and position. Every candidate participates in the
+ambiguity check, even when one qualified name matches exactly; no exact-match preference
+or approximate-name scoring can silently select a different declaring type. SQLite uses
+literal suffix comparison rather than wildcard matching, with no schema change.
+
+Navigation resolves addresses through `IIndexStore` and verifies the target source hash.
+Navigation and diagnostic continuations retain independent query/version metadata to
+prevent mixing pages. No default request or response exposes file hashes or snapshots.
+`serve --expose-indexing` restores the detailed tools and snapshot arguments independently
+of write permission. Index refresh remains an operator operation. Both presentations
+share domain, parsing and persistence contracts; technical errors go to stderr and
+optionally the configured log file.
 
 1. `Domain` references nothing in this solution.
 2. `Application` may reference `Domain`, never a concrete adapter.

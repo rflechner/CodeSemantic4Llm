@@ -2,8 +2,6 @@ using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Domain.Source;
 using CodeSemantic4Llm.Domain.Symbols;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
 namespace CodeSemantic4Llm.Analysis.CSharp;
@@ -14,31 +12,31 @@ namespace CodeSemantic4Llm.Analysis.CSharp;
 /// </summary>
 public sealed class CSharpMethodSyntaxDiagnostics : IMethodSyntaxDiagnostics
 {
-    public IReadOnlyList<MethodSyntaxDiagnostic> GetCurrent(
+    public IReadOnlyList<SyntaxDiagnostic> GetCurrent(
         SourceDocument document, SourceLocation declaration, string expectedMethodName)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(expectedMethodName);
         var method = CSharpMethodBodyEditor.FindMethod(document, declaration, expectedMethodName);
         _ = CSharpMethodBodyEditor.GetBodySpan(method);
 
-        return GetMethodDiagnostics(method, document.RelativePath);
+        return CSharpSyntaxDiagnosticReader.Read(method.SyntaxTree, method.Span);
     }
 
-    public IReadOnlyList<MethodSyntaxDiagnostic> ValidateReplacement(
+    public IReadOnlyList<SyntaxDiagnostic> ValidateReplacement(
         SourceDocument document, SourceLocation declaration, string newBody)
     {
         ArgumentNullException.ThrowIfNull(newBody);
         var method = CSharpMethodBodyEditor.FindMethod(document, declaration);
         var span = CSharpMethodBodyEditor.GetBodySpan(method);
-        var (replacement, hasValidShape, syntaxErrors) = CSharpMethodBodyEditor.InspectReplacement(newBody);
+        var (replacement, hasValidShape, syntaxErrors) = CSharpMethodBodyEditor.InspectReplacement(document, newBody);
 
         if (!hasValidShape)
         {
             return
             [
-                new MethodSyntaxDiagnostic(
+                new SyntaxDiagnostic(
                     "CS4L0001", "error",
-                    "Supply one complete C# method body enclosed in braces, without other declarations.",
+                    "Supply C# statements or one complete block, with balanced braces and no surrounding declarations.",
                     declaration)
             ];
         }
@@ -66,57 +64,14 @@ public sealed class CSharpMethodSyntaxDiagnostics : IMethodSyntaxDiagnostics
         return GetCurrent(updated, declaration, method.Identifier.ValueText);
     }
 
-    private static IReadOnlyList<MethodSyntaxDiagnostic> GetMethodDiagnostics(
-        MethodDeclarationSyntax method, string relativePath)
-    {
-        var diagnostics = new List<MethodSyntaxDiagnostic>();
-
-        foreach (var diagnostic in method.SyntaxTree.GetDiagnostics())
-        {
-            if (!diagnostic.Location.IsInSource ||
-                diagnostic.Severity is not (DiagnosticSeverity.Error or DiagnosticSeverity.Warning))
-            {
-                continue;
-            }
-
-            var start = diagnostic.Location.SourceSpan.Start;
-
-            // Include a diagnostic at the closing boundary (for example a missing semicolon).
-            // Ignore errors in unrelated methods or elsewhere in the source file.
-            if (start < method.SpanStart || start > method.Span.End)
-            {
-                continue;
-            }
-
-            diagnostics.Add(ToSourceDiagnostic(diagnostic, relativePath));
-        }
-
-        return diagnostics
-            .Distinct()
-            .OrderBy(diagnostic => diagnostic.Location.Line)
-            .ThenBy(diagnostic => diagnostic.Location.Column)
-            .ThenBy(diagnostic => diagnostic.Id, StringComparer.Ordinal)
-            .ToArray();
-    }
-
-    private static MethodSyntaxDiagnostic ToProposedDiagnostic(
+    private static SyntaxDiagnostic ToProposedDiagnostic(
         Diagnostic diagnostic, string relativePath, SourceText source, int bodyStart)
     {
         var blockPosition = diagnostic.Location.IsInSource ? diagnostic.Location.SourceSpan.Start : 0;
         var position = Math.Clamp(bodyStart + blockPosition, 0, source.Length);
         var line = source.Lines.GetLinePosition(position);
 
-        return new MethodSyntaxDiagnostic(
-            diagnostic.Id, diagnostic.Severity.ToString().ToLowerInvariant(),
-            diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
-            new SourceLocation(relativePath, line.Line + 1, line.Character + 1));
-    }
-
-    private static MethodSyntaxDiagnostic ToSourceDiagnostic(Diagnostic diagnostic, string relativePath)
-    {
-        var line = diagnostic.Location.GetLineSpan().StartLinePosition;
-
-        return new MethodSyntaxDiagnostic(
+        return new SyntaxDiagnostic(
             diagnostic.Id, diagnostic.Severity.ToString().ToLowerInvariant(),
             diagnostic.GetMessage(System.Globalization.CultureInfo.InvariantCulture),
             new SourceLocation(relativePath, line.Line + 1, line.Character + 1));

@@ -6,7 +6,7 @@ Feature: Select the MCP repository from the serve command
   Scenario Outline: Select a project with an absolute or relative path
     Given two configured MCP project directories
     When I serve the selected project using an "<path>" path with "<environment>" environment configuration
-    Then MCP previews the project selected by the argument
+    Then MCP inspects the project selected by the argument
     And MCP startup creates no index cache
 
     Examples:
@@ -19,7 +19,7 @@ Feature: Select the MCP repository from the serve command
   Scenario Outline: Keep environment configuration when no path is supplied
     Given two configured MCP project directories
     When I start MCP using "<invocation>" and the environment repository
-    Then MCP previews the project selected by the environment
+    Then MCP inspects the project selected by the environment
     And MCP startup creates no index cache
 
     Examples:

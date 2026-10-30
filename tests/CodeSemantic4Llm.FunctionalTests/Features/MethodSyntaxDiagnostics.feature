@@ -39,7 +39,7 @@ Feature: Get precise Roslyn syntax diagnostics for C# methods
     When I index the checkout
     And I select indexed "Run" declaration number 1
     And I read the selected method body
-    And I validate proposed method body "return 42;"
+    And I validate proposed method body "{ return 42;"
     Then method syntax diagnostics are invalid
     And method syntax diagnostics include "CS4L0001"
     And the source file contains "return 1;"

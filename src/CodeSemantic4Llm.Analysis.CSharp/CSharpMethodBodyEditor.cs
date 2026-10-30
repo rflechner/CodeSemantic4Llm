@@ -24,7 +24,7 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
         ArgumentNullException.ThrowIfNull(newBody);
         var method = FindMethod(document, declaration);
         var span = GetBodySpan(method);
-        var replacement = ValidateBody(newBody);
+        var replacement = ValidateBody(document, newBody);
 
         // Replace a TextSpan, not the whole Roslyn node: preserve the signature, attributes,
         // comments and byte-for-byte source outside the targeted body (including CRLF).
@@ -53,7 +53,7 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
             });
 
         return method ?? throw new InvalidOperationException(
-            "No C# method exists at the selected indexed declaration location. Run index again.");
+            "No C# method exists at the selected indexed declaration location. Run index again, or use get_file_diagnostics to check current syntax without selecting a declaration.");
     }
 
     internal static TextSpan GetBodySpan(MethodDeclarationSyntax method)
@@ -72,14 +72,14 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
             "The selected method has no executable body (for example, an interface or abstract declaration).");
     }
 
-    private static string ValidateBody(string newBody)
+    private static string ValidateBody(SourceDocument document, string newBody)
     {
-        var (body, hasValidShape, syntaxErrors) = InspectReplacement(newBody);
+        var (body, hasValidShape, syntaxErrors) = InspectReplacement(document, newBody);
 
         if (!hasValidShape)
         {
             throw new ArgumentException(
-                "Supply a complete C# block enclosed in braces, for example '{ return 42; }'.",
+                "Supply C# statements or one complete block, with balanced braces and no surrounding declarations.",
                 nameof(newBody));
         }
 
@@ -93,18 +93,33 @@ public sealed class CSharpMethodBodyEditor : IMethodBodyEditor
     }
 
     /// <summary>
-    /// Shares the exact syntax gate between replace_method_body and validate_method_body,
-    /// so preflight cannot approve a block that the writer's syntax gate would reject.
+    /// Shares normalization and the syntax gate between validation and editing. A leading block
+    /// is treated as explicit; otherwise statements are enclosed without repairing unmatched braces.
     /// </summary>
     internal static (string Body, bool HasValidShape, IReadOnlyList<Diagnostic> SyntaxErrors)
-        InspectReplacement(string newBody)
+        InspectReplacement(SourceDocument document, string newBody)
     {
         ArgumentNullException.ThrowIfNull(newBody);
         var body = newBody.Trim();
-
+        var newLine = document.Content.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
         var statement = SyntaxFactory.ParseStatement(body);
-        var isCompleteBlock = body.Length >= 2 && body[0] == '{' && body[^1] == '}'
-            && statement is BlockSyntax && statement.FullSpan.Length == body.Length;
+
+        if (statement is not BlockSyntax)
+        {
+            // Separate the closing brace from trailing // comments and preprocessor directives.
+            body = "{" + newLine + body + newLine + "}";
+            statement = SyntaxFactory.ParseStatement(body);
+        }
+        else if (statement.Span.End < body.Length)
+        {
+            // A supplied trailing line comment must not consume source after the replaced span.
+            body += newLine;
+            statement = SyntaxFactory.ParseStatement(body);
+        }
+
+        var isCompleteBlock = statement is BlockSyntax block
+            && !block.OpenBraceToken.IsMissing && !block.CloseBraceToken.IsMissing
+            && statement.FullSpan.Length == body.Length;
 
         return (body, isCompleteBlock,
             statement.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)

@@ -10,14 +10,14 @@ namespace CodeSemantic4Llm.Mcp.Server.Tools;
 [McpServerToolType]
 public sealed class RepositoryWriteTools(IConfiguration configuration, MethodBodyOperations operations)
 {
-    [McpServerTool, Description("Replaces ONLY the executable body of one indexed C# method in the operator-selected checkout. This changes a real source file (not the SQLite index) and requires server startup with --allow-write. Call get_method_body first, pass its contentHash and the selected declaration's location/snapshotId, and supply a complete C# block including braces. Rejects stale indexes, stale file hashes, invalid syntax and methods without bodies. Does not build or execute code. Reindex the checkout after a successful edit.")]
+    [McpServerTool, Description("Replaces ONLY the executable body of one indexed C# method in the operator-selected checkout. This changes a real source file (not the SQLite index) and requires server startup with --allow-write. Call get_method_body first, pass its contentHash and the selected declaration's location/snapshotId, and supply a C# body with or without outer braces. Rejects stale indexes, stale file hashes, invalid syntax and methods without bodies. Does not build or execute code. Reindex the checkout after a successful edit.")]
     public Task<MethodBodyWriteResult> ReplaceMethodBodyAsync(
         [Description("Indexed method declaration's repository-relative location.relativePath.")] string relativePath,
         [Description("One-based declaration location.line.")] int line,
         [Description("One-based declaration location.column.")] int column,
         [Description("snapshot.snapshotId from find_symbols or get_method_body.")] long snapshotId,
         [Description("Exact contentHash returned by get_method_body.")] string expectedContentHash,
-        [Description("Complete replacement C# body including '{' and '}', not an entire method declaration.")] string newBody,
+        [Description("C# body with or without outer braces, e.g. 'return 42;' or '{ return 42; }'. Omit the method signature.")] string newBody,
         CancellationToken cancellationToken = default) =>
         operations.ReplaceAsync(GetRoot(), new SourceLocation(relativePath, line, column),
             snapshotId, expectedContentHash, newBody, cancellationToken);
