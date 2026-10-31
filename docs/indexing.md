@@ -79,11 +79,13 @@ different cache identity. No YAML or source files are copied into the cache.
 The versioned schema stores derived declarations, reference locations and
 lookup/invalidation metadata. It is a regenerable cache, not a stable interchange format
 or a source backup. Schema 2 introduced type membership, schema 3 adds a compact
-reference table indexed by target declaration position, and schema 4 adds optional LLM
-summaries to each symbol. Running `index` upgrades old caches on the write path; the old published snapshot remains intact until
-atomic publication. An earlier branch may still return its declarations, but cannot
-answer `find_usages` until reindexed. An interrupted run preserves the older published
-snapshot. MCP reads never migrate storage.
+reference table indexed by target declaration position, schema 4 adds optional LLM
+summaries to each symbol, and schema 5 adds SQLite FTS5 over the saved symbol names
+and summaries. Running `index` upgrades existing caches and rebuilds the full-text
+index from stored declarations, without making any LLM calls or reading source files.
+The previous published snapshot remains intact until atomic publication. An earlier branch may still return its declarations, but cannot
+answer `find_usages` or `search_code` until upgraded/reindexed as necessary.
+An interrupted run preserves the older published snapshot. MCP reads never migrate storage.
 
 Unsupported schema versions fail without changes; select a fresh cache directory and rerun
 `index`. Deleting an unused cache directory is sufficient to discard its derived data.
@@ -115,6 +117,35 @@ best-effort check rather than an atomic filesystem snapshot: avoid editing or sw
 branches during indexing. The recorded HEAD identifies observed Git history; it does not
 prove that working-tree content matches that commit or remains unchanged afterward.
 
+## Searching saved LLM summaries with FTS5
+
+The `search_code` MCP tool searches the active branch's stored symbol names,
+qualified names and optional summaries. For example:
+
+```json
+{"query":"where is the repository index published?","kind":"method","maxResults":10}
+```
+
+SQLite **FTS5** indexes these fields and ranks results with **BM25**, emphasizing
+exact declaration names and qualified names. A bounded set of English and French
+grammatical stop words is ignored; remaining words are interpreted as literal
+Unicode-aware prefix terms. This means `index` can also match `indexing`.
+Queries with quotation marks, punctuation, colons or boolean operators are
+sanitized before building the FTS expression and always bound as SQL parameters.
+
+This is **lexical relevance search, not embedding/vector similarity**. It may
+miss conceptual synonyms when the summary uses different words. Queries work
+without LLM summaries (names are still indexed), but summaries generally
+provide much better discovery by intent.
+
+Searches read only the published, branch-specific SQLite snapshot. They do not
+start the configured LLM, send code over the network, or reread the checkout.
+A maximum of 200 results is returned, with a `hasMore` indication, and ties
+are resolved deterministically by source location. If the cache has not yet
+been upgraded to schema 5, run `index` once on that checkout. Reindex after
+source changes as before; FTS5 rows are updated and removed in the same SQLite
+transaction as their declarations.
+
 ## Querying through MCP
 
 MCP startup never indexes automatically. It selects the checkout from `serve [repository-path]`,
@@ -131,7 +162,11 @@ Descriptions, argument schemas and responses omit snapshot IDs, index metadata,
 SQLite details, file hashes and reindexing instructions.
 
 - `find_symbols` returns `symbols` and `hasMore`. Declarations contain their name,
-  qualified name, kind and source location, with no temporary identity token.
+  qualified name, kind, optional LLM summary and source location, with no temporary identity token.
+- `search_code` accepts `query` and optional exact `kind` (`method`, `class`, etc.)
+  and `maxResults` (default 10; maximum 200). It searches indexed names, qualified names
+  and optional summaries, returning ranked declarations and `hasMore`, without reading
+  source code or sending any request to an LLM. The default mode hides snapshot details.
 - `get_type_members`, `find_usages`, `get_method_body`, `validate_method_body` and
   `replace_method_body` select code with `relativePath` and `name` (simple or qualified).
   Optional `line` and `column` identify the declaration when names are ambiguous.
@@ -191,6 +226,11 @@ diagnostic offsets remain numeric row positions with explicit version checks.
   It matches the exact, case-sensitive simple name and returns declaration metadata,
   snapshot identity and `hasMore`. Ordering is deterministic by path, line, column and
   declaration order. It does not return source text or perform substring/semantic search.
+- `search_code` ranks names and generated summaries using SQLite FTS5/BM25.
+  It accepts a natural-language `query`, optional exact `kind`, and `maxResults`
+  (default 10, range 1–200), and includes the snapshot identity in detailed mode.
+  The search is scoped to the current branch. It does not access source files or
+  call a model at query time.
 - `get_type_members` lists direct members of one type declaration by its relative path,
   line, column and snapshot ID from `find_symbols`. The optional `kind` filter selects
   `method`, `constructor`, `property`, `field`, `event`, or another supported declaration

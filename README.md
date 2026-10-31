@@ -7,7 +7,8 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 > indexing into SQLite, and bounded MCP queries against saved branch snapshots.
 > Reference binding currently uses a lightweight repository-wide compilation rather than
 > full MSBuild project resolution; optional OpenAI-compatible LLM summaries are implemented
-> for C# methods and types. Embeddings and TypeScript analysis remain planned.
+> for C# methods and types, with local FTS5/BM25 keyword search over stored
+> names and summaries. Embeddings and TypeScript analysis remain planned.
 
 ## Architecture
 
@@ -131,7 +132,7 @@ Spectre progress for discovery, indexing, verification and publication. Redirect
 contains a plain summary. Unlike preview, indexing has no file-count limit.
 
 Rerunning `index` reuses unchanged declarations and removes stale records after deletions
-or renames. Each branch keeps its own completed snapshot. Failures and cancellation preserve
+or renames. FTS5 search entries follow the same atomic snapshot lifecycle. Each branch keeps its own completed snapshot. Failures and cancellation preserve
 the previous snapshot. SQLite stores derived metadata only, outside the source checkout.
 Set `CODESEMANTIC4LLM_INDEX_ROOT` to an absolute cache directory to override the default
 `LocalApplicationData/CodeSemantic4Llm/indexes`; use the same setting when starting MCP.
@@ -154,7 +155,7 @@ To retain logs for investigating failed tool calls, add
 The file includes complete tool parameters and responses, including source snippets.
 See [file logging and troubleshooting](docs/logging.md) for examples and log fields.
 By default it exposes code-focused tools: `get_server_info`,
-`find_symbols`, `get_type_members`, `find_usages`, `get_method_body`,
+`find_symbols`, `search_code`, `get_type_members`, `find_usages`, `get_method_body`,
 `validate_method_body`, and the file/type/method diagnostic tools. Tool descriptions,
 parameters and responses hide indexing, snapshot details and file hashes. Select declarations
 by `relativePath` and `name` (simple or qualified), adding the identifier `line` and `column`
@@ -165,7 +166,12 @@ matches `TinyHarness.Cli.CliApplication.RunAsync` when unique in the requested f
 Matching remains case-sensitive and respects complete dot-separated name segments.
 
 `find_symbols` matches exact, case-sensitive simple names (20 results by default,
-at most 200). To list a class's methods, pass its file path and name to `get_type_members`
+at most 200). **`search_code`** accepts a natural-language question such as
+`"where does the repository index get published?"`, ranks results using local
+SQLite FTS5/BM25 across symbol names and stored LLM summaries, and returns
+source locations and optional descriptions. No LLM server is required at search
+time. This is keyword-based relevance, not embedding similarity; see the
+[FTS5 search guide](docs/indexing.md#searching-saved-llm-summaries-with-fts5). To list a class's methods, pass its file path and name to `get_type_members`
 with `kind: "method"`. To find callers or type references, use the same source-address
 arguments with `find_usages`. Both support pagination, defaulting to
 50 results with a maximum of 200. Overloads stay distinct, partial declarations

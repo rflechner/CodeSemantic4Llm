@@ -43,7 +43,7 @@ public sealed partial class RepositoryIndexingSteps
     {
         await using var client = await StartCodeClientAsync(exposeIndexing: exposeIndexing);
         var response = await client.CallAsync("search_code", new { query, kind = "method" });
-        _fullTextError = response.GetProperty("isError").GetBoolean();
+        _fullTextError = response.TryGetProperty("isError", out var error) && error.GetBoolean();
         _fullTextReply = _fullTextError ? response : McpCodeClient.ReadContent(response);
     }
 }
