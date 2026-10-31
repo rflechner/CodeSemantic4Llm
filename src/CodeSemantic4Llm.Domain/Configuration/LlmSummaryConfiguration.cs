@@ -3,8 +3,8 @@ using System.Text.RegularExpressions;
 namespace CodeSemantic4Llm.Domain.Configuration;
 
 /// <summary>
-/// Opt-in, repository-local LLM settings. Only the name of an environment variable may
-/// appear here; API keys themselves must not be stored in repository YAML.
+/// Opt-in, repository-local LLM settings. An inline API key takes precedence over
+/// the optional environment variable used for authentication.
 /// </summary>
 public sealed class LlmSummaryConfiguration
 {
@@ -15,7 +15,8 @@ public sealed class LlmSummaryConfiguration
         bool enabled = false,
         string? baseUrl = null,
         string? model = null,
-        string? apiKeyEnvironmentVariable = null)
+        string? apiKeyEnvironmentVariable = null,
+        string? apiKey = null)
     {
         Enabled = enabled;
 
@@ -37,6 +38,7 @@ public sealed class LlmSummaryConfiguration
         }
 
         Model = model?.Trim();
+        ApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
 
         if (apiKeyEnvironmentVariable is not null)
         {
@@ -64,8 +66,11 @@ public sealed class LlmSummaryConfiguration
     /// <summary>Model name used in chat completion requests.</summary>
     public string? Model { get; }
 
-    /// <summary>Optional variable containing a Bearer token; never an inline secret.</summary>
+    /// <summary>Optional variable containing a Bearer token, used only when ApiKey is absent.</summary>
     public string? ApiKeyEnvironmentVariable { get; }
+
+    /// <summary>Optional inline Bearer token. Blank values are treated as absent; surrounding whitespace is removed.</summary>
+    public string? ApiKey { get; }
 
     public Uri ChatCompletionsEndpoint => BaseUrl is null
         ? throw new InvalidOperationException("LLM baseUrl is not configured.")

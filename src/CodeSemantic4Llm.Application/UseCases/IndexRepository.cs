@@ -243,6 +243,7 @@ public sealed class IndexRepository(
     private string Fingerprint(RepositoryIndexingConfiguration configuration, ConfiguredSourceAnalyzers analyzers)
     {
         // ProjectName is display metadata; renaming it does not change derived declarations.
+        // Inline API keys only authenticate requests; rotating one does not change derived content.
         var settings = JsonSerializer.Serialize(new
         {
             configuration.Version,

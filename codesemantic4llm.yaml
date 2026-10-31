@@ -20,6 +20,7 @@ semanticIndexing:
     enabled: false
     # baseUrl: http://127.0.0.1:1234/v1
     # model: your-local-model
+    # apiKey: your-api-key # Takes priority over apiKeyEnvironmentVariable when non-empty.
     # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 
 # User-defined excludes extend the built-in defaults for **/.git/**, **/bin/** and **/obj/**.

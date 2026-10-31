@@ -72,8 +72,10 @@ internal static class DashboardHost
                     throw new ArgumentException("Filter is too long.");
                 }
 
-                return reader.GetSymbols(project, branch, search, kind, file,
+                var page = reader.GetSymbols(project, branch, search, kind, file,
                     offset, limit, context.RequestAborted);
+                return new DashboardPage<DashboardSymbolResponse>(
+                    page.Items.Select(DashboardSymbolResponse.From).ToArray(), page.Total, page.Offset, page.Limit);
             }));
 
         app.MapGet("/api/references", (HttpContext context) =>

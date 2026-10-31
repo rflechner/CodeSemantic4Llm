@@ -10,6 +10,7 @@
     <ProjectReference Include="../CodeSemantic4Llm.Persistence.Sqlite/CodeSemantic4Llm.Persistence.Sqlite.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Markdig" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <PackageReference Include="ModelContextProtocol" />

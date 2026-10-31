@@ -24,6 +24,11 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- index /path/to/checkout
 The declaration inspector displays generated LLM summaries when the repository opted
 in to `semanticIndexing.llm.enabled`. Summaries come from the published SQLite
 index; the dashboard never sends code to a model and never opens source files.
+The server renders Markdown with [Markdig](https://github.com/xoofx/markdig): headings,
+lists, emphasis, inline/fenced code, quotes and tables are formatted in the inspector.
+Raw HTML is displayed as text, images retain only their labels, and only HTTP(S) and
+mailto links remain clickable. Formatting is scoped to the summary panel. Rendering
+uses the stored Markdown without changing it or requiring reindexing or an LLM call.
 
 ## What you can browse
 
@@ -66,6 +71,8 @@ All endpoints use GET and return JSON; the UI is embedded in the executable.
 The paginated endpoints accept `q` (case-insensitive substring),
 `offset` (default 0) and `limit` (default 50, maximum 200).
 `/api/symbols` also accepts `kind` and `file`.
+Each declaration retains its original `summary` and includes a transient `summaryHtml`
+fragment for the inspector; absent or blank summaries have a null `summaryHtml`.
 `/api/references` may be restricted to one declaration with
 `targetPath`, `line` and `column`, which must be supplied together.
 

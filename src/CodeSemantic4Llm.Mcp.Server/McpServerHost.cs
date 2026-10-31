@@ -57,6 +57,7 @@ internal static class McpServerHost
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             TypeInfoResolver = McpJsonUtilities.DefaultOptions.TypeInfoResolver!
                 .WithAddedModifier(typeInfo => RepositoryPathJson.AddAbsolutePath(typeInfo, builder.Configuration))
+                .WithAddedModifier(RepositoryConfigurationJson.RemoveSecrets)
         };
 
         // Explicit registration keeps the editing tool undiscoverable in read-only mode.

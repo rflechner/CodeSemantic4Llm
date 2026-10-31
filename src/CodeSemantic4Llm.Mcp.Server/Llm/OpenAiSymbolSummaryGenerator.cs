@@ -26,18 +26,7 @@ public sealed class OpenAiSymbolSummaryGenerator(HttpClient client) : ISymbolSum
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Post, settings.ChatCompletionsEndpoint);
-
-        if (settings.ApiKeyEnvironmentVariable is { } variable)
-        {
-            var apiKey = Environment.GetEnvironmentVariable(variable);
-
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                throw new InvalidOperationException("The configured LLM API key environment variable is empty or missing: " + variable);
-            }
-
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-        }
+        ApplyAuthentication(request, settings);
 
         request.Content = JsonContent.Create(new
         {
@@ -82,5 +71,25 @@ public sealed class OpenAiSymbolSummaryGenerator(HttpClient client) : ISymbolSum
             .Replace("\r", "", StringComparison.Ordinal)
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Take(10));
+    }
+
+    private static void ApplyAuthentication(HttpRequestMessage request, LlmSummaryConfiguration settings)
+    {
+        var apiKey = settings.ApiKey;
+
+        if (apiKey is null && settings.ApiKeyEnvironmentVariable is { } variable)
+        {
+            apiKey = Environment.GetEnvironmentVariable(variable);
+
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                throw new InvalidOperationException("The configured LLM API key environment variable is empty or missing: " + variable);
+            }
+        }
+
+        if (apiKey is not null)
+        {
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+        }
     }
 }

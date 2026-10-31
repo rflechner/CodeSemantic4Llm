@@ -11,7 +11,7 @@ namespace CodeSemantic4Llm.FunctionalTests.Steps;
 
 /// <summary>Exercises YAML parsing, analyzer selection and actual filesystem filtering together.</summary>
 [Binding]
-public sealed class RepositoryConfigurationSteps
+public sealed partial class RepositoryConfigurationSteps
 {
     private readonly string _repositoryRoot = Path.Combine(
         Path.GetTempPath(),

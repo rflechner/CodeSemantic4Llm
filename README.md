@@ -68,6 +68,7 @@ semanticIndexing:
     enabled: false  # Opt in per repository
     # baseUrl: http://127.0.0.1:1234/v1
     # model: my-local-model
+    # apiKey: your-api-key
     # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 exclude: []
 ```
@@ -82,7 +83,10 @@ the effective extensions and returns at most 200 candidate paths without reading
 The optional `semanticIndexing.language` selects the language of AI-generated summaries;
 its default is `en`. It does not affect which source languages the analyzers support.
 To enable summaries, set `semanticIndexing.llm.enabled: true` and supply an OpenAI-compatible
-`baseUrl` and `model` in that repository's YAML. The model receives entire C# methods
+`baseUrl` and `model` in that repository's YAML. An optional `apiKey` supplies a Bearer token
+directly and takes priority over `apiKeyEnvironmentVariable`; blank keys use the environment
+fallback. Inline keys are omitted from MCP configuration responses.
+The model receives entire C# methods
 (including XML doc comments) or entire type declarations. Each stored summary is limited
 to 10 lines and is available to MCP clients and the dashboard. Source is not copied
 into SQLite, but **the selected LLM endpoint does receive source code**.

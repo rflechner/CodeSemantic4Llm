@@ -2,6 +2,10 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
+using CodeSemantic4Llm.Domain.Repositories;
+using CodeSemantic4Llm.Domain.Source;
+using CodeSemantic4Llm.Domain.Symbols;
 using CodeSemantic4Llm.Mcp.Server.Commands;
 using CodeSemantic4Llm.Persistence.Sqlite;
 using Xunit;
@@ -15,6 +19,8 @@ public sealed class DashboardHttpTests
     public async Task DashboardHostsAnOfflineReadOnlyUiOnTheSelectedLoopbackPort()
     {
         var port = FindFreeLoopbackPort();
+        var temporaryRoot = Path.Combine(Path.GetTempPath(), "dashboard-http-" + Guid.NewGuid().ToString("N"));
+        var paths = new IndexStoragePaths(Path.Combine(temporaryRoot, "cache"));
         var startInfo = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
             UseShellExecute = false,
@@ -27,8 +33,7 @@ public sealed class DashboardHttpTests
         startInfo.ArgumentList.Add("dashboard");
         startInfo.ArgumentList.Add("--port");
         startInfo.ArgumentList.Add(port.ToString(CultureInfo.InvariantCulture));
-        startInfo.Environment[IndexStoragePaths.EnvironmentVariable] =
-            Path.Combine(Path.GetTempPath(), "dashboard-empty-" + Guid.NewGuid().ToString("N"));
+        startInfo.Environment[IndexStoragePaths.EnvironmentVariable] = paths.Root;
 
         using var process = Process.Start(startInfo)!;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
@@ -79,6 +84,8 @@ public sealed class DashboardHttpTests
             Assert.Equal(HttpStatusCode.OK, projects.StatusCode);
             Assert.Equal("[]", await projects.Content.ReadAsStringAsync(timeout.Token));
 
+            await AssertRenderedSummariesAsync(client, paths, temporaryRoot, timeout.Token);
+
             using var missingScope = await client.GetAsync("/api/symbols", timeout.Token);
             Assert.Equal(HttpStatusCode.BadRequest, missingScope.StatusCode);
 
@@ -95,7 +102,47 @@ public sealed class DashboardHttpTests
             }
 
             await process.WaitForExitAsync(CancellationToken.None);
+            if (Directory.Exists(temporaryRoot))
+            {
+                Directory.Delete(temporaryRoot, recursive: true);
+            }
         }
+    }
+
+    private static async Task AssertRenderedSummariesAsync(
+        HttpClient client, IndexStoragePaths paths, string temporaryRoot, CancellationToken token)
+    {
+        const string markdown = "**Indexes** `Worker`.\n\n- Reads metadata\n- Publishes a snapshot\n\n<script>alert(1)</script>";
+        var root = Path.Combine(temporaryRoot, "repository");
+        Directory.CreateDirectory(root);
+        var scope = new RepositoryScope(root, "main");
+        using (var update = new SqliteIndexStore(paths).BeginUpdate(new RepositoryState(scope, "test-head"), "config", "en", token))
+        {
+            update.AddFile(new IndexedSourceFile("Worker.cs", "hash", "dotnet-csharp", "test"),
+            [
+                new SymbolDefinition("csharp", "class", "Worker", "Demo.Worker", new SourceLocation("Worker.cs", 1, 1),
+                    Summary: markdown),
+                new SymbolDefinition("csharp", "method", "Run", "Demo.Worker.Run", new SourceLocation("Worker.cs", 3, 5))
+            ], token);
+            update.Publish(token);
+        }
+
+        using var projects = JsonDocument.Parse(await client.GetStringAsync("/api/projects", token));
+        var projectId = Assert.Single(projects.RootElement.EnumerateArray()).GetProperty("id").GetString();
+        using var response = JsonDocument.Parse(await client.GetStringAsync($"/api/symbols?project={projectId}&branch=main", token));
+        var page = response.RootElement;
+        Assert.Equal(2, page.GetProperty("total").GetInt64());
+        var symbols = page.GetProperty("items").EnumerateArray().ToArray();
+        var worker = Assert.Single(symbols, symbol => symbol.GetProperty("name").GetString() == "Worker");
+        Assert.Equal(markdown, worker.GetProperty("summary").GetString());
+        var rendered = worker.GetProperty("summaryHtml").GetString();
+        Assert.Contains("<strong>Indexes</strong>", rendered);
+        Assert.Contains("<code>Worker</code>", rendered);
+        Assert.Contains("<li>Reads metadata</li>", rendered);
+        Assert.DoesNotContain("<script", rendered);
+        var run = Assert.Single(symbols, symbol => symbol.GetProperty("name").GetString() == "Run");
+        Assert.Equal(JsonValueKind.Null, run.GetProperty("summaryHtml").ValueKind);
+        Assert.Equal(markdown, Assert.Single(new SqliteIndexStore(paths).FindSymbols(scope, "Worker", 10, token).Symbols).Summary);
     }
 
     private static int FindFreeLoopbackPort()

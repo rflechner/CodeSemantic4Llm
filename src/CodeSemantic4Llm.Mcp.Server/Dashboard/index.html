@@ -129,6 +129,24 @@
     .drawer-separator { height: 1px; background: var(--line); margin: 23px 0; }
     .drawer-data { display: grid; gap: 17px; grid-template-columns: 1fr 1fr; margin-top: 24px; }
     .drawer h3 { font-size: 14px; }
+    .markdown { color: var(--muted); font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+    .markdown > :first-child { margin-top: 0; }
+    .markdown > :last-child { margin-bottom: 0; }
+    .markdown p, .markdown ul, .markdown ol, .markdown pre, .markdown blockquote { margin: 12px 0; }
+    .markdown ul, .markdown ol { padding-left: 24px; }
+    .markdown li + li { margin-top: 4px; }
+    .markdown strong { color: var(--text); }
+    .drawer .markdown :is(h1, h2, h3, h4, h5, h6) {
+      color: var(--text); font-size: 15px; line-height: 1.4; letter-spacing: 0; margin: 20px 0 9px;
+    }
+    .markdown code { color: var(--accent); background: var(--bg); padding: 2px 5px; border-radius: 4px; font-size: 12px; }
+    .markdown pre { overflow-x: auto; padding: 13px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+    .markdown pre code { padding: 0; white-space: pre; overflow-wrap: normal; }
+    .markdown blockquote { border-left: 3px solid var(--accent); margin-left: 0; padding-left: 14px; }
+    .markdown a { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+    .markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; margin: 12px 0; }
+    .markdown th, .markdown td { border: 1px solid var(--line); padding: 7px 10px; white-space: normal; }
+    .markdown hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
     .reference-item { display: block; padding: 12px 0; border-bottom: 1px solid var(--line); }
     .reference-item .cell-sub { margin-top: 2px; }
     .reference-footer { margin-top: 13px; display: flex; gap: 10px; align-items: center; justify-content: space-between; color: var(--muted); }
@@ -228,7 +246,7 @@
       </div>
       <div class="drawer-separator"></div>
       <h3>LLM summary</h3>
-      <p id="drawer-summary" class="hint" style="white-space: pre-line"></p>
+      <div id="drawer-summary" class="markdown"></div>
       <div class="drawer-separator"></div>
       <h3>Recorded usages <span class="hint" id="drawer-ref-count"></span></h3>
       <div id="drawer-references"></div>
@@ -573,7 +591,13 @@
       byId('drawer-location').textContent = symbol.line + ' : ' + symbol.column;
       byId('drawer-container').textContent = symbol.containingTypeLine === null ? '—' :
         symbol.containingTypeLine + ' : ' + symbol.containingTypeColumn;
-      byId('drawer-summary').textContent = symbol.summary || 'No LLM summary stored for this declaration.';
+      const summary = byId('drawer-summary');
+      if (symbol.summaryHtml) {
+        // Only the server's restricted Markdig output is inserted as HTML.
+        summary.innerHTML = symbol.summaryHtml;
+      } else {
+        summary.replaceChildren(element('p', 'hint', 'No LLM summary stored for this declaration.'));
+      }
       byId('backdrop').hidden = false;
       byId('close-drawer').focus();
       loadDrawerReferences();

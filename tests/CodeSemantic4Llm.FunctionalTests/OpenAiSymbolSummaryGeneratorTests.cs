@@ -38,17 +38,91 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
         Assert.Contains("value * 2", messages[1].GetProperty("content").GetString());
     }
 
+    [Theory]
+    [InlineData("inline-token", false, null, "inline-token")]
+    [InlineData("inline-token", true, "environment-token", "inline-token")]
+    [InlineData("inline-token", true, null, "inline-token")]
+    [InlineData(null, true, "environment-token", "environment-token")]
+    [InlineData("", true, "environment-token", "environment-token")]
+    [InlineData("   ", true, "environment-token", "environment-token")]
+    [InlineData(null, false, null, null)]
+    public async Task Inline_api_key_takes_priority_over_optional_environment_authentication(
+        string? apiKey, bool useEnvironment, string? environmentKey, string? expectedKey)
+    {
+        var variable = "CODESEMANTIC4LLM_TEST_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(variable, environmentKey);
+
+        try
+        {
+            var handler = new RecordingHandler();
+            using var client = new HttpClient(handler);
+            var generator = new OpenAiSymbolSummaryGenerator(client);
+            var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
+                true, "http://localhost:1234/v1", "local-test-model",
+                useEnvironment ? variable : null, apiKey));
+            var symbol = new SymbolDefinition("csharp", "method", "Run", "Demo.Run",
+                new SourceLocation("Demo.cs", 1, 1));
+
+            await generator.SummarizeAsync(symbol, "public void Run() {}", configuration,
+                TestContext.Current.CancellationToken);
+
+            Assert.Equal(expectedKey is null ? null : "Bearer " + expectedKey, handler.Authorization);
+            if (expectedKey is not null)
+            {
+                Assert.DoesNotContain(expectedKey, handler.Payload!);
+            }
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+        }
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Missing_environment_key_without_an_inline_key_fails_before_sending(string? environmentKey)
+    {
+        var variable = "CODESEMANTIC4LLM_TEST_" + Guid.NewGuid().ToString("N");
+        Environment.SetEnvironmentVariable(variable, environmentKey);
+
+        try
+        {
+            var handler = new RecordingHandler();
+            using var client = new HttpClient(handler);
+            var generator = new OpenAiSymbolSummaryGenerator(client);
+            var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
+                true, "http://localhost:1234/v1", "local-test-model", variable));
+            var symbol = new SymbolDefinition("csharp", "method", "Run", "Demo.Run",
+                new SourceLocation("Demo.cs", 1, 1));
+
+            var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                generator.SummarizeAsync(symbol, "public void Run() {}", configuration,
+                    TestContext.Current.CancellationToken));
+
+            Assert.Contains("empty or missing", error.Message);
+            Assert.Null(handler.Url);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(variable, null);
+        }
+    }
+
     private sealed class RecordingHandler : HttpMessageHandler
     {
         public string? Url { get; private set; }
         public string? Method { get; private set; }
         public string? Payload { get; private set; }
+        public string? Authorization { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Url = request.RequestUri!.ToString();
             Method = request.Method.Method;
+            Authorization = request.Headers.Authorization?.ToString();
             Payload = await request.Content!.ReadAsStringAsync(cancellationToken);
             var json = JsonSerializer.Serialize(new
             {

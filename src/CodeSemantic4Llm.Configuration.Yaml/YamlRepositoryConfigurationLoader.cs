@@ -74,7 +74,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
                         document.SemanticIndexing.Llm.Enabled,
                         document.SemanticIndexing.Llm.BaseUrl,
                         document.SemanticIndexing.Llm.Model,
-                        document.SemanticIndexing.Llm.ApiKeyEnvironmentVariable));
+                        document.SemanticIndexing.Llm.ApiKeyEnvironmentVariable,
+                        document.SemanticIndexing.Llm.ApiKey));
 
             var fileExtensions = MapFileExtensions(document.FileExtensions);
 
@@ -139,5 +140,7 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         public string? Model { get; set; }
 
         public string? ApiKeyEnvironmentVariable { get; set; }
+
+        public string? ApiKey { get; set; }
     }
 }

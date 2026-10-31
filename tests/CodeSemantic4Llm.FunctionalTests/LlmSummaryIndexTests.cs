@@ -68,6 +68,28 @@ public sealed class LlmSummaryIndexTests : IDisposable
     }
 
     [Fact]
+    public async Task Rotating_an_inline_key_reuses_summaries_without_persisting_credentials()
+    {
+        await CreateCheckoutAsync();
+        const string originalKey = "inline-key-original-57a1";
+        const string rotatedKey = "inline-key-rotated-57a1";
+        WriteYaml(enabled: true, model: "model-one", apiKey: originalKey);
+        var indexer = CreateIndexer();
+        var first = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+
+        WriteYaml(enabled: true, model: "model-one", apiKey: rotatedKey);
+        var second = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, second.ReusedFiles);
+        Assert.Equal(0, second.AnalyzedFiles);
+        Assert.Equal(2, _generator.Requests.Count);
+        var bytes = File.ReadAllBytes(Paths.GetDatabasePath(first.Snapshot.Scope.RootPath));
+        var storedText = Encoding.UTF8.GetString(bytes);
+        Assert.DoesNotContain(originalKey, storedText);
+        Assert.DoesNotContain(rotatedKey, storedText);
+    }
+
+    [Fact]
     public async Task Failed_generation_preserves_last_published_snapshot()
     {
         await CreateCheckoutAsync();
@@ -99,10 +121,11 @@ public sealed class LlmSummaryIndexTests : IDisposable
         [new CSharpSymbolSourceExtractor()],
         _generator);
 
-    private void WriteYaml(bool enabled, string model) => File.WriteAllText(ConfigPath,
+    private void WriteYaml(bool enabled, string model, string? apiKey = null) => File.WriteAllText(ConfigPath,
         "version: 1\nanalyzers: [dotnet-csharp]\nsemanticIndexing:\n  language: fr\n" +
         "  llm:\n    enabled: " + (enabled ? "true" : "false") +
-        "\n    baseUrl: http://127.0.0.1:1234/v1\n    model: " + model + "\n");
+        "\n    baseUrl: http://127.0.0.1:1234/v1\n    model: " + model + "\n" +
+        (apiKey is null ? "" : "    apiKey: " + apiKey + "\n"));
 
     private async Task CreateCheckoutAsync()
     {

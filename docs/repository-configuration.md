@@ -102,6 +102,7 @@ semanticIndexing:
     enabled: true
     baseUrl: http://127.0.0.1:1234/v1
     model: my-local-model
+    # apiKey: your-api-key
     # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 
 exclude:
@@ -117,7 +118,7 @@ exclude:
 - `semanticIndexing.language` is optional and defaults to `en` (English).
 - `semanticIndexing.llm.enabled` is optional and defaults to `false` (no LLM calls).
 - When enabled, `semanticIndexing.llm.baseUrl` (HTTP(S) OpenAI-compatible API root)
-  and `semanticIndexing.llm.model` are required. `apiKeyEnvironmentVariable` is optional.
+  and `semanticIndexing.llm.model` are required. `apiKey` and `apiKeyEnvironmentVariable` are optional.
 - `exclude` is optional. Rules add to, rather than replace, the built-in defaults.
 - Git submodules are **not** excluded automatically; list their checkout paths if they should be skipped.
 - Unknown YAML properties, duplicate keys, missing configuration, and unknown/unimplemented analyzers fail explicitly.
@@ -193,9 +194,16 @@ Only this repository sends snippets to the configured LLM endpoint. Without this
 - `baseUrl` is an OpenAI-compatible API root, such as `http://127.0.0.1:1234/v1`
   for LM Studio. CodeSemantic4Llm posts to `{baseUrl}/chat/completions`.
 - `model` is sent in the `model` field. Use the model identifier advertised by your server.
-- `apiKeyEnvironmentVariable` names an environment variable containing an optional
-  Bearer token; never put an API key in the checked-in YAML. Set it in the environment
-  of the process running the `index` command. Missing configured keys fail the run.
+- `apiKey` supplies an optional Bearer token directly in YAML. Surrounding whitespace
+  is removed; an empty or whitespace-only value is treated as absent. A non-empty value
+  takes priority over `apiKeyEnvironmentVariable`, even if that variable is unset.
+- `apiKeyEnvironmentVariable` names a fallback environment variable containing a Bearer
+  token. It is read only when `apiKey` is absent. Set it in the environment of the process
+  running `index`; a missing or blank fallback value fails the request. If neither option
+  is configured, requests omit the Authorization header.
+- Inline keys are stored as plain text in repository YAML; keep real keys out of version
+  control. MCP configuration responses omit `apiKey`, including their payload logs.
+  Keys are not stored in SQLite, and rotating an inline key does not regenerate summaries.
 - The base URL supports only HTTP(S), without embedded credentials or query strings.
   The API must implement OpenAI-compatible chat completions; vendor-specific endpoints
   requiring different paths or authentication need a compatible gateway.

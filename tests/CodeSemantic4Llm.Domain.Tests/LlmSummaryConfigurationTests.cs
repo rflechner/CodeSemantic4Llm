@@ -12,6 +12,7 @@ public sealed class LlmSummaryConfigurationTests
         Assert.False(settings.Llm.Enabled);
         Assert.Null(settings.Llm.BaseUrl);
         Assert.Null(settings.Llm.Model);
+        Assert.Null(settings.Llm.ApiKey);
     }
 
     [Fact]
@@ -37,5 +38,17 @@ public sealed class LlmSummaryConfigurationTests
     public void Url_does_not_accept_unsupported_schemes_or_inline_secrets(string url)
     {
         Assert.Throws<ArgumentException>(() => new LlmSummaryConfiguration(true, url, "model"));
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("", null)]
+    [InlineData("   ", null)]
+    [InlineData("  local-token  ", "local-token")]
+    public void Inline_api_keys_are_normalized(string? value, string? expected)
+    {
+        var settings = new LlmSummaryConfiguration(apiKey: value);
+
+        Assert.Equal(expected, settings.ApiKey);
     }
 }

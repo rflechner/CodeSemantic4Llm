@@ -96,6 +96,11 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
             llmDocument["apiKeyEnvironmentVariable"] = llm.ApiKeyEnvironmentVariable;
         }
 
+        if (llm.ApiKey is not null)
+        {
+            llmDocument["apiKey"] = llm.ApiKey;
+        }
+
         document["semanticIndexing"] = new Dictionary<string, object>
         {
             ["language"] = configuration.SemanticIndexing.Language,
