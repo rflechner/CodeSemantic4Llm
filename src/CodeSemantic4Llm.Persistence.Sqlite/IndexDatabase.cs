@@ -5,7 +5,7 @@ namespace CodeSemantic4Llm.Persistence.Sqlite;
 /// <summary>Versioned, regenerable schema for declaration snapshots. It contains no source text.</summary>
 internal static class IndexDatabase
 {
-    private const int SchemaVersion = 4;
+    private const int SchemaVersion = 5;
 
     public static SqliteConnection Open(string path, string repositoryRoot, bool writable)
     {
@@ -61,7 +61,7 @@ internal static class IndexDatabase
         {
             Initialize(connection, root);
         }
-        else if (version is not 1 and not 2 and not 3 && version != SchemaVersion)
+        else if (version is not 1 and not 2 and not 3 and not 4 && version != SchemaVersion)
         {
             throw new InvalidOperationException($"Unsupported index schema version {version}. Use a new index cache directory.");
         }
@@ -95,6 +95,11 @@ internal static class IndexDatabase
         if (writable && version is 1 or 2 or 3)
         {
             UpgradeFromVersionThree(connection);
+        }
+
+        if (writable && version is 1 or 2 or 3 or 4)
+        {
+            UpgradeFromVersionFour(connection);
         }
     }
 
@@ -164,6 +169,21 @@ internal static class IndexDatabase
         transaction.Commit();
     }
 
+    private static void UpgradeFromVersionFour(SqliteConnection connection)
+    {
+        // The index is derived entirely from symbols, including already-published LLM
+        // summaries. Rebuilding it does not call the LLM or read source files.
+        using var transaction = connection.BeginTransaction();
+        using var schema = Command(connection, transaction, FullTextSchema);
+        schema.ExecuteNonQuery();
+        using var rebuild = Command(connection, transaction,
+            "INSERT INTO symbol_search(symbol_search) VALUES ('rebuild');");
+        rebuild.ExecuteNonQuery();
+        using var version = Command(connection, transaction, "PRAGMA user_version = 5;");
+        version.ExecuteNonQuery();
+        transaction.Commit();
+    }
+
     /// <summary>Legacy read-only caches have no summary column and are never migrated by readers.</summary>
     public static string SummaryColumn(SqliteConnection connection, SqliteTransaction? transaction, string prefix = "")
     {
@@ -185,6 +205,8 @@ internal static class IndexDatabase
         using var transaction = connection.BeginTransaction();
         using var schema = Command(connection, transaction, Schema);
         schema.ExecuteNonQuery();
+        using var fullText = Command(connection, transaction, FullTextSchema);
+        fullText.ExecuteNonQuery();
         using var identity = Command(connection, transaction,
             "INSERT INTO repository_info(id, root) VALUES (1, $root);", ("$root", root));
         identity.ExecuteNonQuery();
@@ -226,6 +248,32 @@ internal static class IndexDatabase
         CREATE INDEX ix_symbols_name ON symbols(snapshot_id, name, path, line, column_number);
         CREATE INDEX ix_symbols_container ON symbols(
             snapshot_id, path, containing_type_line, containing_type_column, line, column_number, ordinal);
-        PRAGMA user_version = 4;
+        PRAGMA user_version = 5;
+        """;
+
+    // External-content FTS keeps the authoritative name/summary text solely in
+    // symbols. SQLite maintains the term index in the same transaction as symbol
+    // inserts, copies, updates and cascading deletes across snapshot publication.
+    private const string FullTextSchema = """
+        CREATE VIRTUAL TABLE IF NOT EXISTS symbol_search USING fts5(
+            name, qualified_name, summary,
+            content='symbols', content_rowid='rowid',
+            tokenize='unicode61 remove_diacritics 2',
+            prefix='2 3 4'
+        );
+        CREATE TRIGGER IF NOT EXISTS symbol_search_insert AFTER INSERT ON symbols BEGIN
+            INSERT INTO symbol_search(rowid, name, qualified_name, summary)
+            VALUES (new.rowid, new.name, new.qualified_name, new.summary);
+        END;
+        CREATE TRIGGER IF NOT EXISTS symbol_search_delete AFTER DELETE ON symbols BEGIN
+            INSERT INTO symbol_search(symbol_search, rowid, name, qualified_name, summary)
+            VALUES ('delete', old.rowid, old.name, old.qualified_name, old.summary);
+        END;
+        CREATE TRIGGER IF NOT EXISTS symbol_search_update AFTER UPDATE ON symbols BEGIN
+            INSERT INTO symbol_search(symbol_search, rowid, name, qualified_name, summary)
+            VALUES ('delete', old.rowid, old.name, old.qualified_name, old.summary);
+            INSERT INTO symbol_search(rowid, name, qualified_name, summary)
+            VALUES (new.rowid, new.name, new.qualified_name, new.summary);
+        END;
         """;
 }

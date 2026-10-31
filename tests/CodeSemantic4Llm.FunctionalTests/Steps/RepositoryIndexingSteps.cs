@@ -426,7 +426,7 @@ public sealed partial class RepositoryIndexingSteps
         }).Build();
         return new RepositoryIndexTools(configuration, _stateProvider, Store,
             new FindSymbols(Store, _stateProvider), new GetTypeMembers(Store, _stateProvider),
-            new FindUsages(Store, _stateProvider));
+            new FindUsages(Store, _stateProvider), new SearchCode(Store, _stateProvider));
     }
 
     private void WriteSource(string path, string content)

@@ -25,6 +25,14 @@ public interface IIndexStore
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Returns declarations ranked by FTS5/BM25 across names and generated summaries.
+    /// The published snapshot and branch are enforced; source files are never read.
+    /// </summary>
+    SymbolSearchResult SearchCode(
+        RepositoryScope scope, string query, string? kind, int maxResults,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Matches simple, full or abbreviated qualified names using DeclarationSelector's source-address rules.
     /// Returns up to two candidates so callers can reject ambiguous declarations.
     /// </summary>

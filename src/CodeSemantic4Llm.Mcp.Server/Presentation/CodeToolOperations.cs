@@ -13,6 +13,7 @@ namespace CodeSemantic4Llm.Mcp.Server.Presentation;
 public sealed class CodeToolOperations(
     IConfiguration configuration,
     FindSymbols findSymbols,
+    SearchCode searchCode,
     SelectCodeDeclaration selectDeclaration,
     GetTypeMembers getTypeMembers,
     FindUsages findUsages,
@@ -26,6 +27,15 @@ public sealed class CodeToolOperations(
         PresentAsync(async () =>
         {
             var result = await findSymbols.ExecuteAsync(Root, name, maxResults, cancellationToken);
+            return new CodeSymbolSearchResult(result.Symbols, result.HasMore);
+        });
+
+    /// <summary>Ranks declarations using saved names and summaries, never an LLM call.</summary>
+    public Task<CodeSymbolSearchResult> SearchAsync(
+        string query, string? kind, int maxResults, CancellationToken cancellationToken) =>
+        PresentAsync(async () =>
+        {
+            var result = await searchCode.ExecuteAsync(Root, query, kind, maxResults, cancellationToken);
             return new CodeSymbolSearchResult(result.Symbols, result.HasMore);
         });
 
