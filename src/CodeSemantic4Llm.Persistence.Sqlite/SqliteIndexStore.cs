@@ -74,6 +74,68 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         return new SymbolSearchResult(snapshot, symbols.Take(maxResults).ToArray(), hasMore);
     }
 
+    /// <inheritdoc />
+    public SymbolSearchResult SearchCode(
+        RepositoryScope scope, string query, string? kind, int maxResults,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
+
+        if (maxResults > 200)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxResults), "Limit must not exceed 200.");
+        }
+
+        var match = FullTextSearchQuery.Build(query);
+        var path = paths.GetDatabasePath(scope.RootPath);
+
+        if (!File.Exists(path))
+        {
+            throw MissingIndex();
+        }
+
+        using var connection = IndexDatabase.Open(path, scope.RootPath, writable: false);
+        using var transaction = connection.BeginTransaction(deferred: true);
+        var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
+
+        using (var version = IndexDatabase.Command(connection, transaction, "PRAGMA user_version;"))
+        {
+            if (Convert.ToInt32(version.ExecuteScalar()) < 5)
+            {
+                throw new InvalidOperationException(
+                    "This index does not contain full-text search metadata. Run the index command again.");
+            }
+        }
+
+        using var command = IndexDatabase.Command(connection, transaction, """
+            SELECT s.language, s.kind, s.name, s.qualified_name, s.path,
+                   s.line, s.column_number, s.containing_type_line, s.containing_type_column, s.summary
+            FROM symbol_search
+            JOIN symbols s ON s.rowid = symbol_search.rowid
+            WHERE symbol_search MATCH $match
+              AND s.snapshot_id = $snapshot
+              AND ($kind IS NULL OR s.kind = $kind COLLATE BINARY)
+            ORDER BY bm25(symbol_search, 8.0, 4.0, 1.0),
+                     s.path COLLATE BINARY, s.line, s.column_number, s.ordinal
+            LIMIT $limit;
+            """,
+            ("$match", match), ("$snapshot", snapshot.SnapshotId),
+            ("$kind", string.IsNullOrWhiteSpace(kind) ? null : kind.Trim()),
+            ("$limit", maxResults + 1));
+
+        using var reader = command.ExecuteReader();
+        var symbols = new List<SymbolDefinition>(maxResults + 1);
+
+        while (reader.Read())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            symbols.Add(ReadSymbol(reader));
+        }
+
+        return new SymbolSearchResult(snapshot, symbols.Take(maxResults).ToArray(), symbols.Count > maxResults);
+    }
+
     public IReadOnlyList<IndexedDeclaration> SelectDeclarations(
         RepositoryScope scope, DeclarationSelector selector, bool typesOnly,
         CancellationToken cancellationToken = default)

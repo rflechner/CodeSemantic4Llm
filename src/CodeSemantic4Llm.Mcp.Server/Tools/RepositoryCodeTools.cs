@@ -16,6 +16,14 @@ public sealed class RepositoryCodeTools(CodeToolOperations operations)
         CancellationToken cancellationToken = default) =>
         operations.FindAsync(name, maxResults, cancellationToken);
 
+    [McpServerTool, Description("Searches saved declaration names and optional LLM-generated summaries by keywords or natural-language intent using local SQLite FTS5/BM25. Results are ranked and contain locations and concise descriptions, not source code. This is lexical, not vector similarity. No LLM calls occur during search.")]
+    public Task<CodeSymbolSearchResult> SearchCodeAsync(
+        [Description("Plain-language keywords or question about what code does.")] string query,
+        [Description("Optional declaration kind, such as method, class or interface.")] string? kind = null,
+        [Description("Maximum ranked results, 1–200.")] int maxResults = 10,
+        CancellationToken cancellationToken = default) =>
+        operations.SearchAsync(query, kind, maxResults, cancellationToken);
+
     [McpServerTool, Description("Lists direct members of a type. Inherited members and other partial declarations are excluded. Follow nextOffset for more.")]
     public Task<CodeTypeMemberPage> GetTypeMembersAsync(
         [Description("Repository-relative source path.")] string relativePath,
