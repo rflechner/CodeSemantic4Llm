@@ -39,6 +39,11 @@ uses the stored Markdown without changing it or requiring reindexing or an LLM c
   recorded HEAD, completion time, semantic language and reference availability.
 - **Overview:** counts for projects, source files, declarations, resolved usages,
   and a breakdown of declaration kinds.
+- **Intent search:** natural-language queries over symbol names, qualified names
+  and saved summaries, ranked with the same SQLite FTS5/BM25 implementation as MCP
+  `search_code`. Choose a kind and a result limit (10 by default, up to 200).
+  Results show their rank, location and Markdown summary; select a declaration
+  to inspect its recorded usages. A notice identifies truncated results.
 - **Symbols:** paginated search over qualified names and file paths, with
   filters for kind and source file. Select a symbol to inspect its exact
   declaration location, containing type and recorded usages.
@@ -55,6 +60,29 @@ or copies source content. Searches are bounded to 200 records per request and
 use SQL parameters. Missing or corrupt index databases are skipped during
 discovery rather than initialized.
 
+## Trying code search before connecting an LLM
+
+Select a project and branch, open **Intent search**, and ask, for example,
+`Where do we publish a branch snapshot?`. Submit with **Search code**. The results
+identify the actual saved snapshot and recorded revision used for that query.
+Changing the query, kind, limit, project or branch clears previous results;
+submit again to evaluate the new selection.
+
+This is lexical search, not embedding similarity or a query-time LLM call.
+It uses the existing query normalization (English/French stop words, literal
+prefix terms) and BM25 weights for name, qualified name and summary (8, 4, 1).
+Without generated summaries, identifiers remain searchable. Words in the
+index's configured summary language usually work best; search does not translate
+queries or infer synonyms. The displayed rank is an ordering, not a confidence score.
+
+The dashboard resolves a validated cache ID and delegates to the same store
+search as MCP, preserving ranking and limits without duplicating SQL. Unlike
+the MCP use case, it searches the selected **published branch** without checking
+the checkout's current branch or HEAD. This permits offline inspection of saved
+indexes; it does not promise that their locations match today's working tree.
+Indexes predating FTS5 must be reindexed with `index`; searching never upgrades
+or modifies them.
+
 ## Internal HTTP endpoints
 
 All endpoints use GET and return JSON; the UI is embedded in the executable.
@@ -66,6 +94,7 @@ All endpoints use GET and return JSON; the UI is embedded in the executable.
 | `/api/summary?project=ID&branch=NAME` | Kind/language breakdown and reference count |
 | `/api/files?project=ID&branch=NAME` | File metadata page |
 | `/api/symbols?project=ID&branch=NAME` | Declaration page |
+| `/api/search?project=ID&branch=NAME&q=QUESTION` | Ranked code intent matches |
 | `/api/references?project=ID&branch=NAME` | Reference relationships page |
 
 The paginated endpoints accept `q` (case-insensitive substring),
@@ -75,6 +104,13 @@ Each declaration retains its original `summary` and includes a transient `summar
 fragment for the inspector; absent or blank summaries have a null `summaryHtml`.
 `/api/references` may be restricted to one declaration with
 `targetPath`, `line` and `column`, which must be supplied together.
+
+`/api/search` accepts a required `q` (up to 512 characters and at least one
+searchable word), optional `kind`, and `limit` (default 10, range 1–200).
+It returns `snapshot`, ranked `symbols` (including `summaryHtml`) and `hasMore`.
+It has no offset or total count. Invalid queries return 400, unknown projects or
+branches return 404, and indexes needing reindexing return 409. Request
+cancellation propagates to the shared search implementation.
 
 Project IDs are the validated, opaque cache directory hashes returned by
 `/api/projects`; callers cannot substitute arbitrary file paths.

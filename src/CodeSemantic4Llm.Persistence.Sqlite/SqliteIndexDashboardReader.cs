@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using CodeSemantic4Llm.Application.Abstractions;
+using CodeSemantic4Llm.Domain.Repositories;
 using Microsoft.Data.Sqlite;
 
 namespace CodeSemantic4Llm.Persistence.Sqlite;
@@ -79,6 +80,31 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
         }
 
         return new DashboardSummary(references, kinds, languages);
+    }
+
+    public DashboardCodeSearchResult SearchCode(
+        string projectId, string branch, string query, string? kind, int maxResults,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RepositoryScope scope;
+
+        using (var connection = OpenProject(projectId))
+        {
+            scope = new RepositoryScope(ReadRoot(connection), branch);
+            using var transaction = connection.BeginTransaction(deferred: true);
+            RequireSnapshot(connection, transaction, branch);
+        }
+
+        // Resolve only validated cache ids, then reuse the MCP store's query and ordering.
+        // The dashboard can inspect a saved branch even when its checkout is unavailable.
+        var result = new SqliteIndexStore(paths).SearchCode(scope, query, kind, maxResults, cancellationToken);
+        var symbols = result.Symbols.Select(symbol => new DashboardSymbol(
+            symbol.Language, symbol.Kind, symbol.Name, symbol.QualifiedName,
+            symbol.Location.RelativePath, symbol.Location.Line, symbol.Location.Column,
+            symbol.ContainingType?.Line, symbol.ContainingType?.Column, symbol.Summary)).ToArray();
+
+        return new DashboardCodeSearchResult(result.Snapshot, symbols, result.HasMore);
     }
 
     public DashboardPage<DashboardFile> GetFiles(

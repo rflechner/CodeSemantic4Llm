@@ -14,7 +14,9 @@ internal static class FullTextSearchQuery
     private static readonly Regex Words = new(
         @"[\p{L}\p{M}\p{N}]+",
         RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
-        TimeSpan.FromMilliseconds(100));
+        // The input is bounded to 512 characters and matching is linear. Allow cold-start
+        // initialization under load without rejecting ordinary questions after only 100 ms.
+        TimeSpan.FromSeconds(1));
 
     private static readonly HashSet<string> StopWords = new(StringComparer.OrdinalIgnoreCase)
     {

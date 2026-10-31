@@ -36,6 +36,9 @@ public sealed class DashboardHttpTests
         startInfo.Environment[IndexStoragePaths.EnvironmentVariable] = paths.Root;
 
         using var process = Process.Start(startInfo)!;
+        // Drain host logs while requests run so redirected pipe buffers cannot block HTTP responses.
+        var standardOutput = process.StandardOutput.ReadToEndAsync();
+        var standardError = process.StandardError.ReadToEndAsync();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
         using var client = new HttpClient(new HttpClientHandler { UseProxy = false })
@@ -79,6 +82,7 @@ public sealed class DashboardHttpTests
             var html = await client.GetStringAsync("/", timeout.Token);
             Assert.Contains("INDEX EXPLORER", html);
             Assert.Contains("Declaration breakdown", html);
+            Assert.Contains("Intent search", html);
 
             using var projects = await client.GetAsync("/api/projects", timeout.Token);
             Assert.Equal(HttpStatusCode.OK, projects.StatusCode);
@@ -102,6 +106,7 @@ public sealed class DashboardHttpTests
             }
 
             await process.WaitForExitAsync(CancellationToken.None);
+            await Task.WhenAll(standardOutput, standardError);
             if (Directory.Exists(temporaryRoot))
             {
                 Directory.Delete(temporaryRoot, recursive: true);
@@ -143,6 +148,67 @@ public sealed class DashboardHttpTests
         var run = Assert.Single(symbols, symbol => symbol.GetProperty("name").GetString() == "Run");
         Assert.Equal(JsonValueKind.Null, run.GetProperty("summaryHtml").ValueKind);
         Assert.Equal(markdown, Assert.Single(new SqliteIndexStore(paths).FindSymbols(scope, "Worker", 10, token).Symbols).Summary);
+
+        await AssertIntentSearchAsync(client, projectId!, markdown, token);
+        await AssertIntentSearchValidationAsync(client, projectId!, token);
+    }
+
+    private static async Task AssertIntentSearchAsync(
+        HttpClient client, string projectId, string markdown, CancellationToken token)
+    {
+        var endpoint = $"/api/search?project={projectId}&branch=main";
+        using var response = JsonDocument.Parse(await client.GetStringAsync(endpoint + "&q=publishes", token));
+        var result = response.RootElement;
+        var symbol = Assert.Single(result.GetProperty("symbols").EnumerateArray());
+        Assert.Equal("Worker", symbol.GetProperty("name").GetString());
+        Assert.Equal(markdown, symbol.GetProperty("summary").GetString());
+        Assert.Contains("<strong>Indexes</strong>", symbol.GetProperty("summaryHtml").GetString());
+        Assert.DoesNotContain("<script", symbol.GetProperty("summaryHtml").GetString());
+        Assert.False(result.GetProperty("hasMore").GetBoolean());
+        var snapshot = result.GetProperty("snapshot");
+        Assert.Equal("main", snapshot.GetProperty("scope").GetProperty("branchName").GetString());
+        Assert.Equal("test-head", snapshot.GetProperty("recordedRevision").GetString());
+
+        using var bounded = JsonDocument.Parse(await client.GetStringAsync(endpoint + "&q=Worker&limit=1", token));
+        Assert.Single(bounded.RootElement.GetProperty("symbols").EnumerateArray());
+        Assert.True(bounded.RootElement.GetProperty("hasMore").GetBoolean());
+
+        using var filtered = JsonDocument.Parse(await client.GetStringAsync(endpoint + "&q=Worker&kind=method", token));
+        var method = Assert.Single(filtered.RootElement.GetProperty("symbols").EnumerateArray());
+        Assert.Equal("Run", method.GetProperty("name").GetString());
+        Assert.Equal(JsonValueKind.Null, method.GetProperty("summaryHtml").ValueKind);
+
+        using var empty = JsonDocument.Parse(await client.GetStringAsync(endpoint + "&q=astronomy", token));
+        Assert.Empty(empty.RootElement.GetProperty("symbols").EnumerateArray());
+        Assert.False(empty.RootElement.GetProperty("hasMore").GetBoolean());
+
+        var longestQuery = Uri.EscapeDataString("snapshot" + new string(' ', 504));
+        using var longest = await client.GetAsync(endpoint + "&q=" + longestQuery, token);
+        Assert.Equal(HttpStatusCode.OK, longest.StatusCode);
+    }
+
+    private static async Task AssertIntentSearchValidationAsync(HttpClient client, string projectId, CancellationToken token)
+    {
+        var endpoint = $"/api/search?project={projectId}&branch=main";
+        string[] invalidQueries =
+        [
+            "", "&q=where%20is%20the", "&q=" + new string('a', 513),
+            "&q=snapshot&limit=0", "&q=snapshot&limit=201", "&q=snapshot&limit=invalid",
+            "&q=snapshot&kind=" + new string('a', 65)
+        ];
+
+        foreach (var query in invalidQueries)
+        {
+            using var response = await client.GetAsync(endpoint + query, token);
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        using var noScope = await client.GetAsync("/api/search?q=snapshot", token);
+        Assert.Equal(HttpStatusCode.BadRequest, noScope.StatusCode);
+        using var noBranch = await client.GetAsync($"/api/search?project={projectId}&branch=missing&q=snapshot", token);
+        Assert.Equal(HttpStatusCode.NotFound, noBranch.StatusCode);
+        using var noProject = await client.GetAsync($"/api/search?project={new string('0', 64)}&branch=main&q=snapshot", token);
+        Assert.Equal(HttpStatusCode.NotFound, noProject.StatusCode);
     }
 
     private static int FindFreeLoopbackPort()

@@ -22,10 +22,10 @@
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    button, input, select { font: inherit; }
+    button, input, select, textarea { font: inherit; }
     button { cursor: pointer; }
     button:disabled { opacity: .35; cursor: default; }
-    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     .app { display: grid; grid-template-columns: 285px minmax(0, 1fr); min-height: 100vh; }
     .sidebar { display: flex; flex-direction: column; padding: 28px 18px 22px; background: #0d1627; border-right: 1px solid #233249; gap: 20px; }
     .brand { display: flex; align-items: center; gap: 13px; padding: 2px 10px 24px; border-bottom: 1px solid var(--line); }
@@ -120,6 +120,25 @@
     .empty { padding: 58px 22px; text-align: center; color: var(--muted); }
     .empty .illustration { display: block; font-size: 32px; opacity: .7; margin-bottom: 10px; }
     .error { color: #ffb6b6; }
+    .intent-panel { padding: 24px; }
+    .intent-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .intent-heading h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+    .intent-panel > p { color: var(--muted); margin: 8px 0 22px; max-width: 75ch; font-size: 12px; }
+    .intent-form label { display: block; color: #c8d5e8; font-size: 12px; margin-bottom: 7px; }
+    .intent-query { display: block; width: 100%; resize: vertical; min-height: 90px; border: 1px solid #3e5671; border-radius: 12px; padding: 13px 15px; color: var(--text); background: #0e192b; }
+    .intent-query::placeholder { color: #7e93af; }
+    .intent-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 14px; margin-top: 14px; }
+    .primary-button { border: 1px solid #70e0ca; border-radius: 10px; background: #62d8c1; color: #0a2929; padding: 9px 18px; font-weight: 750; margin-left: auto; }
+    .primary-button:hover:not(:disabled) { background: #85ead6; }
+    .intent-status { margin: 24px 0 14px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .intent-status.error { color: #ffb6b6; }
+    .intent-results { display: grid; gap: 14px; margin: 0; padding: 0; list-style: none; }
+    .intent-result { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 19px; border: 1px solid var(--line); border-radius: 12px; background: #121f33; }
+    .result-rank { color: var(--accent); font: 700 13px/1.8 ui-monospace, monospace; }
+    .result-heading { display: flex; align-items: flex-start; gap: 12px; justify-content: space-between; }
+    .result-title { padding: 0; border: 0; background: transparent; color: var(--text); text-align: left; font-weight: 700; overflow-wrap: anywhere; min-width: 0; }
+    .result-title:hover { color: var(--accent); text-decoration: underline; }
+    .intent-result .markdown { border-top: 1px solid var(--line); padding-top: 12px; margin-top: 12px; }
     .drawer-backdrop { position: fixed; inset: 0; background: #030915b8; display: flex; justify-content: flex-end; z-index: 20; }
     .drawer-backdrop[hidden] { display: none; }
     .drawer { width: min(560px, 100%); height: 100%; overflow-y: auto; background: #122036; border-left: 1px solid #3c536d; padding: 28px 30px; box-shadow: -15px 0 60px #0005; }
@@ -136,7 +155,7 @@
     .markdown ul, .markdown ol { padding-left: 24px; }
     .markdown li + li { margin-top: 4px; }
     .markdown strong { color: var(--text); }
-    .drawer .markdown :is(h1, h2, h3, h4, h5, h6) {
+    .markdown :is(h1, h2, h3, h4, h5, h6) {
       color: var(--text); font-size: 15px; line-height: 1.4; letter-spacing: 0; margin: 20px 0 9px;
     }
     .markdown code { color: var(--accent); background: var(--bg); padding: 2px 5px; border-radius: 4px; font-size: 12px; }
@@ -173,6 +192,9 @@
       .explorer-head { padding: 14px; }
       .filters { padding: 11px 14px; }
       .search-input { width: min(330px, 75vw); }
+      .intent-panel { padding: 18px 14px; }
+      .intent-controls .primary-button { width: 100%; margin-left: 0; }
+      .intent-result { padding: 14px 12px; gap: 6px; grid-template-columns: 26px minmax(0, 1fr); }
     }
     @media (prefers-reduced-motion: no-preference) {
       .project-item, .tab, .soft-button { transition: background .15s ease, color .15s ease; }
@@ -218,19 +240,35 @@
       <section class="explorer" aria-label="Index explorer">
         <div class="explorer-head">
           <div class="tabs" role="tablist" aria-label="Explore index records">
+            <button class="tab" role="tab" aria-selected="false" data-tab="intent">⌕ &nbsp; Intent search</button>
             <button class="tab active" role="tab" aria-selected="true" data-tab="symbols">⌘ &nbsp; Symbols</button>
             <button class="tab" role="tab" aria-selected="false" data-tab="files">▤ &nbsp; Files</button>
             <button class="tab" role="tab" aria-selected="false" data-tab="references">⇄ &nbsp; References</button>
           </div>
-          <div class="toolbar"><label for="search" class="hint">Search</label><input id="search" class="search-input" type="search" placeholder="Name, path or type…" autocomplete="off" maxlength="200" aria-label="Search current index records"></div>
+          <div class="toolbar" id="browse-search"><label for="search" class="hint">Search</label><input id="search" class="search-input" type="search" placeholder="Name, path or type…" autocomplete="off" maxlength="200" aria-label="Search current index records"></div>
         </div>
-        <div class="filters">
+        <section class="intent-panel" id="intent-panel" aria-label="Search code by intent" hidden>
+          <div class="intent-heading"><h2>Find code by what it does</h2><span class="symbol-badge">FTS5 / BM25</span></div>
+          <p id="intent-help">Try the questions you would send to MCP <code>search_code</code>. Matches use symbol names and saved summaries, with the same ranking and no LLM call during search.</p>
+          <form class="intent-form" id="intent-form">
+            <label for="intent-query">What should the code do?</label>
+            <textarea class="intent-query" id="intent-query" rows="2" maxlength="512" required placeholder="Where do we publish a branch snapshot?" aria-describedby="intent-help"></textarea>
+            <div class="intent-controls">
+              <div><label for="intent-kind">Symbol kind</label><select id="intent-kind"><option value="">All kinds</option></select></div>
+              <div><label for="intent-limit">Maximum results</label><select id="intent-limit"><option>10</option><option>25</option><option>50</option><option>100</option><option>200</option></select></div>
+              <button class="primary-button" id="intent-submit" type="submit" disabled>Search code →</button>
+            </div>
+          </form>
+          <p class="intent-status" id="intent-status" role="status" aria-live="polite">Describe an intent to search the selected snapshot.</p>
+          <ol class="intent-results" id="intent-results" aria-label="Code matches in relevance order"></ol>
+        </section>
+        <div class="filters" id="browse-filters">
           <label for="kind">Symbol kind</label><select id="kind" aria-label="Filter by symbol kind"><option value="">All kinds</option></select>
           <div class="file-chip" id="file-chip"><span id="file-filter-name"></span><button id="clear-file" title="Remove file filter" aria-label="Remove file filter">×</button></div>
           <span class="hint" id="scope-hint">Choose a project and branch to explore.</span>
         </div>
-        <div class="table-scroll"><table aria-label="Indexed data"><thead id="table-head"></thead><tbody id="table-body"></tbody></table><div class="empty" id="empty"><span class="illustration">⌁</span>Index records will appear here.</div></div>
-        <footer class="pager"><span id="page-label">No results</span><div class="pager-actions"><button class="soft-button" id="prev" disabled>← Previous</button><button class="soft-button" id="next" disabled>Next →</button></div></footer>
+        <div class="table-scroll" id="browse-table"><table aria-label="Indexed data"><thead id="table-head"></thead><tbody id="table-body"></tbody></table><div class="empty" id="empty"><span class="illustration">⌁</span>Index records will appear here.</div></div>
+        <footer class="pager" id="browse-pager"><span id="page-label">No results</span><div class="pager-actions"><button class="soft-button" id="prev" disabled>← Previous</button><button class="soft-button" id="next" disabled>Next →</button></div></footer>
       </section>
     </main>
   </div>
@@ -260,7 +298,8 @@
     const state = {
       projects: [], project: null, branch: null, summary: null,
       tab: 'symbols', search: '', kind: '', file: '', offset: 0, limit: 50, total: 0,
-      tableToken: 0, summaryToken: 0, drawerToken: 0, drawerSymbol: null, drawerOffset: 0
+      tableToken: 0, summaryToken: 0, drawerToken: 0, drawerSymbol: null, drawerOffset: 0,
+      intentToken: 0, intentBusy: false, intentKind: ''
     };
 
     const byId = id => document.getElementById(id);
@@ -333,6 +372,8 @@
     }
 
     function renderSelection() {
+      state.summary = null;
+      state.intentKind = '';
       renderProjects();
       const project = state.project;
       const branch = currentBranch();
@@ -365,6 +406,7 @@
     }
 
     async function refresh() {
+      resetIntentSearch();
       try {
         const projects = await api('/api/projects');
         const selectedId = state.project && state.project.id;
@@ -375,7 +417,9 @@
           state.branch = null;
           ++state.tableToken;
           ++state.summaryToken;
+          closeDrawer();
           renderSelection();
+          resetIntentSearch();
           setEmpty('No published index found. Run codesemantic4llm index /path/to/repository.', false);
           byId('page-label').textContent = 'No results';
           byId('prev').disabled = true;
@@ -385,6 +429,7 @@
         selectProject(projects.some(project => project.id === selectedId) ? selectedId : projects[0].id);
       } catch (error) {
         setEmpty(error.message, true);
+        setIntentStatus(error.message, true);
       }
     }
 
@@ -424,19 +469,15 @@
 
     function updateFilterUI() {
       const onSymbols = state.tab === 'symbols';
-      byId('kind').disabled = !onSymbols || !currentBranch();
-      byId('kind').parentElement.hidden = false;
-      const kindPicker = byId('kind');
-      kindPicker.replaceChildren();
-      const all = element('option', '', 'All kinds');
-      all.value = '';
-      kindPicker.append(all);
-      for (const kind of (state.summary && state.summary.kinds) || []) {
-        const option = element('option', '', kind.name);
-        option.value = kind.name;
-        kindPicker.append(option);
+      const onIntent = state.tab === 'intent';
+      byId('intent-panel').hidden = !onIntent;
+      for (const id of ['browse-search', 'browse-filters', 'browse-table', 'browse-pager']) {
+        byId(id).hidden = onIntent;
       }
-      kindPicker.value = state.kind;
+      byId('kind').disabled = !onSymbols || !currentBranch();
+      populateKinds(byId('kind'), state.kind);
+      populateKinds(byId('intent-kind'), state.intentKind);
+      updateIntentControls();
       const chip = byId('file-chip');
       chip.classList.toggle('visible', onSymbols && !!state.file);
       byId('file-filter-name').textContent = state.file;
@@ -449,6 +490,109 @@
       }
       byId('search').placeholder = state.tab === 'files' ? 'Filter paths…' :
         state.tab === 'references' ? 'Target or usage path…' : 'Name, qualified name or path…';
+    }
+
+    function populateKinds(kindPicker, selected) {
+      kindPicker.replaceChildren();
+      const all = element('option', '', 'All kinds');
+      all.value = '';
+      kindPicker.append(all);
+      for (const kind of (state.summary && state.summary.kinds) || []) {
+        const option = element('option', '', kind.name);
+        option.value = kind.name;
+        kindPicker.append(option);
+      }
+      kindPicker.value = selected;
+    }
+
+    function updateIntentControls() {
+      const hasBranch = !!currentBranch();
+      byId('intent-query').disabled = !hasBranch;
+      byId('intent-kind').disabled = !hasBranch;
+      byId('intent-limit').disabled = !hasBranch;
+      byId('intent-submit').disabled = !hasBranch || state.intentBusy || !byId('intent-query').value.trim();
+      byId('intent-submit').textContent = state.intentBusy ? 'Searching…' : 'Search code →';
+      byId('intent-results').setAttribute('aria-busy', String(state.intentBusy));
+    }
+
+    function setIntentStatus(message, isError = false) {
+      byId('intent-status').textContent = message;
+      byId('intent-status').classList.toggle('error', isError);
+    }
+
+    function resetIntentSearch() {
+      ++state.intentToken;
+      state.intentBusy = false;
+      byId('intent-results').replaceChildren();
+      setIntentStatus(currentBranch()
+        ? 'Describe an intent and select Search code to query this saved branch.'
+        : 'Choose a repository with a published branch snapshot.');
+      updateIntentControls();
+    }
+
+    function renderSymbolSummary(container, symbol) {
+      if (symbol.summaryHtml) {
+        // Only the server's restricted Markdig output is inserted as HTML.
+        container.innerHTML = symbol.summaryHtml;
+      } else {
+        container.replaceChildren(element('p', 'hint', 'No LLM summary stored for this declaration.'));
+      }
+    }
+
+    function renderIntentResults(symbols) {
+      const list = byId('intent-results');
+      list.replaceChildren();
+      symbols.forEach((symbol, index) => {
+        const card = element('li', 'intent-result');
+        const content = element('div');
+        const heading = element('div', 'result-heading');
+        const title = element('button', 'result-title', symbol.qualifiedName);
+        title.type = 'button';
+        title.title = 'Inspect declaration and recorded usages';
+        title.addEventListener('click', () => openDrawer(symbol));
+        heading.append(title, element('span', 'symbol-badge ' + symbol.kind.replace(/[^a-z-]/g, ''), symbol.kind));
+        const summary = element('div', 'markdown');
+        renderSymbolSummary(summary, symbol);
+        content.append(heading,
+          element('span', 'cell-sub code', symbol.path + ':' + symbol.line + ':' + symbol.column + ' · ' + symbol.language),
+          summary);
+        card.append(element('span', 'result-rank', '#' + (index + 1)), content);
+        list.append(card);
+      });
+    }
+
+    async function searchIntent(event) {
+      event.preventDefault();
+      const query = byId('intent-query').value.trim();
+      if (!currentBranch() || !query || state.intentBusy) return;
+      resetIntentSearch();
+      const token = state.intentToken;
+      state.intentBusy = true;
+      updateIntentControls();
+      setIntentStatus('Searching names and summaries in the selected snapshot…');
+      try {
+        const result = await api('/api/search', params({
+          q: query, kind: state.intentKind, limit: byId('intent-limit').value
+        }));
+        if (token !== state.intentToken) return;
+        renderIntentResults(result.symbols);
+        const snapshot = result.snapshot;
+        const scope = 'Snapshot #' + snapshot.snapshotId + ' · ' + snapshot.scope.branchName +
+          (snapshot.recordedRevision ? ' · ' + snapshot.recordedRevision.slice(0, 12) : '');
+        const count = result.symbols.length;
+        setIntentStatus((count ? number(count) + (count === 1 ? ' match' : ' matches') + ' in relevance order.' :
+          'No matches. Try words from symbol names or saved summaries.') + ' ' + scope +
+          (result.hasMore ? ' · More matches available; increase the result limit to see more.' : ''));
+        // Replacing a long result list can anchor the browser to the footer instead of the top matches.
+        byId('intent-panel').parentElement.scrollIntoView({ block: 'start' });
+      } catch (error) {
+        if (token === state.intentToken) setIntentStatus(error.message, true);
+      } finally {
+        if (token === state.intentToken) {
+          state.intentBusy = false;
+          updateIntentControls();
+        }
+      }
     }
 
     function cell(main, sub, code) {
@@ -538,11 +682,13 @@
 
     async function loadTable() {
       const token = ++state.tableToken;
+      resetIntentSearch();
       const branch = currentBranch();
       state.total = 0;
       updateFilterUI();
       byId('prev').disabled = true;
       byId('next').disabled = true;
+      if (state.tab === 'intent') return;
       if (!branch) {
         setEmpty('Choose a repository with a published branch snapshot.', false);
         byId('page-label').textContent = 'No results';
@@ -591,13 +737,7 @@
       byId('drawer-location').textContent = symbol.line + ' : ' + symbol.column;
       byId('drawer-container').textContent = symbol.containingTypeLine === null ? '—' :
         symbol.containingTypeLine + ' : ' + symbol.containingTypeColumn;
-      const summary = byId('drawer-summary');
-      if (symbol.summaryHtml) {
-        // Only the server's restricted Markdig output is inserted as HTML.
-        summary.innerHTML = symbol.summaryHtml;
-      } else {
-        summary.replaceChildren(element('p', 'hint', 'No LLM summary stored for this declaration.'));
-      }
+      renderSymbolSummary(byId('drawer-summary'), symbol);
       byId('backdrop').hidden = false;
       byId('close-drawer').focus();
       loadDrawerReferences();
@@ -637,6 +777,13 @@
     }
 
     let searchTimeout;
+    byId('intent-form').addEventListener('submit', searchIntent);
+    byId('intent-query').addEventListener('input', resetIntentSearch);
+    byId('intent-kind').addEventListener('change', event => {
+      state.intentKind = event.target.value;
+      resetIntentSearch();
+    });
+    byId('intent-limit').addEventListener('change', resetIntentSearch);
     byId('refresh').addEventListener('click', refresh);
     byId('branch').addEventListener('change', event => {
       state.branch = event.target.value;
@@ -652,10 +799,9 @@
       loadTable();
     });
     byId('search').addEventListener('input', event => {
-      const value = event.target.value;
+      state.search = event.target.value;
       clearTimeout(searchTimeout);
       searchTimeout = setTimeout(() => {
-        state.search = value;
         state.offset = 0;
         loadTable();
       }, 230);
@@ -663,6 +809,7 @@
     for (const tab of document.querySelectorAll('[data-tab]')) {
       tab.addEventListener('click', () => {
         if (state.tab === tab.dataset.tab) return;
+        clearTimeout(searchTimeout);
         state.tab = tab.dataset.tab;
         state.offset = 0;
         updateFilterUI();
