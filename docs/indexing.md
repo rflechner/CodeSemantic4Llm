@@ -126,6 +126,12 @@ qualified names and optional summaries. For example:
 {"query":"where is the repository index published?","kind":"method","maxResults":10}
 ```
 
+Omit `kind` or send JSON `null` to search all declaration kinds. A concrete value
+is an exact filter: `"method"` excludes classes, for example. For compatibility
+with model clients that stringify missing optional arguments, the MCP endpoint
+also treats the text `"null"` (ignoring surrounding whitespace and case) as no
+kind filter. Other kind values retain their filtering behavior.
+
 SQLite **FTS5** indexes these fields and ranks results with **BM25**, emphasizing
 exact declaration names and qualified names. A bounded set of English and French
 grammatical stop words is ignored; remaining words are interpreted as literal

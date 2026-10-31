@@ -35,7 +35,8 @@ public sealed class CodeToolOperations(
         string query, string? kind, int maxResults, CancellationToken cancellationToken) =>
         PresentAsync(async () =>
         {
-            var result = await searchCode.ExecuteAsync(Root, query, kind, maxResults, cancellationToken);
+            var result = await searchCode.ExecuteAsync(
+                Root, query, NormalizeSearchKind(kind), maxResults, cancellationToken);
             return new CodeSymbolSearchResult(result.Symbols, result.HasMore);
         });
 
@@ -117,6 +118,16 @@ public sealed class CodeToolOperations(
 
     private string Root => configuration["CODESEMANTIC4LLM_REPOSITORY_ROOT"]
         ?? throw new McpException("Ask the server operator to select a repository before using code tools.");
+
+    private static string? NormalizeSearchKind(string? kind)
+    {
+        var value = kind?.Trim();
+
+        // Some model clients serialize an absent optional string as "null". Interpret
+        // that sentinel at the MCP boundary, without changing persisted kind semantics.
+        return string.IsNullOrEmpty(value) || string.Equals(value, "null", StringComparison.OrdinalIgnoreCase)
+            ? null : value;
+    }
 
     private async Task<T> PresentAsync<T>(Func<Task<T>> operation)
     {
