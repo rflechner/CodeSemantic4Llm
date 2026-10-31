@@ -20,6 +20,9 @@ semanticIndexing:
     enabled: false
     # baseUrl: http://127.0.0.1:1234/v1
     # model: your-local-model
+    # Optional generation settings; support depends on the model and endpoint.
+    # reasoningEffort: low
+    # maxCompletionTokens: 2048
     # apiKey: your-api-key # Takes priority over apiKeyEnvironmentVariable when non-empty.
     # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 

@@ -101,6 +101,16 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
             llmDocument["apiKey"] = llm.ApiKey;
         }
 
+        if (llm.ReasoningEffort is not null)
+        {
+            llmDocument["reasoningEffort"] = llm.ReasoningEffort;
+        }
+
+        if (llm.MaxCompletionTokens is { } maxCompletionTokens)
+        {
+            llmDocument["maxCompletionTokens"] = maxCompletionTokens;
+        }
+
         document["semanticIndexing"] = new Dictionary<string, object>
         {
             ["language"] = configuration.SemanticIndexing.Language,

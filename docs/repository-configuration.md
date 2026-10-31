@@ -194,6 +194,11 @@ Only this repository sends snippets to the configured LLM endpoint. Without this
 - `baseUrl` is an OpenAI-compatible API root, such as `http://127.0.0.1:1234/v1`
   for LM Studio. CodeSemantic4Llm posts to `{baseUrl}/chat/completions`.
 - `model` is sent in the `model` field. Use the model identifier advertised by your server.
+- `reasoningEffort` optionally requests a reasoning level: `none`, `minimal`, `low`,
+  `medium`, `high`, `xhigh`, or `max`. Values are trimmed and case-normalized;
+  unknown or blank values fail validation. Omit it to keep the provider's default.
+- `maxCompletionTokens` optionally sets a positive completion token ceiling.
+  On reasoning APIs, this budget includes reasoning and the visible summary.
 - `apiKey` supplies an optional Bearer token directly in YAML. Surrounding whitespace
   is removed; an empty or whitespace-only value is treated as absent. A non-empty value
   takes priority over `apiKeyEnvironmentVariable`, even if that variable is unset.
@@ -220,8 +225,43 @@ LLM summarization is opt-in because sending source to any HTTP endpoint can expo
 proprietary code. Use a trusted local endpoint or an explicitly authorized service.
 An unresponsive or failed LLM request aborts the new index generation: the previous
 published snapshot remains readable. Changing the model, URL, language, enable flag,
-or source content invalidates the appropriate reuse. Unchanged files preserve their
-summaries; no vector embeddings are generated yet.
+reasoning effort, completion budget or source content invalidates the appropriate
+reuse. Unchanged files preserve their summaries; no vector embeddings are generated yet.
+
+### Reducing reasoning during summary generation
+
+For an endpoint and model supporting the OpenAI Chat Completions reasoning parameter,
+add these fields to the existing `semanticIndexing.llm` configuration:
+
+```yaml
+semanticIndexing:
+  llm:
+    # Keep your existing enabled, baseUrl, model and authentication settings.
+    reasoningEffort: low
+    maxCompletionTokens: 2048
+```
+
+The generator sends `reasoning_effort: "low"`. Lower effort can reduce latency and
+reasoning token usage, but may affect summary quality. Support depends on the
+provider and model: `none` is not universally available, and an OpenAI-compatible
+endpoint need not implement this parameter. See the
+[OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning).
+When switching models, choose a supported level or omit the setting. The generator
+does not infer capabilities from model names or silently retry a rejected request
+with different settings.
+
+Setting either option uses `max_completion_tokens` instead of `max_tokens`, which
+some reasoning models reject. With an effort other than `none`, the default ceiling
+is 2,048 tokens to leave room for reasoning; with `reasoningEffort: none` alone,
+it is 320. An explicit `maxCompletionTokens` overrides the default, whether or not
+an effort is configured. This is a ceiling, not a requested output length; the summary prompt and
+10-line storage limit still apply. Increase the budget if reasoning consumes it
+before a text summary is produced. See the
+[Chat Completions reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
+
+When both options are omitted, requests retain the existing `max_tokens: 320` and
+omit `reasoning_effort` entirely. No live provider latency or quality guarantee is
+implied by these settings; compare summaries and timings with each model you test.
 
 ## Exclusion rules
 

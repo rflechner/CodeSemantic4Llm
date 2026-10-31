@@ -13,6 +13,8 @@ public sealed class LlmSummaryConfigurationTests
         Assert.Null(settings.Llm.BaseUrl);
         Assert.Null(settings.Llm.Model);
         Assert.Null(settings.Llm.ApiKey);
+        Assert.Null(settings.Llm.ReasoningEffort);
+        Assert.Null(settings.Llm.MaxCompletionTokens);
     }
 
     [Fact]
@@ -50,5 +52,37 @@ public sealed class LlmSummaryConfigurationTests
         var settings = new LlmSummaryConfiguration(apiKey: value);
 
         Assert.Equal(expected, settings.ApiKey);
+    }
+
+    [Theory]
+    [InlineData(null, null)]
+    [InlineData("none", "none")]
+    [InlineData("minimal", "minimal")]
+    [InlineData(" LOW ", "low")]
+    [InlineData("medium", "medium")]
+    [InlineData("high", "high")]
+    [InlineData("xhigh", "xhigh")]
+    [InlineData("max", "max")]
+    public void Reasoning_effort_is_optional_and_normalized(string? value, string? expected)
+    {
+        Assert.Equal(expected, new LlmSummaryConfiguration(reasoningEffort: value).ReasoningEffort);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("fast")]
+    [InlineData("disabled")]
+    public void Unknown_or_blank_reasoning_effort_is_rejected(string value)
+    {
+        Assert.Throws<ArgumentException>(() => new LlmSummaryConfiguration(reasoningEffort: value));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void Completion_token_budget_must_be_positive(int value)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LlmSummaryConfiguration(maxCompletionTokens: value));
     }
 }

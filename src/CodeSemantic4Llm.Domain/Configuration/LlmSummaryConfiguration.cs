@@ -16,7 +16,9 @@ public sealed class LlmSummaryConfiguration
         string? baseUrl = null,
         string? model = null,
         string? apiKeyEnvironmentVariable = null,
-        string? apiKey = null)
+        string? apiKey = null,
+        string? reasoningEffort = null,
+        int? maxCompletionTokens = null)
     {
         Enabled = enabled;
 
@@ -39,6 +41,14 @@ public sealed class LlmSummaryConfiguration
 
         Model = model?.Trim();
         ApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
+        ReasoningEffort = NormalizeReasoningEffort(reasoningEffort);
+
+        if (maxCompletionTokens is <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxCompletionTokens), "LLM maxCompletionTokens must be positive.");
+        }
+
+        MaxCompletionTokens = maxCompletionTokens;
 
         if (apiKeyEnvironmentVariable is not null)
         {
@@ -72,7 +82,30 @@ public sealed class LlmSummaryConfiguration
     /// <summary>Optional inline Bearer token. Blank values are treated as absent; surrounding whitespace is removed.</summary>
     public string? ApiKey { get; }
 
+    /// <summary>
+    /// Optional reasoning effort sent to compatible chat completion APIs. Null keeps the server default;
+    /// supported levels vary by provider and model and are not inferred from the model name.
+    /// </summary>
+    public string? ReasoningEffort { get; }
+
+    /// <summary>Optional completion token budget, including reasoning tokens on APIs that count them.</summary>
+    public int? MaxCompletionTokens { get; }
+
     public Uri ChatCompletionsEndpoint => BaseUrl is null
         ? throw new InvalidOperationException("LLM baseUrl is not configured.")
         : new Uri(BaseUrl.AbsoluteUri.TrimEnd('/') + "/chat/completions", UriKind.Absolute);
+
+    private static string? NormalizeReasoningEffort(string? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized is "none" or "minimal" or "low" or "medium" or "high" or "xhigh" or "max"
+            ? normalized
+            : throw new ArgumentException(
+                "LLM reasoningEffort must be one of: none, minimal, low, medium, high, xhigh, max.", nameof(value));
+    }
 }

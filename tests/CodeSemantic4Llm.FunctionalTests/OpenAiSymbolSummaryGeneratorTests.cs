@@ -36,6 +36,60 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
         Assert.Contains("language fr", messages[0].GetProperty("content").GetString());
         Assert.Contains("Documents the method.", messages[1].GetProperty("content").GetString());
         Assert.Contains("value * 2", messages[1].GetProperty("content").GetString());
+        Assert.False(request.RootElement.TryGetProperty("reasoning_effort", out _));
+        Assert.False(request.RootElement.TryGetProperty("max_completion_tokens", out _));
+        Assert.Equal(320, request.RootElement.GetProperty("max_tokens").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("low", null, 2048)]
+    [InlineData("none", null, 320)]
+    [InlineData("minimal", 1024, 1024)]
+    [InlineData("medium", 4096, 4096)]
+    [InlineData(null, 1024, 1024)]
+    public async Task Configured_reasoning_uses_the_modern_completion_budget(
+        string? effort, int? tokenBudget, int expectedBudget)
+    {
+        var handler = new RecordingHandler();
+        using var client = new HttpClient(handler);
+        var generator = new OpenAiSymbolSummaryGenerator(client);
+        var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
+            true, "http://localhost:1234/v1", "reasoning-model",
+            reasoningEffort: effort, maxCompletionTokens: tokenBudget));
+        var symbol = new SymbolDefinition("csharp", "method", "Run", "Demo.Run",
+            new SourceLocation("Demo.cs", 1, 1));
+
+        await generator.SummarizeAsync(symbol, "public void Run() {}", configuration,
+            TestContext.Current.CancellationToken);
+
+        using var request = JsonDocument.Parse(handler.Payload!);
+        Assert.Equal(expectedBudget, request.RootElement.GetProperty("max_completion_tokens").GetInt32());
+        Assert.False(request.RootElement.TryGetProperty("max_tokens", out _));
+        if (effort is null)
+        {
+            Assert.False(request.RootElement.TryGetProperty("reasoning_effort", out _));
+        }
+        else
+        {
+            Assert.Equal(effort, request.RootElement.GetProperty("reasoning_effort").GetString());
+        }
+    }
+
+    [Fact]
+    public async Task Unsupported_reasoning_parameters_fail_without_retrying_with_different_settings()
+    {
+        var handler = new RecordingHandler { StatusCode = HttpStatusCode.BadRequest };
+        using var client = new HttpClient(handler);
+        var generator = new OpenAiSymbolSummaryGenerator(client);
+        var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
+            true, "http://localhost:1234/v1", "model-without-reasoning", reasoningEffort: "low"));
+        var symbol = new SymbolDefinition("csharp", "method", "Run", "Demo.Run",
+            new SourceLocation("Demo.cs", 1, 1));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => generator.SummarizeAsync(
+            symbol, "public void Run() {}", configuration, TestContext.Current.CancellationToken));
+
+        Assert.Equal(1, handler.RequestCount);
     }
 
     [Theory]
@@ -116,10 +170,13 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
         public string? Method { get; private set; }
         public string? Payload { get; private set; }
         public string? Authorization { get; private set; }
+        public HttpStatusCode StatusCode { get; init; } = HttpStatusCode.OK;
+        public int RequestCount { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            RequestCount++;
             Url = request.RequestUri!.ToString();
             Method = request.Method.Method;
             Authorization = request.Headers.Authorization?.ToString();
@@ -128,7 +185,7 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
             {
                 choices = new[] { new { message = new { content = "First line\nSecond line" } } }
             });
-            return new HttpResponseMessage(HttpStatusCode.OK)
+            return new HttpResponseMessage(StatusCode)
             {
                 Content = new StringContent(json, Encoding.UTF8, "application/json")
             };

@@ -254,6 +254,8 @@ public sealed class IndexRepository(
                 Url = configuration.SemanticIndexing.Llm.BaseUrl?.AbsoluteUri,
                 configuration.SemanticIndexing.Llm.Model,
                 configuration.SemanticIndexing.Llm.ApiKeyEnvironmentVariable,
+                configuration.SemanticIndexing.Llm.ReasoningEffort,
+                configuration.SemanticIndexing.Llm.MaxCompletionTokens,
                 GeneratorVersion = configuration.SemanticIndexing.Llm.Enabled
                     ? summaryGenerator?.GetType().Assembly.ManifestModule.ModuleVersionId.ToString("N") : null,
                 Extractors = configuration.SemanticIndexing.Llm.Enabled

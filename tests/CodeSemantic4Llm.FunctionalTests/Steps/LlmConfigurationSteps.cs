@@ -32,6 +32,32 @@ public sealed partial class RepositoryConfigurationSteps
     public void ThenLlmApiKeyEnvironmentVariable(string expected) =>
         Assert.Equal(expected, _loadedConfiguration!.SemanticIndexing.Llm.ApiKeyEnvironmentVariable);
 
+    [Then(@"the configured LLM reasoning effort is ""(.*)""")]
+    public void ThenLlmReasoningEffort(string expected) =>
+        Assert.Equal(expected, _loadedConfiguration!.SemanticIndexing.Llm.ReasoningEffort);
+
+    [Then(@"the configured LLM completion budget is (\d+)")]
+    public void ThenLlmCompletionBudget(int expected) =>
+        Assert.Equal(expected, _loadedConfiguration!.SemanticIndexing.Llm.MaxCompletionTokens);
+
+    [Then("no LLM reasoning settings are configured or written")]
+    public void ThenNoLlmReasoningSettings()
+    {
+        Assert.Null(_loadedConfiguration!.SemanticIndexing.Llm.ReasoningEffort);
+        Assert.Null(_loadedConfiguration.SemanticIndexing.Llm.MaxCompletionTokens);
+        var yaml = File.ReadAllText(Path.Combine(_repositoryRoot, "roundtrip", "codesemantic4llm.yaml"));
+        Assert.DoesNotContain("reasoningEffort", yaml);
+        Assert.DoesNotContain("maxCompletionTokens", yaml);
+    }
+
+    [Then(@"the MCP configuration reports reasoning effort ""(.*)"" and completion budget (\d+)")]
+    public void ThenMcpReportsReasoningSettings(string expectedEffort, int expectedBudget)
+    {
+        var llm = McpCodeClient.ReadContent(_llmConfigurationResponse).GetProperty("semanticIndexing").GetProperty("llm");
+        Assert.Equal(expectedEffort, llm.GetProperty("reasoningEffort").GetString());
+        Assert.Equal(expectedBudget, llm.GetProperty("maxCompletionTokens").GetInt32());
+    }
+
     [When("MCP reads the repository LLM configuration")]
     public async Task WhenReadLlmConfigurationThroughMcp()
     {
