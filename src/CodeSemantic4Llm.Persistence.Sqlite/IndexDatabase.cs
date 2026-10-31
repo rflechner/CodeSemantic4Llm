@@ -5,7 +5,7 @@ namespace CodeSemantic4Llm.Persistence.Sqlite;
 /// <summary>Versioned, regenerable schema for declaration snapshots. It contains no source text.</summary>
 internal static class IndexDatabase
 {
-    private const int SchemaVersion = 3;
+    private const int SchemaVersion = 4;
 
     public static SqliteConnection Open(string path, string repositoryRoot, bool writable)
     {
@@ -61,7 +61,7 @@ internal static class IndexDatabase
         {
             Initialize(connection, root);
         }
-        else if (version is not 1 and not 2 && version != SchemaVersion)
+        else if (version is not 1 and not 2 and not 3 && version != SchemaVersion)
         {
             throw new InvalidOperationException($"Unsupported index schema version {version}. Use a new index cache directory.");
         }
@@ -90,6 +90,11 @@ internal static class IndexDatabase
         if (writable && version is 1 or 2)
         {
             UpgradeFromVersionTwo(connection);
+        }
+
+        if (writable && version is 1 or 2 or 3)
+        {
+            UpgradeFromVersionThree(connection);
         }
     }
 
@@ -126,6 +131,44 @@ internal static class IndexDatabase
             """);
         migration.ExecuteNonQuery();
         transaction.Commit();
+    }
+
+    private static void UpgradeFromVersionThree(SqliteConnection connection)
+    {
+        // Older real caches lack the column. The test suite also simulates legacy caches
+        // by downgrading a newer schema while retaining unrelated columns.
+        using var transaction = connection.BeginTransaction();
+        using var columns = Command(connection, transaction, "PRAGMA table_info(symbols);");
+        var hasSummary = false;
+
+        using (var reader = columns.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), "summary", StringComparison.Ordinal))
+                {
+                    hasSummary = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasSummary)
+        {
+            using var addSummary = Command(connection, transaction, "ALTER TABLE symbols ADD COLUMN summary TEXT;");
+            addSummary.ExecuteNonQuery();
+        }
+
+        using var version = Command(connection, transaction, "PRAGMA user_version = 4;");
+        version.ExecuteNonQuery();
+        transaction.Commit();
+    }
+
+    /// <summary>Legacy read-only caches have no summary column and are never migrated by readers.</summary>
+    public static string SummaryColumn(SqliteConnection connection, SqliteTransaction? transaction, string prefix = "")
+    {
+        using var version = Command(connection, transaction, "PRAGMA user_version;");
+        return Convert.ToInt32(version.ExecuteScalar()) >= 4 ? prefix + "summary" : "NULL";
     }
 
     private static void Initialize(SqliteConnection connection, string root)
@@ -169,6 +212,7 @@ internal static class IndexDatabase
             language TEXT NOT NULL, kind TEXT NOT NULL, name TEXT NOT NULL,
             qualified_name TEXT NOT NULL, line INTEGER NOT NULL, column_number INTEGER NOT NULL,
             containing_type_line INTEGER, containing_type_column INTEGER,
+            summary TEXT,
             PRIMARY KEY(snapshot_id, path, ordinal),
             FOREIGN KEY(snapshot_id, path) REFERENCES indexed_files(snapshot_id, path) ON DELETE CASCADE);
         CREATE TABLE symbol_references(
@@ -182,6 +226,6 @@ internal static class IndexDatabase
         CREATE INDEX ix_symbols_name ON symbols(snapshot_id, name, path, line, column_number);
         CREATE INDEX ix_symbols_container ON symbols(
             snapshot_id, path, containing_type_line, containing_type_column, line, column_number, ordinal);
-        PRAGMA user_version = 3;
+        PRAGMA user_version = 4;
         """;
 }

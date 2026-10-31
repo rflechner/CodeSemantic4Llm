@@ -12,4 +12,5 @@ public sealed record SymbolDefinition(
     string Name,
     string QualifiedName,
     SourceLocation Location,
-    SourceLocation? ContainingType = null);
+    SourceLocation? ContainingType = null,
+    string? Summary = null);

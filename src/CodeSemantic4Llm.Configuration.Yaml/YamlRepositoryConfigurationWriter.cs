@@ -75,9 +75,31 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
                 entry => entry.Key, entry => entry.Value.ToArray());
         }
 
-        document["semanticIndexing"] = new Dictionary<string, string>
+        var llm = configuration.SemanticIndexing.Llm;
+        var llmDocument = new Dictionary<string, object>
         {
-            ["language"] = configuration.SemanticIndexing.Language
+            ["enabled"] = llm.Enabled
+        };
+
+        if (llm.BaseUrl is not null)
+        {
+            llmDocument["baseUrl"] = llm.BaseUrl.ToString();
+        }
+
+        if (llm.Model is not null)
+        {
+            llmDocument["model"] = llm.Model;
+        }
+
+        if (llm.ApiKeyEnvironmentVariable is not null)
+        {
+            llmDocument["apiKeyEnvironmentVariable"] = llm.ApiKeyEnvironmentVariable;
+        }
+
+        document["semanticIndexing"] = new Dictionary<string, object>
+        {
+            ["language"] = configuration.SemanticIndexing.Language,
+            ["llm"] = llmDocument
         };
 
         // Built-in exclusions apply when loading; only repository-specific rules belong in YAML.

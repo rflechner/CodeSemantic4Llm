@@ -55,7 +55,8 @@ public sealed record DashboardFile(
 /// <summary>A declaration, including its exact source address and optional immediate containing type.</summary>
 public sealed record DashboardSymbol(
     string Language, string Kind, string Name, string QualifiedName,
-    string Path, int Line, int Column, int? ContainingTypeLine, int? ContainingTypeColumn);
+    string Path, int Line, int Column, int? ContainingTypeLine, int? ContainingTypeColumn,
+    string? Summary = null);
 
 /// <summary>A saved relation between a target declaration and an occurrence elsewhere in the checkout.</summary>
 public sealed record DashboardReference(

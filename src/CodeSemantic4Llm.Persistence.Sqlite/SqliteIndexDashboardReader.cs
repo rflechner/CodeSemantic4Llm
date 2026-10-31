@@ -119,6 +119,7 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
         using var connection = OpenProject(projectId);
         using var transaction = connection.BeginTransaction(deferred: true);
         var snapshotId = RequireSnapshot(connection, transaction, branch);
+        var summaryColumn = ReadSchemaVersion(connection, transaction) >= 4 ? "s.summary" : "NULL";
         var parameters = new (string Name, object? Value)[]
         {
             ("$snapshot", snapshotId), ("$search", EmptyToNull(search)),
@@ -136,9 +137,9 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
 
         return ReadPage(connection, transaction,
             "SELECT COUNT(*) " + from,
-            """
+            $"""
             SELECT s.language, s.kind, s.name, s.qualified_name, s.path, s.line, s.column_number,
-                   s.containing_type_line, s.containing_type_column
+                   s.containing_type_line, s.containing_type_column, {summaryColumn}
             """ + " " + from + " ORDER BY s.qualified_name COLLATE BINARY, s.path COLLATE BINARY, " +
             "s.line, s.column_number, s.ordinal LIMIT $limit OFFSET $offset;",
             parameters, offset, limit,
@@ -146,7 +147,8 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
                 reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
                 reader.GetString(4), reader.GetInt32(5), reader.GetInt32(6),
                 reader.IsDBNull(7) ? null : reader.GetInt32(7),
-                reader.IsDBNull(8) ? null : reader.GetInt32(8)),
+                reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9)),
             cancellationToken);
     }
 

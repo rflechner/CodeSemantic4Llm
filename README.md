@@ -6,7 +6,8 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 > Status: repository-local YAML configuration, C# declaration and Roslyn-resolved reference
 > indexing into SQLite, and bounded MCP queries against saved branch snapshots.
 > Reference binding currently uses a lightweight repository-wide compilation rather than
-> full MSBuild project resolution; AI-generated descriptions and TypeScript analysis remain planned.
+> full MSBuild project resolution; optional OpenAI-compatible LLM summaries are implemented
+> for C# methods and types. Embeddings and TypeScript analysis remain planned.
 
 ## Architecture
 
@@ -62,6 +63,11 @@ analyzers:
 #   dotnet-csharp: [.cs, .csharp]
 semanticIndexing:
   language: en   # Optional: use fr, fr-CH, etc.
+  llm:
+    enabled: false  # Opt in per repository
+    # baseUrl: http://127.0.0.1:1234/v1
+    # model: my-local-model
+    # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 exclude: []
 ```
 
@@ -72,10 +78,14 @@ and selects `.cs` files by default for `dotnet-csharp`, ignoring extension case.
 The optional `fileExtensions` mapping replaces extensions per enabled analyzer;
 include `.cs` in an override to keep it alongside custom extensions. The preview reports
 the effective extensions and returns at most 200 candidate paths without reading source contents.
-The optional `semanticIndexing.language` selects the language of **future AI-generated
-natural-language descriptions**; its default is `en`. It does not affect which source
-languages the analyzers support. The value is already validated and reported by the MCP preview,
-but natural-language index generation is not implemented yet.
+The optional `semanticIndexing.language` selects the language of AI-generated summaries;
+its default is `en`. It does not affect which source languages the analyzers support.
+To enable summaries, set `semanticIndexing.llm.enabled: true` and supply an OpenAI-compatible
+`baseUrl` and `model` in that repository's YAML. The model receives entire C# methods
+(including XML doc comments) or entire type declarations. Each stored summary is limited
+to 10 lines and is available to MCP clients and the dashboard. Source is not copied
+into SQLite, but **the selected LLM endpoint does receive source code**.
+See [LLM configuration and data safety](docs/repository-configuration.md#optional-per-repository-llm-summaries).
 The TypeScript analyzer is planned but not yet registered.
 
 ## Build and test
@@ -329,6 +339,6 @@ NuGet packages use **Central Package Management**:
 2. Implement TypeScript/Angular analysis using a validated Tree-sitter integration.
 3. Add source excerpts validated against indexed content hashes and paginated navigation.
 4. Add dependency-aware invalidation and reuse across branches as semantic analysis expands.
-5. Generate semantic descriptions and embeddings with explicit model and language invalidation.
+5. Add semantic search embeddings and finer-grained summary invalidation independent of declaration extraction.
 
 Read [AGENTS.md](AGENTS.md) before making changes.

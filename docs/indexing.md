@@ -30,8 +30,11 @@ methods and types across the selected C# files. Only target/usage locations are 
 no source text, copied project files or Roslyn syntax trees are persisted. The reference
 pass loads the selected C# files into memory, so its peak memory scales with the size of
 the compilation. References to framework and other external declarations are not saved.
-AI descriptions and embeddings remain planned. `semanticIndexing.language` is recorded
-for future generated text.
+Optional OpenAI-compatible LLM summaries of methods and types are available through
+`semanticIndexing.llm` in each repository YAML. The feature is disabled by default.
+When enabled, the C# extractor supplies full declarations (including XML doc comments)
+to the model; only concise summaries (maximum 10 lines) are stored beside symbols.
+Embeddings remain planned; see [configuration](repository-configuration.md#optional-per-repository-llm-summaries).
 
 **Current limitation:** The reference pass treats all selected C# files as one assembly;
 it does not evaluate `.csproj` boundaries, target frameworks, conditional compilation
@@ -75,9 +78,9 @@ different cache identity. No YAML or source files are copied into the cache.
 
 The versioned schema stores derived declarations, reference locations and
 lookup/invalidation metadata. It is a regenerable cache, not a stable interchange format
-or a source backup. Schema 2 introduced type membership, and schema 3 adds a compact
-reference table indexed by target declaration position. Running `index` upgrades version-one
-and version-two caches on the write path; the old published snapshot remains intact until
+or a source backup. Schema 2 introduced type membership, schema 3 adds a compact
+reference table indexed by target declaration position, and schema 4 adds optional LLM
+summaries to each symbol. Running `index` upgrades old caches on the write path; the old published snapshot remains intact until
 atomic publication. An earlier branch may still return its declarations, but cannot
 answer `find_usages` until reindexed. An interrupted run preserves the older published
 snapshot. MCP reads never migrate storage.
@@ -90,7 +93,8 @@ Unsupported schema versions fail without changes; select a fresh cache directory
 Rerun the same command after edits. Content hashes, analyzer identity/version and a
 configuration fingerprint decide whether prior declarations can be reused. New and
 changed files are analyzed; deleted files and old rename locations disappear on publication.
-Changes to analyzer selection, extensions, exclusions or semantic language invalidate reuse.
+Changes to analyzer selection, extensions, exclusions, semantic language or LLM settings
+invalidate reuse. Unchanged files reuse their previously generated summaries without LLM calls.
 All selected files are read and hashed even when their declarations can be reused.
 References are global semantic relationships: when any selected file is added, deleted
 or changed, all C# references are resolved again against the new compilation. Only an
@@ -100,7 +104,8 @@ target is edited.
 
 One SQLite transaction stages the replacement. Publication switches the branch snapshot
 and removes its old generation atomically. Other branches retain their snapshots. A failed
-or canceled run rolls back; readers continue to see the last completed snapshot. A first
+or canceled run, including an LLM failure, rolls back; readers continue to see the last
+completed snapshot. A first
 failed run may leave an initialized database with no published snapshot. Concurrent writers
 are serialized by SQLite and fail if the lock timeout is exceeded.
 

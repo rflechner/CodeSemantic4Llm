@@ -69,7 +69,12 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
 
             var semanticIndexing = document.SemanticIndexing is null
                 ? new SemanticIndexingConfiguration()
-                : new SemanticIndexingConfiguration(document.SemanticIndexing.Language);
+                : new SemanticIndexingConfiguration(document.SemanticIndexing.Language,
+                    document.SemanticIndexing.Llm is null ? null : new LlmSummaryConfiguration(
+                        document.SemanticIndexing.Llm.Enabled,
+                        document.SemanticIndexing.Llm.BaseUrl,
+                        document.SemanticIndexing.Llm.Model,
+                        document.SemanticIndexing.Llm.ApiKeyEnvironmentVariable));
 
             var fileExtensions = MapFileExtensions(document.FileExtensions);
 
@@ -121,5 +126,18 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
     private sealed class SemanticIndexingYamlDocument
     {
         public string? Language { get; set; } = SemanticIndexingConfiguration.DefaultLanguage;
+
+        public LlmSummaryYamlDocument? Llm { get; set; }
+    }
+
+    private sealed class LlmSummaryYamlDocument
+    {
+        public bool Enabled { get; set; }
+
+        public string? BaseUrl { get; set; }
+
+        public string? Model { get; set; }
+
+        public string? ApiKeyEnvironmentVariable { get; set; }
     }
 }

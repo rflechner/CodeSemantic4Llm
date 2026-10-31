@@ -227,6 +227,9 @@
         <div class="detail-block"><small>Containing type location</small><strong id="drawer-container"></strong></div>
       </div>
       <div class="drawer-separator"></div>
+      <h3>LLM summary</h3>
+      <p id="drawer-summary" class="hint" style="white-space: pre-line"></p>
+      <div class="drawer-separator"></div>
       <h3>Recorded usages <span class="hint" id="drawer-ref-count"></span></h3>
       <div id="drawer-references"></div>
       <div class="reference-footer"><span id="drawer-ref-page"></span><div class="pager-actions"><button class="soft-button" id="drawer-prev">←</button><button class="soft-button" id="drawer-next">→</button></div></div>
@@ -570,6 +573,7 @@
       byId('drawer-location').textContent = symbol.line + ' : ' + symbol.column;
       byId('drawer-container').textContent = symbol.containingTypeLine === null ? '—' :
         symbol.containingTypeLine + ' : ' + symbol.containingTypeColumn;
+      byId('drawer-summary').textContent = symbol.summary || 'No LLM summary stored for this declaration.';
       byId('backdrop').hidden = false;
       byId('close-drawer').focus();
       loadDrawerReferences();

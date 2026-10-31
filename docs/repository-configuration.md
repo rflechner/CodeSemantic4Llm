@@ -30,6 +30,8 @@ analyzers:
   - dotnet-csharp
 semanticIndexing:
   language: en
+  llm:
+    enabled: false
 exclude: []
 ```
 
@@ -96,6 +98,11 @@ fileExtensions:
 
 semanticIndexing:
   language: fr   # Optional; defaults to en
+  llm:
+    enabled: true
+    baseUrl: http://127.0.0.1:1234/v1
+    model: my-local-model
+    # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 
 exclude:
   - submodules/**
@@ -108,6 +115,9 @@ exclude:
 - `analyzers` is a required, non-empty list of installed analyzer IDs. Currently only `dotnet-csharp` is registered.
 - `fileExtensions` is an optional mapping of enabled analyzer IDs to replacement extension lists.
 - `semanticIndexing.language` is optional and defaults to `en` (English).
+- `semanticIndexing.llm.enabled` is optional and defaults to `false` (no LLM calls).
+- When enabled, `semanticIndexing.llm.baseUrl` (HTTP(S) OpenAI-compatible API root)
+  and `semanticIndexing.llm.model` are required. `apiKeyEnvironmentVariable` is optional.
 - `exclude` is optional. Rules add to, rather than replace, the built-in defaults.
 - Git submodules are **not** excluded automatically; list their checkout paths if they should be skipped.
 - Unknown YAML properties, duplicate keys, missing configuration, and unknown/unimplemented analyzers fail explicitly.
@@ -156,8 +166,8 @@ extension selections. No source contents are read or copied during discovery.
 ## Language of semantic descriptions
 
 The optional `semanticIndexing.language` setting selects the human language in which
-**future AI-generated semantic descriptions, summaries, and natural-language index text**
-will be written. It is separate from `analyzers`, which choose the programming languages
+**LLM-generated summaries and future natural-language index text**
+are written. It is separate from `analyzers`, which choose the programming languages
 to parse. For example, `dotnet-csharp` can analyze French-named C# code while descriptions
 are generated in English, French or another supported language.
 
@@ -170,15 +180,40 @@ are generated in English, French or another supported language.
 Codes are case-normalized using the supported subset of **BCP 47**: a two- or three-letter
 language, optional four-letter script, and optional two-letter/three-digit region.
 Incorrect formats such as `english`, `fr_CH` or an empty value fail validation.
-The code is validated syntactically; actual language support will depend on the semantic
-generation model when that feature is implemented.
+The code is validated syntactically; actual language support depends on the selected model.
+Changing the language invalidates previously generated descriptions through the index
+configuration fingerprint.
 
-**Current status:** the option is parsed, validated and included in configuration, preview
-responses and persisted snapshots. Changing it invalidates reuse for the next `index` run
-through the configuration fingerprint. Natural-language descriptions and vectors are not
-generated yet. When implemented, language-dependent text must be regenerated without
-translating source code or copying source files. Separate invalidation for declarations and
-generated text can then avoid unnecessary parsing.
+## Optional per-repository LLM summaries
+
+Set `semanticIndexing.llm.enabled: true` in each checkout's YAML to opt in.
+Only this repository sends snippets to the configured LLM endpoint. Without this option
+(or when false), indexing remains fully offline and does not call an LLM.
+
+- `baseUrl` is an OpenAI-compatible API root, such as `http://127.0.0.1:1234/v1`
+  for LM Studio. CodeSemantic4Llm posts to `{baseUrl}/chat/completions`.
+- `model` is sent in the `model` field. Use the model identifier advertised by your server.
+- `apiKeyEnvironmentVariable` names an environment variable containing an optional
+  Bearer token; never put an API key in the checked-in YAML. Set it in the environment
+  of the process running the `index` command. Missing configured keys fail the run.
+- The base URL supports only HTTP(S), without embedded credentials or query strings.
+  The API must implement OpenAI-compatible chat completions; vendor-specific endpoints
+  requiring different paths or authentication need a compatible gateway.
+
+The indexer sends the **whole C# method**, including its preceding XML documentation
+comments (`summary`, `param`, `returns`, etc.), or the **whole class/type
+declaration**, including its members, to the selected model. The prompt requests an
+accurate, concise summary in `semanticIndexing.language`. Stored summaries are limited
+to **10 non-empty lines per declaration**. They are saved with the symbol in SQLite,
+returned by MCP symbol queries and shown in the dashboard declaration inspector.
+Source snippets and prompt bodies are never saved in the index cache.
+
+LLM summarization is opt-in because sending source to any HTTP endpoint can expose
+proprietary code. Use a trusted local endpoint or an explicitly authorized service.
+An unresponsive or failed LLM request aborts the new index generation: the previous
+published snapshot remains readable. Changing the model, URL, language, enable flag,
+or source content invalidates the appropriate reuse. Unchanged files preserve their
+summaries; no vector embeddings are generated yet.
 
 ## Exclusion rules
 

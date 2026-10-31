@@ -3,6 +3,7 @@ using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Configuration.Yaml;
 using CodeSemantic4Llm.Infrastructure.Workspace;
+using CodeSemantic4Llm.Mcp.Server.Llm;
 using CodeSemantic4Llm.Persistence.Sqlite;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,6 +15,9 @@ internal static class ServerServiceCollectionExtensions
     public static void AddRepositoryServices(this IServiceCollection services)
     {
         services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
+        services.AddSingleton<ISymbolSourceExtractor, CSharpSymbolSourceExtractor>();
+        services.AddHttpClient<ISymbolSummaryGenerator, OpenAiSymbolSummaryGenerator>(client =>
+            client.Timeout = TimeSpan.FromMinutes(5));
         services.AddSingleton<ISourceReferenceAnalyzer, CSharpReferenceAnalyzer>();
         services.AddSingleton<IMethodBodyEditor, CSharpMethodBodyEditor>();
         services.AddSingleton<IMethodDeclarationEditor, CSharpMethodDeclarationEditor>();
