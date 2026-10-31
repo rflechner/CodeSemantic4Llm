@@ -18,9 +18,11 @@ public sealed class LlmSummaryConfiguration
         string? apiKeyEnvironmentVariable = null,
         string? apiKey = null,
         string? reasoningEffort = null,
-        int? maxCompletionTokens = null)
+        int? maxCompletionTokens = null,
+        bool forceGeneration = false)
     {
         Enabled = enabled;
+        ForceGeneration = forceGeneration;
 
         if (baseUrl is not null)
         {
@@ -69,6 +71,12 @@ public sealed class LlmSummaryConfiguration
     }
 
     public bool Enabled { get; }
+
+    /// <summary>
+    /// When LLM indexing is enabled, generates summaries even for declarations with source documentation.
+    /// Does not enable LLM calls by itself or bypass reuse of unchanged indexed files.
+    /// </summary>
+    public bool ForceGeneration { get; }
 
     /// <summary>OpenAI-compatible API root, for example http://127.0.0.1:1234/v1.</summary>
     public Uri? BaseUrl { get; }

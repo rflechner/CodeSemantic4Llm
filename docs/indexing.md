@@ -30,10 +30,16 @@ methods and types across the selected C# files. Only target/usage locations are 
 no source text, copied project files or Roslyn syntax trees are persisted. The reference
 pass loads the selected C# files into memory, so its peak memory scales with the size of
 the compilation. References to framework and other external declarations are not saved.
+C# methods, constructors and types store their own usable XML `<summary>` text locally,
+even without LLM generation. The complete documentation is retained as readable text.
 Optional OpenAI-compatible LLM summaries of methods and types are available through
 `semanticIndexing.llm` in each repository YAML. The feature is disabled by default.
-When enabled, the C# extractor supplies full declarations (including XML doc comments)
-to the model; only concise summaries (maximum 10 lines) are stored beside symbols.
+When enabled, declarations without usable documentation are sent to the model; set
+`semanticIndexing.llm.forceGeneration: true` to generate summaries for documented declarations too.
+The C# extractor supplies full declarations (including XML doc comments) to the model;
+only generated summaries are limited to 10 lines.
+If the LLM response contains no usable text summary, a warning is logged to stderr and indexing
+continues, preserving any existing source documentation for that declaration.
 Embeddings remain planned; see [configuration](repository-configuration.md#optional-per-repository-llm-summaries).
 
 **Current limitation:** The reference pass treats all selected C# files as one assembly;
@@ -96,7 +102,7 @@ Rerun the same command after edits. Content hashes, analyzer identity/version an
 configuration fingerprint decide whether prior declarations can be reused. New and
 changed files are analyzed; deleted files and old rename locations disappear on publication.
 Changes to analyzer selection, extensions, exclusions, semantic language or LLM settings
-invalidate reuse. Unchanged files reuse their previously generated summaries without LLM calls.
+invalidate reuse. Unchanged files reuse their stored summaries without LLM calls.
 All selected files are read and hashed even when their declarations can be reused.
 References are global semantic relationships: when any selected file is added, deleted
 or changed, all C# references are resolved again against the new compilation. Only an
@@ -106,7 +112,7 @@ target is edited.
 
 One SQLite transaction stages the replacement. Publication switches the branch snapshot
 and removes its old generation atomically. Other branches retain their snapshots. A failed
-or canceled run, including an LLM failure, rolls back; readers continue to see the last
+or canceled run, including an LLM request failure, rolls back; readers continue to see the last
 completed snapshot. A first
 failed run may leave an initialized database with no published snapshot. Concurrent writers
 are serialized by SQLite and fail if the lock timeout is exceeded.
@@ -117,7 +123,7 @@ best-effort check rather than an atomic filesystem snapshot: avoid editing or sw
 branches during indexing. The recorded HEAD identifies observed Git history; it does not
 prove that working-tree content matches that commit or remains unchanged afterward.
 
-## Searching saved LLM summaries with FTS5
+## Searching saved summaries with FTS5
 
 The `search_code` MCP tool searches the active branch's stored symbol names,
 qualified names and optional summaries. For example:
@@ -141,7 +147,7 @@ sanitized before building the FTS expression and always bound as SQL parameters.
 
 This is **lexical relevance search, not embedding/vector similarity**. It may
 miss conceptual synonyms when the summary uses different words. Queries work
-without LLM summaries (names are still indexed), but summaries generally
+without LLM generation (names and available XML summaries are still indexed), but summaries generally
 provide much better discovery by intent.
 
 Searches read only the published, branch-specific SQLite snapshot. They do not
@@ -168,7 +174,7 @@ Descriptions, argument schemas and responses omit snapshot IDs, index metadata,
 SQLite details, file hashes and reindexing instructions.
 
 - `find_symbols` returns `symbols` and `hasMore`. Declarations contain their name,
-  qualified name, kind, optional LLM summary and source location, with no temporary identity token.
+  qualified name, kind, optional documentation or LLM summary and source location, with no temporary identity token.
 - `search_code` accepts `query` and optional exact `kind` (`method`, `class`, etc.)
   and `maxResults` (default 10; maximum 200). It searches indexed names, qualified names
   and optional summaries, returning ranked declarations and `hasMore`, without reading

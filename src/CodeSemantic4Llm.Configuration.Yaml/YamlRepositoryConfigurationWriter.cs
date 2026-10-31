@@ -81,6 +81,11 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
             ["enabled"] = llm.Enabled
         };
 
+        if (llm.ForceGeneration)
+        {
+            llmDocument["forceGeneration"] = true;
+        }
+
         if (llm.BaseUrl is not null)
         {
             llmDocument["baseUrl"] = llm.BaseUrl.ToString();

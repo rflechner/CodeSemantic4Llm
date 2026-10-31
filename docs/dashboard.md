@@ -21,8 +21,9 @@ and `serve`. Index each checkout and Git branch you want to examine first:
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- index /path/to/checkout
 ```
 
-The declaration inspector displays generated LLM summaries when the repository opted
-in to `semanticIndexing.llm.enabled`. Summaries come from the published SQLite
+The declaration inspector displays stored XML documentation summaries and optional
+LLM-generated summaries. Generation is controlled by `semanticIndexing.llm`; source
+documentation is indexed even when generation is disabled. Summaries come from the published SQLite
 index; the dashboard never sends code to a model and never opens source files.
 The server renders Markdown with [Markdig](https://github.com/xoofx/markdig): headings,
 lists, emphasis, inline/fenced code, quotes and tables are formatted in the inspector.
@@ -71,8 +72,8 @@ submit again to evaluate the new selection.
 This is lexical search, not embedding similarity or a query-time LLM call.
 It uses the existing query normalization (English/French stop words, literal
 prefix terms) and BM25 weights for name, qualified name and summary (8, 4, 1).
-Without generated summaries, identifiers remain searchable. Words in the
-index's configured summary language usually work best; search does not translate
+Without LLM generation, identifiers and available XML summaries remain searchable. Words in
+the documentation's original language or the configured generation language usually work best; search does not translate
 queries or infer synonyms. The displayed rank is an ordering, not a confidence score.
 
 The dashboard resolves a validated cache ID and delegates to the same store

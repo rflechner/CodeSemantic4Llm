@@ -131,6 +131,8 @@ exclude:
 - `fileExtensions` is an optional mapping of enabled analyzer IDs to replacement extension lists.
 - `semanticIndexing.language` is optional and defaults to `en` (English).
 - `semanticIndexing.llm.enabled` is optional and defaults to `false` (no LLM calls).
+- `semanticIndexing.llm.forceGeneration` defaults to `false`; when LLM calls are enabled,
+  `true` generates summaries even for declarations with an existing XML summary.
 - When enabled, `semanticIndexing.llm.baseUrl` (HTTP(S) OpenAI-compatible API root)
   and `semanticIndexing.llm.model` are required. `apiKey` and `apiKeyEnvironmentVariable` are optional.
 - `exclude` is optional. Rules add to, rather than replace, the built-in defaults.
@@ -227,10 +229,39 @@ Only this repository sends snippets to the configured LLM endpoint. Without this
   The API must implement OpenAI-compatible chat completions; vendor-specific endpoints
   requiring different paths or authentication need a compatible gateway.
 
-The indexer sends the **whole C# method**, including its preceding XML documentation
+### Prefer source documentation
+
+C# types (classes, structs, interfaces and records), methods and constructors use their own
+non-empty XML `<summary>` as the indexed description by default. Roslyn extracts the attached
+documentation, preserving the complete summary text rather than limiting it to ten lines.
+Comment markers and XML markup are removed; entities, inline references such as `<see>` and
+`<paramref>`, and paragraph boundaries become readable text. Other documentation sections,
+such as `<param>`, `<returns>` and `<remarks>`, are not part of the summary.
+
+These descriptions are stored and searchable even with `llm.enabled: false`. They retain their
+authored language; `semanticIndexing.language` only controls generated descriptions. Missing,
+empty or malformed summaries fall back to LLM generation when enabled. Documentation is read
+only from the declaration itself: inherited summaries, `<inheritdoc>` and external `<include>`
+files are not resolved. A method's documentation is not used as its containing class's summary.
+
+To generate summaries even when documentation exists, add this setting to the existing LLM config:
+
+```yaml
+semanticIndexing:
+  llm:
+    # Keep enabled: true, baseUrl, model and any authentication settings.
+    forceGeneration: true
+```
+
+The override does not enable LLM calls by itself. Changing it invalidates reuse on the next
+index run; unchanged files still reuse their summaries when it remains enabled. Switching it
+back to `false` restores available source documentation on the next run. Adding, editing or
+removing documentation updates the stored summary and search entries during re-indexing.
+
+When a declaration needs generation, the indexer sends the **whole C# method**, including its preceding XML documentation
 comments (`summary`, `param`, `returns`, etc.), or the **whole class/type
 declaration**, including its members, to the selected model. The prompt requests an
-accurate, concise summary in `semanticIndexing.language`. Stored summaries are limited
+accurate, concise summary in `semanticIndexing.language`. Generated summaries are limited
 to **10 non-empty lines per declaration**. They are saved with the symbol in SQLite,
 returned by MCP symbol queries and shown in the dashboard declaration inspector.
 Source snippets and prompt bodies are never saved in the index cache.
@@ -239,7 +270,7 @@ LLM summarization is opt-in because sending source to any HTTP endpoint can expo
 proprietary code. Use a trusted local endpoint or an explicitly authorized service.
 An unresponsive or failed LLM request aborts the new index generation: the previous
 published snapshot remains readable. Changing the model, URL, language, enable flag,
-reasoning effort, completion budget or source content invalidates the appropriate
+reasoning effort, completion budget, documentation override or source content invalidates the appropriate
 reuse. Unchanged files preserve their summaries; no vector embeddings are generated yet.
 
 ### Reducing reasoning during summary generation

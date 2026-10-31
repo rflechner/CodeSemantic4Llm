@@ -82,12 +82,15 @@ include `.cs` in an override to keep it alongside custom extensions. The preview
 the effective extensions and returns at most 200 candidate paths without reading source contents.
 The optional `semanticIndexing.language` selects the language of AI-generated summaries;
 its default is `en`. It does not affect which source languages the analyzers support.
-To enable summaries, set `semanticIndexing.llm.enabled: true` and supply an OpenAI-compatible
-`baseUrl` and `model` in that repository's YAML. An optional `apiKey` supplies a Bearer token
+To enable generated summaries, set `semanticIndexing.llm.enabled: true` and supply an OpenAI-compatible
+`baseUrl` and `model` in that repository's YAML. Existing C# XML `<summary>` documentation is
+indexed locally even with LLM calls disabled. By default, only declarations without a usable
+summary need generation; `semanticIndexing.llm.forceGeneration: true` overrides that preference
+when the LLM is enabled. An optional `apiKey` supplies a Bearer token
 directly and takes priority over `apiKeyEnvironmentVariable`; blank keys use the environment
 fallback. Inline keys are omitted from MCP configuration responses.
 The model receives entire C# methods
-(including XML doc comments) or entire type declarations. Each stored summary is limited
+(including XML doc comments) or entire type declarations. Each generated summary is limited
 to 10 lines and is available to MCP clients and the dashboard. Source is not copied
 into SQLite, but **the selected LLM endpoint does receive source code**.
 See [LLM configuration and data safety](docs/repository-configuration.md#optional-per-repository-llm-summaries).
@@ -182,10 +185,10 @@ Matching remains case-sensitive and respects complete dot-separated name segment
 `find_symbols` matches exact, case-sensitive simple names (20 results by default,
 at most 200). **`search_code`** accepts a natural-language question such as
 `"where does the repository index get published?"`, ranks results using local
-SQLite FTS5/BM25 across symbol names and stored LLM summaries, and returns
+SQLite FTS5/BM25 across symbol names and stored documentation or LLM summaries, and returns
 source locations and optional descriptions. No LLM server is required at search
 time. This is keyword-based relevance, not embedding similarity; see the
-[FTS5 search guide](docs/indexing.md#searching-saved-llm-summaries-with-fts5). To list a class's methods, pass its file path and name to `get_type_members`
+[FTS5 search guide](docs/indexing.md#searching-saved-summaries-with-fts5). To list a class's methods, pass its file path and name to `get_type_members`
 with `kind: "method"`. To find callers or type references, use the same source-address
 arguments with `find_usages`. Both support pagination, defaulting to
 50 results with a maximum of 200. Overloads stay distinct, partial declarations

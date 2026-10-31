@@ -4,11 +4,13 @@ using System.Text.Json;
 using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Domain.Configuration;
 using CodeSemantic4Llm.Domain.Symbols;
+using Microsoft.Extensions.Logging;
 
 namespace CodeSemantic4Llm.Mcp.Server.Llm;
 
 /// <summary>Uses an OpenAI-compatible chat completions endpoint; does not log or persist source prompts.</summary>
-public sealed class OpenAiSymbolSummaryGenerator(HttpClient client) : ISymbolSummaryGenerator
+public sealed class OpenAiSymbolSummaryGenerator(
+    HttpClient client, ILogger<OpenAiSymbolSummaryGenerator> logger) : ISymbolSummaryGenerator
 {
     public async Task<string> SummarizeAsync(
         SymbolDefinition symbol, string declarationSource,
@@ -42,7 +44,10 @@ public sealed class OpenAiSymbolSummaryGenerator(HttpClient client) : ISymbolSum
             || content.ValueKind != JsonValueKind.String
             || string.IsNullOrWhiteSpace(content.GetString()))
         {
-            throw new InvalidOperationException("The LLM did not return a text summary.");
+            logger.LogWarning(
+                "The LLM did not return a text summary for {SymbolName} at {RelativePath}:{Line}. Continuing without a generated summary.",
+                symbol.QualifiedName, symbol.Location.RelativePath, symbol.Location.Line);
+            return string.Empty;
         }
 
         return string.Join("\n", content.GetString()!

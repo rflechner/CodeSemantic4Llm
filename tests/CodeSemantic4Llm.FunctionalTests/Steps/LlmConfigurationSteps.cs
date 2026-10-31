@@ -11,6 +11,20 @@ public sealed partial class RepositoryConfigurationSteps
     private RepositoryIndexingConfiguration? _loadedConfiguration;
     private JsonElement _llmConfigurationResponse;
 
+    [Then("the configured LLM documentation override is \"(.*)\"")]
+    public void ThenDocumentationOverride(string expected) =>
+        Assert.Equal(bool.Parse(expected), _loadedConfiguration!.SemanticIndexing.Llm.ForceGeneration);
+
+    [Then("the documentation override has not enabled LLM calls")]
+    public void ThenLlmRemainsDisabled() => Assert.False(_loadedConfiguration!.SemanticIndexing.Llm.Enabled);
+
+    [Then("the MCP configuration reports the documentation override as \"(.*)\"")]
+    public void ThenMcpDocumentationOverride(string expected)
+    {
+        var llm = McpCodeClient.ReadContent(_llmConfigurationResponse).GetProperty("semanticIndexing").GetProperty("llm");
+        Assert.Equal(bool.Parse(expected), llm.GetProperty("forceGeneration").GetBoolean());
+    }
+
     [When("I write and reload the repository configuration")]
     public async Task WhenRoundTripLlmConfiguration()
     {

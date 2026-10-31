@@ -29,7 +29,7 @@ public sealed class LlmSummaryIndexTests : IDisposable
     public async Task Enabled_summaries_are_persisted_reused_regenerated_and_disabled_per_repository()
     {
         await CreateCheckoutAsync();
-        WriteYaml(enabled: true, model: "model-one");
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
         var indexer = CreateIndexer();
 
         var first = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
@@ -53,7 +53,7 @@ public sealed class LlmSummaryIndexTests : IDisposable
         Assert.Equal(2, _generator.Requests.Count);
         Assert.Equal(savedMethod.Summary, Assert.Single(store.FindSymbols(scope, "Calculate", 10).Symbols).Summary);
 
-        WriteYaml(enabled: true, model: "model-two");
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-two");
         var third = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, third.ReusedFiles);
         Assert.Equal(4, _generator.Requests.Count);
@@ -61,7 +61,7 @@ public sealed class LlmSummaryIndexTests : IDisposable
         WriteYaml(enabled: false, model: "model-two");
         await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(4, _generator.Requests.Count);
-        Assert.Null(Assert.Single(store.FindSymbols(scope, "Calculate", 10).Symbols).Summary);
+        Assert.Equal("Computes a total.", Assert.Single(store.FindSymbols(scope, "Calculate", 10).Symbols).Summary);
 
         var bytes = File.ReadAllBytes(Paths.GetDatabasePath(scope.RootPath));
         Assert.DoesNotContain(SourceSecret, Encoding.UTF8.GetString(bytes));
@@ -73,11 +73,11 @@ public sealed class LlmSummaryIndexTests : IDisposable
         await CreateCheckoutAsync();
         const string originalKey = "inline-key-original-57a1";
         const string rotatedKey = "inline-key-rotated-57a1";
-        WriteYaml(enabled: true, model: "model-one", apiKey: originalKey);
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one", apiKey: originalKey);
         var indexer = CreateIndexer();
         var first = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
 
-        WriteYaml(enabled: true, model: "model-one", apiKey: rotatedKey);
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one", apiKey: rotatedKey);
         var second = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(1, second.ReusedFiles);
@@ -93,18 +93,18 @@ public sealed class LlmSummaryIndexTests : IDisposable
     public async Task Reasoning_effort_and_completion_budget_changes_regenerate_summaries()
     {
         await CreateCheckoutAsync();
-        WriteYaml(enabled: true, model: "model-one");
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
         var indexer = CreateIndexer();
         await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(2, _generator.Requests.Count);
 
-        WriteYaml(enabled: true, model: "model-one", reasoningEffort: "low");
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one", reasoningEffort: "low");
         var changedEffort = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, changedEffort.ReusedFiles);
         Assert.Equal(4, _generator.Requests.Count);
         Assert.Equal("low", _generator.LastSettings!.ReasoningEffort);
 
-        WriteYaml(enabled: true, model: "model-one", reasoningEffort: "low", maxCompletionTokens: 4096);
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one", reasoningEffort: "low", maxCompletionTokens: 4096);
         var changedBudget = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, changedBudget.ReusedFiles);
         Assert.Equal(6, _generator.Requests.Count);
@@ -114,7 +114,7 @@ public sealed class LlmSummaryIndexTests : IDisposable
         Assert.Equal(1, unchanged.ReusedFiles);
         Assert.Equal(6, _generator.Requests.Count);
 
-        WriteYaml(enabled: true, model: "model-one");
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
         var removedSettings = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, removedSettings.ReusedFiles);
         Assert.Equal(8, _generator.Requests.Count);
@@ -125,7 +125,7 @@ public sealed class LlmSummaryIndexTests : IDisposable
     public async Task Failed_generation_preserves_last_published_snapshot()
     {
         await CreateCheckoutAsync();
-        WriteYaml(enabled: true, model: "model-one");
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
         var indexer = CreateIndexer();
         var first = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
         var store = new SqliteIndexStore(Paths);
@@ -142,6 +142,37 @@ public sealed class LlmSummaryIndexTests : IDisposable
         Assert.NotNull(Assert.Single(store.FindSymbols(first.Snapshot.Scope, "Calculate", 10).Symbols).Summary);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \r\n\t ")]
+    public async Task Empty_summaries_allow_publication_and_reuse_without_losing_source_documentation(string emptySummary)
+    {
+        await CreateCheckoutAsync();
+        File.WriteAllText(Path.Combine(Root, "Undocumented.cs"), "public class Undocumented {}");
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
+        _generator.SummaryOverride = emptySummary;
+        var indexer = CreateIndexer();
+
+        var first = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, first.AnalyzedFiles);
+        Assert.Equal(3, _generator.Requests.Count);
+        var store = new SqliteIndexStore(Paths);
+        var scope = first.Snapshot.Scope;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        Assert.Equal(first.Snapshot.SnapshotId, store.GetSnapshot(scope, cancellationToken)!.SnapshotId);
+        Assert.Equal("Billing operations.", Assert.Single(store.FindSymbols(scope, "Billing", 10, cancellationToken).Symbols).Summary);
+        Assert.Equal("Computes a total.", Assert.Single(store.FindSymbols(scope, "Calculate", 10, cancellationToken).Symbols).Summary);
+        Assert.Null(Assert.Single(store.FindSymbols(scope, "Undocumented", 10, cancellationToken).Symbols).Summary);
+
+        var second = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, second.ReusedFiles);
+        Assert.Equal(3, _generator.Requests.Count);
+        Assert.Null(Assert.Single(store.FindSymbols(scope, "Undocumented", 10, cancellationToken).Symbols).Summary);
+        Assert.Equal("Computes a total.", Assert.Single(store.FindSymbols(scope, "Calculate", 10, cancellationToken).Symbols).Summary);
+    }
+
     private IndexRepository CreateIndexer() => new(
         _git,
         new YamlRepositoryConfigurationLoader(),
@@ -155,9 +186,10 @@ public sealed class LlmSummaryIndexTests : IDisposable
 
     private void WriteYaml(
         bool enabled, string model, string? apiKey = null, string? reasoningEffort = null,
-        int? maxCompletionTokens = null) => File.WriteAllText(ConfigPath,
+        int? maxCompletionTokens = null, bool forceGeneration = false) => File.WriteAllText(ConfigPath,
         "version: 1\nanalyzers: [dotnet-csharp]\nsemanticIndexing:\n  language: fr\n" +
         "  llm:\n    enabled: " + (enabled ? "true" : "false") +
+        "\n    forceGeneration: " + (forceGeneration ? "true" : "false") +
         "\n    baseUrl: http://127.0.0.1:1234/v1\n    model: " + model + "\n" +
         (apiKey is null ? "" : "    apiKey: " + apiKey + "\n") +
         (reasoningEffort is null ? "" : "    reasoningEffort: " + reasoningEffort + "\n") +
@@ -223,6 +255,7 @@ public sealed class LlmSummaryIndexTests : IDisposable
     {
         public List<(SymbolDefinition Symbol, string Source, string Language)> Requests { get; } = [];
         public bool Fail { get; set; }
+        public string? SummaryOverride { get; set; }
         public LlmSummaryConfiguration? LastSettings { get; private set; }
 
         public Task<string> SummarizeAsync(
@@ -238,7 +271,7 @@ public sealed class LlmSummaryIndexTests : IDisposable
 
             Requests.Add((symbol, declarationSource, configuration.Language));
             LastSettings = configuration.Llm;
-            return Task.FromResult(string.Join("\n", Enumerable.Range(1, 12).Select(n => $"Summary line {n}")));
+            return Task.FromResult(SummaryOverride ?? string.Join("\n", Enumerable.Range(1, 12).Select(n => $"Summary line {n}")));
         }
     }
 }

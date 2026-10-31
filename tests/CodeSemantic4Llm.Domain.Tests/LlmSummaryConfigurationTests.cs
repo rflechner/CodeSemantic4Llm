@@ -6,10 +6,11 @@ namespace CodeSemantic4Llm.Domain.Tests;
 public sealed class LlmSummaryConfigurationTests
 {
     [Fact]
-    public void Summaries_are_opt_in()
+    public void Llm_summaries_are_opt_in()
     {
         var settings = new SemanticIndexingConfiguration();
         Assert.False(settings.Llm.Enabled);
+        Assert.False(settings.Llm.ForceGeneration);
         Assert.Null(settings.Llm.BaseUrl);
         Assert.Null(settings.Llm.Model);
         Assert.Null(settings.Llm.ApiKey);

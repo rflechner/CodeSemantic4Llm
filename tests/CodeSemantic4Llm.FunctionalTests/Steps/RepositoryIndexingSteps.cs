@@ -416,7 +416,8 @@ public sealed partial class RepositoryIndexingSteps
     private CancellationToken Token => _cancellation?.Token ?? TestContext.Current.CancellationToken;
 
     private IndexRepository CreateIndexer() => new(_stateProvider, new YamlRepositoryConfigurationLoader(),
-        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer], [new CSharpReferenceAnalyzer()]);
+        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer], [new CSharpReferenceAnalyzer()],
+        [new CSharpSymbolSourceExtractor()], _summaryGenerator);
 
     private RepositoryIndexTools CreateMcpTools()
     {

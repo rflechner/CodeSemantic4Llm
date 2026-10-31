@@ -118,13 +118,20 @@ public sealed class IndexRepository(
             return symbols;
         }
 
+        var pending = symbols.Where(symbol => settings.Llm.ForceGeneration || string.IsNullOrWhiteSpace(symbol.Summary)).ToArray();
+
+        if (pending.Length == 0)
+        {
+            return symbols;
+        }
+
         if (!_summaryExtractors.TryGetValue(analyzer.AnalyzerId, out var extractor))
         {
             throw new InvalidOperationException(
                 $"LLM summary extraction is not available for analyzer '{analyzer.AnalyzerId}'.");
         }
 
-        var sourceByLocation = extractor.Extract(document, symbols, cancellationToken);
+        var sourceByLocation = extractor.Extract(document, pending, cancellationToken);
         var described = new List<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition>(symbols.Count);
 
         foreach (var symbol in symbols)
@@ -141,7 +148,9 @@ public sealed class IndexRepository(
 
             if (string.IsNullOrWhiteSpace(summary))
             {
-                throw new InvalidOperationException($"LLM returned an empty summary for '{symbol.QualifiedName}'.");
+                // Missing generated text must not discard source documentation or stop indexing.
+                described.Add(symbol);
+                continue;
             }
 
             // Only the generated summary is persisted. The source snippet stays transient.
@@ -251,6 +260,7 @@ public sealed class IndexRepository(
             Llm = new
             {
                 configuration.SemanticIndexing.Llm.Enabled,
+                configuration.SemanticIndexing.Llm.ForceGeneration,
                 Url = configuration.SemanticIndexing.Llm.BaseUrl?.AbsoluteUri,
                 configuration.SemanticIndexing.Llm.Model,
                 configuration.SemanticIndexing.Llm.ApiKeyEnvironmentVariable,

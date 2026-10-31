@@ -4,6 +4,8 @@ using System.Text.Json;
 using CodeSemantic4Llm.Domain.Configuration;
 using CodeSemantic4Llm.Domain.Symbols;
 using CodeSemantic4Llm.Mcp.Server.Llm;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
 namespace CodeSemantic4Llm.FunctionalTests;
@@ -15,7 +17,7 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
     {
         var handler = new RecordingHandler();
         using var client = new HttpClient(handler);
-        var generator = new OpenAiSymbolSummaryGenerator(client);
+        var generator = new OpenAiSymbolSummaryGenerator(client, NullLogger<OpenAiSymbolSummaryGenerator>.Instance);
         var configuration = new SemanticIndexingConfiguration("fr",
             new LlmSummaryConfiguration(true, "http://localhost:1234/v1", "local-test-model"));
         const string source = """
@@ -42,6 +44,43 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
     }
 
     [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"choices\":null}")]
+    [InlineData("{\"choices\":{}}")]
+    [InlineData("{\"choices\":[]}")]
+    [InlineData("{\"choices\":[{}]}")]
+    [InlineData("{\"choices\":[{\"message\":{}}]}")]
+    [InlineData("{\"choices\":[{\"message\":{\"content\":null}}]}")]
+    [InlineData("{\"choices\":[{\"message\":{\"content\":42}}]}")]
+    [InlineData("{\"choices\":[{\"message\":{\"content\":\"\"}}]}")]
+    [InlineData("{\"choices\":[{\"message\":{\"content\":\" \\r\\n\\t \"}}]}")]
+    public async Task Missing_text_summary_returns_empty_and_logs_a_warning(string responseJson)
+    {
+        var handler = new RecordingHandler { ResponseJson = responseJson };
+        using var client = new HttpClient(handler);
+        var logger = new RecordingLogger();
+        var generator = new OpenAiSymbolSummaryGenerator(client, logger);
+        var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
+            true, "http://localhost:1234/v1", "local-test-model", apiKey: "API_KEY_MUST_NOT_BE_LOGGED"));
+        var symbol = new SymbolDefinition("csharp", "method", "Run", "Demo.Run",
+            new SourceLocation("Demo.cs", 3, 1));
+
+        var result = await generator.SummarizeAsync(
+            symbol, "public void Run() { /* SOURCE_MUST_NOT_BE_LOGGED */ }", configuration,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(string.Empty, result);
+        Assert.Equal(1, handler.RequestCount);
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+        Assert.Contains("did not return a text summary", entry.Message);
+        Assert.Contains("Demo.Run", entry.Message);
+        Assert.Contains("Demo.cs:3", entry.Message);
+        Assert.DoesNotContain("SOURCE_MUST_NOT_BE_LOGGED", entry.Message);
+        Assert.DoesNotContain("API_KEY_MUST_NOT_BE_LOGGED", entry.Message);
+    }
+
+    [Theory]
     [InlineData("low", null, 2048)]
     [InlineData("none", null, 320)]
     [InlineData("minimal", 1024, 1024)]
@@ -52,7 +91,7 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
     {
         var handler = new RecordingHandler();
         using var client = new HttpClient(handler);
-        var generator = new OpenAiSymbolSummaryGenerator(client);
+        var generator = new OpenAiSymbolSummaryGenerator(client, NullLogger<OpenAiSymbolSummaryGenerator>.Instance);
         var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
             true, "http://localhost:1234/v1", "reasoning-model",
             reasoningEffort: effort, maxCompletionTokens: tokenBudget));
@@ -80,7 +119,7 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
     {
         var handler = new RecordingHandler { StatusCode = HttpStatusCode.BadRequest };
         using var client = new HttpClient(handler);
-        var generator = new OpenAiSymbolSummaryGenerator(client);
+        var generator = new OpenAiSymbolSummaryGenerator(client, NullLogger<OpenAiSymbolSummaryGenerator>.Instance);
         var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
             true, "http://localhost:1234/v1", "model-without-reasoning", reasoningEffort: "low"));
         var symbol = new SymbolDefinition("csharp", "method", "Run", "Demo.Run",
@@ -110,7 +149,7 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
         {
             var handler = new RecordingHandler();
             using var client = new HttpClient(handler);
-            var generator = new OpenAiSymbolSummaryGenerator(client);
+            var generator = new OpenAiSymbolSummaryGenerator(client, NullLogger<OpenAiSymbolSummaryGenerator>.Instance);
             var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
                 true, "http://localhost:1234/v1", "local-test-model",
                 useEnvironment ? variable : null, apiKey));
@@ -145,7 +184,7 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
         {
             var handler = new RecordingHandler();
             using var client = new HttpClient(handler);
-            var generator = new OpenAiSymbolSummaryGenerator(client);
+            var generator = new OpenAiSymbolSummaryGenerator(client, NullLogger<OpenAiSymbolSummaryGenerator>.Instance);
             var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
                 true, "http://localhost:1234/v1", "local-test-model", variable));
             var symbol = new SymbolDefinition("csharp", "method", "Run", "Demo.Run",
@@ -164,6 +203,20 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
         }
     }
 
+    private sealed record LogEntry(LogLevel Level, string Message);
+
+    private sealed class RecordingLogger : ILogger<OpenAiSymbolSummaryGenerator>
+    {
+        public List<LogEntry> Entries { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter) => Entries.Add(new LogEntry(logLevel, formatter(state, exception)));
+    }
+
     private sealed class RecordingHandler : HttpMessageHandler
     {
         public string? Url { get; private set; }
@@ -171,6 +224,7 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
         public string? Payload { get; private set; }
         public string? Authorization { get; private set; }
         public HttpStatusCode StatusCode { get; init; } = HttpStatusCode.OK;
+        public string? ResponseJson { get; init; }
         public int RequestCount { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(
@@ -181,7 +235,7 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
             Method = request.Method.Method;
             Authorization = request.Headers.Authorization?.ToString();
             Payload = await request.Content!.ReadAsStringAsync(cancellationToken);
-            var json = JsonSerializer.Serialize(new
+            var json = ResponseJson ?? JsonSerializer.Serialize(new
             {
                 choices = new[] { new { message = new { content = "First line\nSecond line" } } }
             });
