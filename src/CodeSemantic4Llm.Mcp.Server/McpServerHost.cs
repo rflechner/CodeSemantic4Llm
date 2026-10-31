@@ -49,6 +49,7 @@ internal static class McpServerHost
         builder.Services.AddSingleton<CodeToolOperations>();
         builder.Services.AddSingleton<DiagnosticPages>();
         builder.Services.AddSingleton<CodeDiagnosticOperations>();
+        builder.Services.AddSingleton<ProjectToolDescriptions>();
 
         // Tool results are JSON inside MCP text, not HTML. Keep C# punctuation and Unicode
         // readable for models; quotes, backslashes and control characters still use JSON escaping.
@@ -64,7 +65,9 @@ internal static class McpServerHost
         // A client cannot enable this capability through tool arguments or YAML settings.
         var mcp = builder.Services.AddMcpServer()
             .WithStdioServerTransport()
-            .WithRequestFilters(filters => filters.AddCallToolFilter(McpToolCallLogging.Wrap))
+            .WithRequestFilters(filters => filters
+                .AddCallToolFilter(McpToolCallLogging.Wrap)
+                .AddListToolsFilter(ProjectToolDescriptions.Wrap))
             .WithTools<ServerInformationTools>(toolJsonOptions)
             .WithTools<RepositoryCodeTools>(toolJsonOptions)
             .WithTools<RepositoryCodeDiagnosticsTools>(toolJsonOptions);

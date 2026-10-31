@@ -19,3 +19,10 @@ Feature: Explicitly opt in to source editing when starting MCP
       | default        | absent    | hidden  |
       | indexing       | absent    | exposed |
       | indexing-write | available | exposed |
+
+  Scenario: Discover tools before selecting a repository
+    When I list MCP tools with "unconfigured" server startup
+    Then MCP advertises the method body reader
+    And MCP writing tools are "absent"
+    And MCP indexing details are "hidden"
+    And MCP tool descriptions do not claim a selected project

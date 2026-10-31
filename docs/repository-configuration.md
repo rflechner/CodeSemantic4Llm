@@ -48,6 +48,20 @@ is returned by `get_repository_configuration` and `preview_repository_index`, an
 by the console preview when present. Changing only this label does not invalidate reusable
 declarations or create a different index cache.
 
+MCP tool discovery prefixes every exposed tool description with `In project <name>, `,
+using `projectName` from the selected checkout. For example, with `projectName: TinyHarness`,
+`get_file_diagnostics` starts with `In project TinyHarness, Returns syntax errors and warnings...`.
+This helps agents connected to several project servers choose the correct instance. Use distinct
+display names for projects that agents need to distinguish. Tool names and argument schemas stay
+the same, including when editing or indexing tools are enabled.
+
+If the display name is omitted or null, discovery uses the checkout directory name. Missing,
+invalid or unreadable YAML also falls back to that directory name with a warning on stderr;
+discovery remains available, while operations requiring valid configuration still report their
+usual errors. Without a selected repository, descriptions remain generic. Each `tools/list`
+request reads the current name without indexing or creating a cache. After changing it, refresh
+the client's tool list or restart the MCP connection if the client caches descriptions.
+
 `--lang` selects `semanticIndexing.language`, using the same validation and case
 normalization as the YAML loader (for example, `FR-ch` becomes `fr-CH`). Its default
 is `en`.

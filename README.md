@@ -153,6 +153,11 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
 Relative paths are resolved from the process working directory. In Rider, use
 `serve /path/to/repository` as the program arguments. Startup does not index the project.
 
+Every exposed MCP tool description identifies its project: `In project TinyHarness, ...`.
+Set `projectName: TinyHarness` in that checkout's YAML to choose the label; otherwise the
+directory name is used. This helps agents distinguish multiple connected project servers.
+Refresh the client's tool list after changing the name.
+
 The server uses **stdio** for MCP and sends logs to **stderr**.
 To retain logs for investigating failed tool calls, add
 `--log-file /absolute/path/to/codesemantic4llm.jsonl` to `serve`.
