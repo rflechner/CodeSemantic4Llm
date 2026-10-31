@@ -255,8 +255,13 @@ public sealed partial class RepositoryIndexingSteps
     }
 
 
-    private static void AssertCodeReplyHasNoStorageDetails(string text)
+    private void AssertCodeReplyHasNoStorageDetails(string text)
     {
+        // The checkout path itself may contain words such as "IndexTests".
+        var encodedRoot = JsonSerializer.Serialize(_root)[1..^1];
+        text = text.Replace(encodedRoot, "<repository>", StringComparison.Ordinal)
+            .Replace(_root, "<repository>", StringComparison.Ordinal);
+
         foreach (var term in new[] { "index", "snapshot", "sqlite", "recordedRevision", "semanticLanguage", "contentHash", "checksum", "fingerprint", "symbolId", "expired symbol" })
         {
             Assert.DoesNotContain(term, text, StringComparison.OrdinalIgnoreCase);

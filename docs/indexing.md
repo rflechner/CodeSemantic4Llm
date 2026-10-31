@@ -411,3 +411,7 @@ execute code, commit, or stage changes.
 A file-hash check immediately before replacement catches ordinary concurrent edits,
 but is not a cross-process atomic compare-and-swap. Avoid concurrent writers to the
 same checkout. Prefer reviewing changes and using Git to revert unwanted edits.
+
+### Source paths in MCP responses
+
+Every response object containing `relativePath` also includes `absolutePath`, including nested symbol locations, references, diagnostics, method reads and edits, and preview candidates. Absolute paths are resolved against the operator-configured checkout root and use the server filesystem’s path format. Tool inputs continue to use repository-relative paths. Absolute paths are added by the MCP JSON presentation contract; persisted semantic data keeps relative paths.

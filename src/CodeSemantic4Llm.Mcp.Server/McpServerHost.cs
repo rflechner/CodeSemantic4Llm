@@ -1,5 +1,6 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -53,7 +54,9 @@ internal static class McpServerHost
         // readable for models; quotes, backslashes and control characters still use JSON escaping.
         var toolJsonOptions = new JsonSerializerOptions(McpJsonUtilities.DefaultOptions)
         {
-            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            TypeInfoResolver = McpJsonUtilities.DefaultOptions.TypeInfoResolver!
+                .WithAddedModifier(typeInfo => RepositoryPathJson.AddAbsolutePath(typeInfo, builder.Configuration))
         };
 
         // Explicit registration keeps the editing tool undiscoverable in read-only mode.

@@ -129,7 +129,7 @@ public sealed class CodeToolOperations(
         }
     }
 
-    private static string DescribeInvalidEdit(MethodEditValidationException exception, string toolName)
+    private string DescribeInvalidEdit(MethodEditValidationException exception, string toolName)
     {
         const int maximumErrors = 10;
         var message = new StringBuilder("No edit applied. Syntax errors in the proposed file:");
@@ -138,7 +138,8 @@ public sealed class CodeToolOperations(
             var location = diagnostic.Location;
             message.Append('\n').Append(diagnostic.Id).Append(' ')
                 .Append(location.RelativePath).Append(':').Append(location.Line).Append(':').Append(location.Column)
-                .Append(' ').Append(diagnostic.Message);
+                .Append(' ').Append(diagnostic.Message)
+                .Append(" (").Append(Path.GetFullPath(location.RelativePath, Path.GetFullPath(Root))).Append(')');
         }
 
         if (exception.Diagnostics.Count > maximumErrors)
