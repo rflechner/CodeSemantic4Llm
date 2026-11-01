@@ -76,6 +76,7 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
         }
 
         document["tools"] = configuration.Tools.EnabledToolNames.ToArray();
+        document["sharedSummaries"] = configuration.SharedSummaries;
 
         var llm = configuration.SemanticIndexing.Llm;
         var llmDocument = new Dictionary<string, object>

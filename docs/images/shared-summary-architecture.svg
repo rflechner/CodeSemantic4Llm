@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660" role="img" aria-labelledby="title desc">
+  <title id="title">Shared descriptions, local search</title>
+  <desc id="desc">A producer exports derived descriptions as Markdown into Git. A consumer validates source, model, prompt, language and analyzer identities before importing descriptions into a local SQLite and FTS5 index. Cache misses use the configured LLM.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0 0 L8 3 L0 6Z" fill="#526782"/></marker>
+    <style>text{font-family:Segoe UI,Arial,sans-serif;fill:#142c46}.title{font-size:32px;font-weight:700}.label{font-size:21px;font-weight:600}.body{font-size:17px}.small{font-size:15px}.line{fill:none;stroke:#526782;stroke-width:2.5;marker-end:url(#arrow)}.card{fill:#fff;stroke:#c6d3e0;stroke-width:2}</style>
+  </defs>
+  <rect width="1200" height="660" rx="20" fill="#f2f6fa"/>
+  <text x="40" y="55" class="title">Shared descriptions, local search</text>
+  <text x="40" y="86" class="body">Git distributes derived Markdown. Each checkout validates its own source bytes.</text>
+  <rect x="40" y="118" width="330" height="440" rx="16" fill="#e3edf9"/>
+  <text x="62" y="155" class="label">01  Produce</text>
+  <rect x="62" y="181" width="286" height="78" rx="10" class="card"/>
+  <text x="80" y="212" class="label">Source + repository YAML</text>
+  <text x="80" y="239" class="small">One model / prompt / language policy</text>
+  <path d="M205 259 V288" class="line"/>
+  <rect x="62" y="291" width="286" height="78" rx="10" class="card"/>
+  <text x="80" y="322" class="label">Index locally</text>
+  <text x="80" y="349" class="body">Generate missing descriptions</text>
+  <path d="M205 369 V405" class="line"/>
+  <rect x="62" y="408" width="286" height="116" rx="10" fill="#fff" stroke="#346eb1" stroke-width="2"/>
+  <text x="80" y="439" class="label">Explicit cache-export</text>
+  <text x="80" y="467" class="body">Review Markdown changes</text>
+  <text x="80" y="495" class="body">Stage and commit with Git</text>
+  <rect x="425" y="236" width="260" height="166" rx="16" fill="#142c46"/>
+  <text x="449" y="276" class="label" style="fill:#fff">02  Distribute with Git</text>
+  <text x="449" y="312" class="body" style="fill:#d5e5f5">One .md per source file</text>
+  <text x="449" y="342" class="body" style="fill:#d5e5f5">YAML hashes + descriptions</text>
+  <text x="449" y="372" class="body" style="fill:#d5e5f5">No SQLite or source copies</text>
+  <path d="M348 466 H395 V319 H421" class="line"/>
+  <path d="M685 319 H725" class="line"/>
+  <rect x="730" y="118" width="430" height="440" rx="16" fill="#e2f3eb"/>
+  <text x="752" y="155" class="label">03  Validate and search</text>
+  <rect x="752" y="181" width="386" height="109" rx="10" class="card"/>
+  <text x="772" y="212" class="label">Startup / index / watcher</text>
+  <text x="772" y="242" class="body">Check source, model, prompt, language</text>
+  <text x="772" y="269" class="body">and analyzer version against this checkout</text>
+  <path d="M945 290 V333" class="line"/>
+  <rect x="752" y="337" width="386" height="76" rx="10" class="card"/>
+  <text x="772" y="367" class="label">Reuse compatible descriptions</text>
+  <text x="772" y="394" class="body">Cache miss → configured LLM policy</text>
+  <path d="M945 413 V446" class="line"/>
+  <rect x="752" y="450" width="386" height="74" rx="10" fill="#176748"/>
+  <text x="772" y="480" class="label" style="fill:#fff">Local SQLite + FTS5</text>
+  <text x="772" y="507" class="body" style="fill:#e1f8ec">Atomic publication · branch isolation</text>
+  <text x="40" y="601" class="label">Publication stays intentional.</text>
+  <text x="40" y="630" class="body">Indexing and watching never modify versioned summaries. Export never stages, commits or pushes.</text>
+</svg>

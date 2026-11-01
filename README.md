@@ -392,12 +392,24 @@ The preview uses the same discovery rules as MCP and exits after displaying its 
 The default limit is 50 and the maximum is 200; the output indicates when more files exist.
 It does not read source contents, execute the target repository, or persist an index.
 Running without a command starts the MCP server and waits for client requests.
-`--help` lists the `init`, `preview`, `index`, `dashboard`, and `serve` commands. `serve` explicitly starts
+`--help` lists the `init`, `preview`, `index`, `watch`, `cache-export`, `setup-git`,
+`git-merge-summary`, `dashboard`, and `serve` commands. `serve` explicitly starts
 the same MCP server as an invocation without arguments, with optional repository selection.
 
 Console commands use Spectre.Console.Cli settings for argument parsing and generated
 help, with Spectre.Console for output. Help and results go to stdout; errors go to stderr.
 Unknown commands and options fail without starting the MCP server.
+
+## Shared LLM summaries
+
+Set `sharedSummaries: true` in repository YAML to reuse compatible descriptions from
+versioned `.codesemantic4llm/summaries/**/*.md` files. `index` validates the source,
+model, prompt, language and analyzer identity before importing into local SQLite/FTS5.
+`cache-export` explicitly publishes local descriptions for review, and `watch` verifies
+the checkout on startup and after changes. Git staging and commits remain manual.
+
+See the [shared summaries guide](docs/shared-summaries.md) for the format, team workflow,
+diagrams, export protections, and merge/rebase/uncommitted-file conflict handling.
 
 ## Dependencies
 

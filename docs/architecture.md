@@ -1,5 +1,9 @@
 # Architecture
 
+The optional [shared summary cache](shared-summaries.md) distributes derived Markdown
+through Git while retaining the existing local, branch-scoped SQLite/FTS5 snapshots.
+Its import, export, watcher and conflict policies follow the same dependency boundaries.
+
 ## Dependency direction
 
 ```mermaid

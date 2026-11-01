@@ -84,7 +84,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
             var tools = MapTools(document.Tools);
 
             return new RepositoryIndexingConfiguration(
-                document.Analyzers, document.Exclude, semanticIndexing, fileExtensions, document.ProjectName, tools);
+                document.Analyzers, document.Exclude, semanticIndexing, fileExtensions, document.ProjectName, tools,
+                document.SharedSummaries);
         }
         catch (YamlException exception)
         {
@@ -145,6 +146,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         internal static readonly List<string> MissingTools = [];
 
         public int Version { get; set; }
+
+        public bool SharedSummaries { get; set; }
 
         public string? ProjectName { get; set; }
 

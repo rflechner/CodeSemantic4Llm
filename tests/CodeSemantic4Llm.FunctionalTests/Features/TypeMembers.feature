@@ -147,7 +147,7 @@ Feature: Navigate from an indexed type to its declared members
     And the cache uses the original version-one schema
     When I index the checkout again
     Then the run analyzes 1 files and reuses 0 files
-    And the cache schema version is 5
+    And the cache schema version is 6
     When I find type "Worker" in "Worker.cs"
     And I list its "method" members with page size 50
     Then the listed member names are:
@@ -174,7 +174,7 @@ Feature: Navigate from an indexed type to its declared members
     And the next index run will encounter "analyzer failure"
     When I attempt to index the checkout
     Then indexing fails without publishing a snapshot
-    And the cache schema version is 5
+    And the cache schema version is 6
     And the previous snapshot still contains "OldType"
     When I find type "OldType" in "First.cs"
     And I attempt to list its methods
