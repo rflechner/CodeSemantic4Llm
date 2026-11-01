@@ -10,6 +10,27 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 > for C# methods and types, with local FTS5/BM25 keyword search over stored
 > names and summaries. Embeddings and TypeScript analysis remain planned.
 
+## Install as a .NET tool
+
+The CLI can be distributed as the **`CodeSemantic4Llm.Mcp.Server`** NuGet .NET
+Tool through `https://nuget.pkg.github.com/rflechner/index.json`.
+Its executable command is **`codesemantic4llm`**, supporting `init`,
+`preview`, `index`, `dashboard`, and `serve`.
+
+For GitHub Packages PAT authentication, project-local tool manifests,
+global installs, and copy-ready MCP JSON for **VS Code**, **GitHub Copilot
+CLI** and **Claude Desktop**, follow the
+[.NET tool installation and MCP tutorial](docs/dotnet-tool.md).
+The registry requires a classic `read:packages` PAT even for public
+packages; the published package must also be made public separately
+if everyone should have access.
+
+```sh
+# Once the feed is registered and authenticated (see the tutorial):
+dotnet tool install --global CodeSemantic4Llm.Mcp.Server
+codesemantic4llm --help
+```
+
 ## Architecture
 
 | Project | Responsibility |
@@ -279,7 +300,11 @@ symlinks and traversal are rejected. This is a local source edit, not an index u
 Only UTF-8 source files are supported for editing in this first version.
 See [the editing workflow](docs/indexing.md#reading-and-replacing-a-method-body).
 
-### MCP client configuration
+### MCP client configuration (when running from a source build)
+
+For the **installed .NET tool** instead of a manually built DLL, see the
+[VS Code, Copilot CLI and Claude Desktop examples](docs/dotnet-tool.md#4-configure-an-mcp-client).
+The example below is specifically for running from a **source build**.
 
 For VS Code's `.vscode/mcp.json`, use a stdio server with the repository in `args`:
 

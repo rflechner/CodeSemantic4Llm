@@ -1,0 +1,77 @@
+name: Publish .NET tool to GitHub Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'NuGet version to publish (for example 0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-dotnet-tool-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # Manual releases must use main. Tags must use a valid semantic version.
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Determine package version
+        id: release
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            version="$REQUESTED_VERSION"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?$ ]]; then
+            echo "Invalid NuGet version: $version" >&2
+            exit 1
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Restore
+        run: dotnet restore CodeSemantic4Llm.slnx
+      - name: Build
+        run: dotnet build CodeSemantic4Llm.slnx --no-restore --configuration Release -p:Version="$TOOL_VERSION"
+        env:
+          TOOL_VERSION: ${{ steps.release.outputs.version }}
+      - name: Test
+        run: dotnet test CodeSemantic4Llm.slnx --no-build --configuration Release
+      - name: Pack .NET tool
+        run: dotnet pack src/CodeSemantic4Llm.Mcp.Server/CodeSemantic4Llm.Mcp.Server.csproj --no-build --configuration Release --output artifacts -p:Version="$TOOL_VERSION"
+        env:
+          TOOL_VERSION: ${{ steps.release.outputs.version }}
+      - name: Smoke-test installed tool
+        run: bash eng/verify-tool-package.sh artifacts "$TOOL_VERSION"
+        env:
+          TOOL_VERSION: ${{ steps.release.outputs.version }}
+      - name: Register GitHub Packages source
+        shell: bash
+        run: dotnet nuget add source "https://nuget.pkg.github.com/$GITHUB_REPOSITORY_OWNER/index.json" --name GitHubPackages
+      - name: Publish NuGet package
+        shell: bash
+        env:
+          NUGET_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NuGetPackageSourceCredentials_GitHubPackages: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }};ValidAuthenticationTypes=Basic
+          TOOL_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          dotnet nuget push "artifacts/CodeSemantic4Llm.Mcp.Server.$TOOL_VERSION.nupkg" \
+            --source GitHubPackages --api-key "$NUGET_TOKEN"
