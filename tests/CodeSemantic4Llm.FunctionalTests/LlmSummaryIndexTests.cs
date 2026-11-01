@@ -245,10 +245,7 @@ public sealed class LlmSummaryIndexTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_workspace))
-        {
-            Directory.Delete(_workspace, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_workspace);
     }
 
     private sealed class RecordingGenerator : ISymbolSummaryGenerator

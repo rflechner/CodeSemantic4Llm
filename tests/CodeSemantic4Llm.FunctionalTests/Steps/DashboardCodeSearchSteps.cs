@@ -56,7 +56,7 @@ public sealed class DashboardCodeSearchSteps
     }
 
     [Given("the original dashboard checkouts are unavailable")]
-    public void GivenUnavailableCheckouts() => Directory.Delete(Path.Combine(_workspace, "repositories"), recursive: true);
+    public void GivenUnavailableCheckouts() => TemporaryDirectory.Remove(Path.Combine(_workspace, "repositories"));
 
     [When(@"the dashboard searches ""(.*)"" branch ""(.*)"" for ""(.*)"" with kind ""(.*)"" and limit (\d+)")]
     public void WhenSearch(string project, string branch, string query, string kind, int limit)
@@ -110,7 +110,7 @@ public sealed class DashboardCodeSearchSteps
     [AfterScenario]
     public void Cleanup()
     {
-        if (Directory.Exists(_workspace)) Directory.Delete(_workspace, recursive: true);
+        TemporaryDirectory.TryRemove(_workspace);
     }
 
     private string Root(string project) => Path.Combine(_workspace, "repositories", project);

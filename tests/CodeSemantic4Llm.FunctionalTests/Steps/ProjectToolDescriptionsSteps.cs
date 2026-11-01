@@ -106,10 +106,7 @@ public sealed class ProjectToolDescriptionsSteps
             await _client.DisposeAsync();
         }
 
-        if (Directory.Exists(_workspace))
-        {
-            Directory.Delete(_workspace, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_workspace);
     }
 
     private static void AssertDescriptions(JsonElement result, string prefix)

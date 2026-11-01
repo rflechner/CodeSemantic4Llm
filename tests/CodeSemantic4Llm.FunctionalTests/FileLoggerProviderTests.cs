@@ -24,7 +24,7 @@ public sealed class FileLoggerProviderTests : IDisposable
             logger.LogError(exception, "A call failed.");
 
             // Reading before disposal verifies flushing and concurrent reader access.
-            var line = Assert.Single(File.ReadAllLines(LogPath));
+            var line = Assert.Single(SharedLogFile.ReadAllLines(LogPath));
             using var entry = JsonDocument.Parse(line);
             Assert.Equal("request\n7", entry.RootElement.GetProperty("requestId").GetString());
             Assert.Equal("get_file_diagnostics", entry.RootElement.GetProperty("toolName").GetString());
@@ -37,7 +37,7 @@ public sealed class FileLoggerProviderTests : IDisposable
             restarted.CreateLogger("Test").LogInformation("Next server run.");
         }
 
-        Assert.Equal(2, File.ReadAllLines(LogPath).Length);
+        Assert.Equal(2, SharedLogFile.ReadAllLines(LogPath).Length);
         Assert.NotEqual(0xEF, File.ReadAllBytes(LogPath)[0]);
     }
 
@@ -52,7 +52,7 @@ public sealed class FileLoggerProviderTests : IDisposable
             return ValueTask.CompletedTask;
         });
 
-        var lines = File.ReadAllLines(LogPath);
+        var lines = SharedLogFile.ReadAllLines(LogPath);
         Assert.Equal(100, lines.Length);
         Assert.All(lines, line =>
         {
@@ -75,8 +75,8 @@ public sealed class FileLoggerProviderTests : IDisposable
         Assert.Equal(3, Directory.GetFiles(_root).Length);
         Assert.True(File.Exists(LogPath + ".1"));
         Assert.True(File.Exists(LogPath + ".2"));
-        Assert.Contains("Record 11", File.ReadAllText(LogPath));
-        Assert.DoesNotContain("Record 0:", string.Join("", Directory.GetFiles(_root).Select(File.ReadAllText)));
+        Assert.Contains("Record 11", SharedLogFile.ReadAllText(LogPath));
+        Assert.DoesNotContain("Record 0:", string.Join("", Directory.GetFiles(_root).Select(SharedLogFile.ReadAllText)));
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class FileLoggerProviderTests : IDisposable
         });
 
         Assert.Null(failure);
-        Assert.Single(File.ReadAllLines(LogPath));
+        Assert.Single(SharedLogFile.ReadAllLines(LogPath));
     }
 
     [Fact]
@@ -105,14 +105,11 @@ public sealed class FileLoggerProviderTests : IDisposable
         logger.LogDebug("DO_NOT_LOG_DEBUG_SOURCE");
         logger.LogTrace("DO_NOT_LOG_TRACE_SOURCE");
 
-        Assert.Empty(File.ReadAllText(LogPath));
+        Assert.Empty(SharedLogFile.ReadAllText(LogPath));
     }
 
     public void Dispose()
     {
-        if (Directory.Exists(_root))
-        {
-            Directory.Delete(_root, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_root);
     }
 }

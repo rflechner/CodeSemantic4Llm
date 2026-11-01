@@ -39,6 +39,8 @@ public sealed class RepositoryInitializationSteps
     [Given("the target configuration links to an external file")]
     public void GivenConfigurationLink()
     {
+        SymbolicLinks.SkipWhenUnsupported();
+
         File.WriteAllText(ExternalConfigurationPath, OriginalContent);
         File.CreateSymbolicLink(ConfigurationPath, ExternalConfigurationPath);
     }
@@ -232,10 +234,7 @@ public sealed class RepositoryInitializationSteps
     [AfterScenario]
     public void CleanUp()
     {
-        if (Directory.Exists(_workspaceRoot))
-        {
-            Directory.Delete(_workspaceRoot, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_workspaceRoot);
     }
 
     private async Task RunAsync(string[] arguments, CancellationToken? cancellationToken = null)

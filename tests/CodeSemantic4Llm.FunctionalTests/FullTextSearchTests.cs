@@ -280,9 +280,6 @@ public sealed class FullTextSearchTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_workspace))
-        {
-            Directory.Delete(_workspace, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_workspace);
     }
 }

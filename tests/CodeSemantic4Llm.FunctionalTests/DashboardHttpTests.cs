@@ -107,10 +107,7 @@ public sealed class DashboardHttpTests
 
             await process.WaitForExitAsync(CancellationToken.None);
             await Task.WhenAll(standardOutput, standardError);
-            if (Directory.Exists(temporaryRoot))
-            {
-                Directory.Delete(temporaryRoot, recursive: true);
-            }
+            TemporaryDirectory.TryRemove(temporaryRoot);
         }
     }
 

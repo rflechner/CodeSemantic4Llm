@@ -228,9 +228,6 @@ public sealed class DashboardIndexReaderTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_temporaryRoot))
-        {
-            Directory.Delete(_temporaryRoot, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_temporaryRoot);
     }
 }

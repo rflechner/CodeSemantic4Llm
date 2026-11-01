@@ -102,10 +102,7 @@ public sealed partial class ServeRepositorySteps
     [AfterScenario]
     public void Cleanup()
     {
-        if (Directory.Exists(_workspace))
-        {
-            Directory.Delete(_workspace, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_workspace);
     }
 
     private async Task DiagnoseRepositoryThroughMcpAsync(string[] arguments, string? environmentRoot, string relativePath)
@@ -212,15 +209,18 @@ public sealed partial class ServeRepositorySteps
     {
         // Child processes report a physical working directory, including macOS's /var -> /private/var link.
         var directory = new DirectoryInfo(path);
-        var target = directory.ResolveLinkTarget(returnFinalTarget: true);
 
-        if (target is not null)
+        // A filesystem or drive root has no parent and is never a link. Windows additionally
+        // refuses to resolve a link target for 'C:\', so the root must be returned before asking.
+        if (directory.Parent is null)
         {
-            return ResolveDirectoryPath(target.FullName);
+            return directory.FullName;
         }
 
-        return directory.Parent is null
-            ? directory.FullName
+        var target = directory.ResolveLinkTarget(returnFinalTarget: true);
+
+        return target is not null
+            ? ResolveDirectoryPath(target.FullName)
             : Path.Combine(ResolveDirectoryPath(directory.Parent.FullName), directory.Name);
     }
 }

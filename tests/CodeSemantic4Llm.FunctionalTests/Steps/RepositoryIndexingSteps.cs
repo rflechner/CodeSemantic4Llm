@@ -69,6 +69,8 @@ public sealed partial class RepositoryIndexingSteps
     [Given("source links in the indexing checkout point outside it")]
     public void GivenSourceLinks()
     {
+        SymbolicLinks.SkipWhenUnsupported();
+
         var outside = Path.Combine(_workspace, "outside");
         Directory.CreateDirectory(outside);
         File.WriteAllText(Path.Combine(outside, "Outside.cs"), "public class OutsideType {}");
@@ -203,7 +205,7 @@ public sealed partial class RepositoryIndexingSteps
         switch (target)
         {
             case "not Git":
-                Directory.Delete(Path.Combine(_root, ".git"), recursive: true);
+                TemporaryDirectory.Remove(Path.Combine(_root, ".git"));
                 break;
             case "subdirectory":
                 _root = Directory.CreateDirectory(Path.Combine(_root, "nested")).FullName;
@@ -407,10 +409,7 @@ public sealed partial class RepositoryIndexingSteps
     {
         _cancellation?.Dispose();
 
-        if (Directory.Exists(_workspace))
-        {
-            Directory.Delete(_workspace, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_workspace);
     }
 
     private CancellationToken Token => _cancellation?.Token ?? TestContext.Current.CancellationToken;
