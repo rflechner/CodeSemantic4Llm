@@ -21,7 +21,9 @@ public sealed class SharedSummaryWatcherTests
         try
         {
             var scope = (await repo.State.GetStateAsync(repo.Root, repo.Token)).Scope;
-            await Eventually(() => repo.Store.GetSnapshot(scope, repo.Token) is not null, repo.Token);
+            // A fresh database file can exist before its schema is initialized; wait for publication.
+            await Eventually(() => reports.Any(report => report.StartsWith("Index verified:", StringComparison.Ordinal)), repo.Token);
+            Assert.NotNull(repo.Store.GetSnapshot(scope, repo.Token));
             Assert.Equal(2, repo.Generator.Calls); // Startup reused the other developer's output.
             File.WriteAllText(repo.SummaryPath, File.ReadAllText(repo.SummaryPath).Replace("nebula", "watcherquasar"));
             await Eventually(() => repo.Store.SearchCode(scope, "watcherquasar", null, 10, repo.Token).Symbols.Count == 2, repo.Token);
