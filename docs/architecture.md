@@ -24,10 +24,11 @@ The application owns the ports. Adapters depend inward; the MCP executable is th
 ## Console commands and MCP transport
 
 `Program.cs` wires dependency injection, output streams and cancellation. Spectre.Console.Cli
-dispatches `init`, `preview`, `index` and `serve` to separate commands with declarative settings.
-The default command starts the same stdio MCP server as `serve`. A small type registrar
-bridges Spectre to Microsoft dependency injection and disposes each run's service provider.
-Application use cases and adapters have no dependency on Spectre.
+dispatches `init`, `preview`, `index`, `dashboard` and `serve` to separate commands with
+declarative settings. The default command starts the same stdio MCP server as `serve`.
+A small type registrar bridges Spectre to Microsoft dependency injection and disposes
+each run's service provider. Application use cases and adapters have no dependency
+on Spectre.
 
 `serve [repository-path]` has its own settings and delegates to the same host composition
 as the argument-free default command. Keeping the default command argument-free ensures
@@ -137,8 +138,9 @@ one transaction to keep snapshot metadata and declaration rows consistent.
 Schema 2 added container coordinates and type membership metadata; schema 3 adds a compact
 `symbol_references` table keyed by snapshot and target declaration location. References
 contain usage path and line/column only, with no copied sources. A version marker on each
-snapshot prevents old indexes from falsely reporting no usages. Version-one and version-two
-caches are upgraded on the write path, leaving older snapshots usable for supported reads.
+snapshot prevents old indexes from falsely reporting no usages. Caches from version one
+through four are upgraded on the write path, leaving older snapshots usable for
+supported reads.
 Failed publication preserves the previous declarations; missing reference data asks for
 reindexing. Reference queries use deterministic bounded pages and snapshot ID guards.
 

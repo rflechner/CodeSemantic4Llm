@@ -248,9 +248,10 @@ Restart the server and refresh the client's tool list when changing modes.
 See the [MCP interface documentation](docs/indexing.md#querying-through-mcp).
 
 When upgrading an older cache, rerun `index` for each branch you need to
-query. Schema 3 adds reference relationships; existing declarations remain readable
-until that branch has been reindexed. Restart the MCP server so clients can discover
-`find_usages`.
+query. Schema 3 adds reference relationships, schema 4 optional LLM summaries and
+schema 5 the FTS5 search index; existing declarations remain readable until that
+branch has been reindexed. Restart the MCP server so clients can discover
+`find_usages` and `search_code`.
 
 ### Optional method-level source editing
 
