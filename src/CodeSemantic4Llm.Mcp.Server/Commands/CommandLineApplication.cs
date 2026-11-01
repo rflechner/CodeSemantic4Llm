@@ -51,6 +51,15 @@ public static class CommandLineApplication
                 .WithDescription("Index every configured source file into a persistent branch snapshot.")
                 .WithExample("index", "./repository");
 
+            configuration.AddCommand<ExportSummariesCommand>("cache-export")
+                .WithDescription("Export current indexed summaries as versionable Markdown; never stages or commits.");
+            configuration.AddCommand<SetupSummaryGitCommand>("setup-git")
+                .WithDescription("Install a repository-local merge driver and the shared-summary attributes rule.");
+            configuration.AddCommand<MergeSummaryCommand>("git-merge-summary")
+                .WithDescription("Git merge driver: select one complete summary document using current/other policy.");
+            configuration.AddCommand<WatchRepositoryCommand>("watch")
+                .WithDescription("Verify the index at startup and reconcile source/configuration/summary changes until stopped.");
+
             configuration.AddCommand<IndexDashboardCommand>("dashboard")
                 .WithDescription("Explore all locally indexed repositories and branches in a read-only HTTP UI.")
                 .WithExample("dashboard", "--port", "5080");

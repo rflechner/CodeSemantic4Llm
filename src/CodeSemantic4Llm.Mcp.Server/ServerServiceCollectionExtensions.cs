@@ -33,6 +33,12 @@ internal static class ServerServiceCollectionExtensions
         services.AddSingleton<IRepositoryConfigurationLoader, YamlRepositoryConfigurationLoader>();
         services.AddSingleton<IRepositoryConfigurationWriter, YamlRepositoryConfigurationWriter>();
         services.AddSingleton<IRepositoryFileEnumerator, FileSystemRepositoryFileEnumerator>();
+        services.AddSingleton<ISharedSummaryCodec, MarkdownSummaryCodec>();
+        services.AddSingleton<ISharedSummaryCache, MarkdownSummaryCache>();
+        services.AddSingleton<ISummaryExportReader, SqliteSummaryExportReader>();
+        services.AddSingleton<ExportSharedSummaries>();
+        services.AddSingleton<GitSummaryIntegration>();
+        services.AddSingleton<RepositoryIndexWatcher>();
         services.AddSingleton<AnalyzeSource>();
         services.AddSingleton<PreviewRepositoryIndex>();
         services.AddSingleton<InitializeRepositoryConfiguration>();

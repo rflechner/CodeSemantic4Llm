@@ -2,6 +2,10 @@
 # The file lives in the source checkout, not in the index storage directory.
 version: 1
 
+# Opt in to importing compatible .codesemantic4llm/summaries/**/*.md files.
+# Run cache-export explicitly to publish local summaries. See docs/shared-summaries.md.
+sharedSummaries: false
+
 analyzers:
   - dotnet-csharp
 
@@ -27,7 +31,7 @@ semanticIndexing:
     # apiKey: your-api-key # Takes priority over apiKeyEnvironmentVariable when non-empty.
     # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 
-# User-defined excludes extend the built-in defaults for **/.git/**, **/bin/** and **/obj/**.
+# User-defined excludes extend built-in .git, bin, obj and .codesemantic4llm exclusions.
 # Git submodules are NOT automatically excluded; opt out by path as needed.
 exclude:
   - submodules/**

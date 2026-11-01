@@ -3,3 +3,6 @@
 * text=auto eol=lf
 
 *.png binary
+
+# Install the executable driver locally with: codesemantic4llm setup-git .
+.codesemantic4llm/summaries/** merge=codesemantic-summary text eol=lf

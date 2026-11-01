@@ -28,7 +28,8 @@ public sealed class IndexRepository(
     IEnumerable<ISourceAnalyzer> analyzers,
     IEnumerable<ISourceReferenceAnalyzer>? referenceAnalyzers = null,
     IEnumerable<ISymbolSourceExtractor>? summaryExtractors = null,
-    ISymbolSummaryGenerator? summaryGenerator = null)
+    ISymbolSummaryGenerator? summaryGenerator = null,
+    ISharedSummaryCache? sharedSummaryCache = null)
 {
     private readonly IReadOnlyList<ISourceAnalyzer> _analyzers = analyzers.ToArray();
     private readonly IReadOnlyList<ISourceReferenceAnalyzer> _referenceAnalyzers = referenceAnalyzers?.ToArray() ?? [];
@@ -54,6 +55,8 @@ public sealed class IndexRepository(
 
         var fingerprint = Fingerprint(configuration, selectedAnalyzers);
         var candidates = Discover(root, configuration, selectedAnalyzers, progress, cancellationToken);
+        var useSharedSummaries = configuration.SharedSummaries && configuration.SemanticIndexing.Llm.Enabled;
+        var summaryProfile = GetSummaryProfile(configuration);
 
         using var update = indexStore.BeginUpdate(
             state, fingerprint, configuration.SemanticIndexing.Language, cancellationToken);
@@ -67,7 +70,11 @@ public sealed class IndexRepository(
             var candidate = candidates[index];
             var source = await sourceReader.ReadAsync(root, candidate.RelativePath, cancellationToken);
             var adapter = candidate.Analyzer.Analyzer;
-            var file = new IndexedSourceFile(candidate.RelativePath, source.ContentHash, adapter.AnalyzerId, adapter.IndexVersion);
+            var shared = useSharedSummaries && sharedSummaryCache is not null
+                ? await sharedSummaryCache.ReadAsync(root, candidate.RelativePath, cancellationToken)
+                : new SharedSummaryRead("", null);
+            var file = new IndexedSourceFile(candidate.RelativePath, source.ContentHash, adapter.AnalyzerId,
+                adapter.IndexVersion, shared.Digest);
             indexedFiles.Add(file);
 
             if (update.TryReuse(file, cancellationToken))
@@ -78,7 +85,8 @@ public sealed class IndexRepository(
             {
                 var symbols = await adapter.AnalyzeAsync(source.Document, cancellationToken);
                 var described = await SummarizeSymbolsAsync(
-                    source.Document, candidate.Analyzer, symbols, configuration.SemanticIndexing, cancellationToken);
+                    source.Document, candidate.Analyzer, symbols, configuration.SemanticIndexing,
+                    shared.File?.Matches(file, summaryProfile) == true ? shared.File : null, cancellationToken);
                 update.AddFile(file, described, cancellationToken);
             }
 
@@ -93,6 +101,19 @@ public sealed class IndexRepository(
         }
 
         await VerifyFilesAsync(root, indexedFiles, progress, cancellationToken);
+
+        if (useSharedSummaries && sharedSummaryCache is not null)
+        {
+            foreach (var file in indexedFiles)
+            {
+                var observed = await sharedSummaryCache.ReadAsync(root, file.RelativePath, cancellationToken);
+                if (observed.Digest != file.SummaryCacheHash)
+                {
+                    throw new IOException($"Shared summary for '{file.RelativePath}' changed during indexing. Run index again.");
+                }
+            }
+        }
+
         var finalCandidates = Discover(root, configuration, selectedAnalyzers, null, cancellationToken);
 
         if (!candidates.Select(file => file.RelativePath).SequenceEqual(finalCandidates.Select(file => file.RelativePath)))
@@ -111,14 +132,17 @@ public sealed class IndexRepository(
     private async Task<IReadOnlyList<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition>> SummarizeSymbolsAsync(
         SourceDocument document, ConfiguredSourceAnalyzer analyzer,
         IReadOnlyList<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition> symbols,
-        SemanticIndexingConfiguration settings, CancellationToken cancellationToken)
+        SemanticIndexingConfiguration settings, SharedSummaryFile? shared, CancellationToken cancellationToken)
     {
         if (!settings.Llm.Enabled)
         {
             return symbols;
         }
 
-        var pending = symbols.Where(symbol => settings.Llm.ForceGeneration || string.IsNullOrWhiteSpace(symbol.Summary)).ToArray();
+        symbols = symbols.Select(symbol => shared?.Find(symbol) is { } summary
+            ? symbol with { Summary = summary } : symbol).ToArray();
+        var pending = symbols.Where(symbol => shared?.Find(symbol) is null &&
+            (settings.Llm.ForceGeneration || string.IsNullOrWhiteSpace(symbol.Summary))).ToArray();
 
         if (pending.Length == 0)
         {
@@ -256,6 +280,7 @@ public sealed class IndexRepository(
         var settings = JsonSerializer.Serialize(new
         {
             configuration.Version,
+            configuration.SharedSummaries,
             configuration.SemanticIndexing.Language,
             Llm = new
             {
@@ -263,11 +288,10 @@ public sealed class IndexRepository(
                 configuration.SemanticIndexing.Llm.ForceGeneration,
                 Url = configuration.SemanticIndexing.Llm.BaseUrl?.AbsoluteUri,
                 configuration.SemanticIndexing.Llm.Model,
-                configuration.SemanticIndexing.Llm.ApiKeyEnvironmentVariable,
                 configuration.SemanticIndexing.Llm.ReasoningEffort,
                 configuration.SemanticIndexing.Llm.MaxCompletionTokens,
                 GeneratorVersion = configuration.SemanticIndexing.Llm.Enabled
-                    ? summaryGenerator?.GetType().Assembly.ManifestModule.ModuleVersionId.ToString("N") : null,
+                    ? summaryGenerator?.CacheVersion : null,
                 Extractors = configuration.SemanticIndexing.Llm.Enabled
                     ? _summaryExtractors.OrderBy(item => item.Key, StringComparer.Ordinal)
                         .Select(item => new { item.Key, Version = item.Value.GetType().Assembly.ManifestModule.ModuleVersionId })
@@ -284,6 +308,14 @@ public sealed class IndexRepository(
 
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(settings)));
     }
+
+    /// <summary>Matches an export to the exact settings used by a published local index.</summary>
+    public string GetConfigurationFingerprint(RepositoryIndexingConfiguration configuration) =>
+        Fingerprint(configuration, new ConfiguredSourceAnalyzers(configuration, _analyzers));
+
+    /// <summary>Portable model, prompt and language identity; secrets never enter exported metadata.</summary>
+    public SummaryProfile GetSummaryProfile(RepositoryIndexingConfiguration configuration) =>
+        SummaryProfile.Create(configuration.SemanticIndexing, summaryGenerator?.CacheVersion ?? "unavailable");
 
     private sealed record IndexingSource(string RelativePath, ConfiguredSourceAnalyzer Analyzer);
 }

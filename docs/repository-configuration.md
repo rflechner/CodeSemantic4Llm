@@ -527,3 +527,12 @@ Git checkouts and SQLite to verify full indexing, reuse, stale-record removal, r
 branch isolation and saved-index queries. See [the indexing guide](indexing.md).
 
 Run all tests with `dotnet test CodeSemantic4Llm.slnx`.
+
+## Shared summary distribution
+
+The optional top-level boolean `sharedSummaries` defaults to `false`. Set it to `true`
+to import compatible `.codesemantic4llm/summaries/**/*.md` when LLM indexing is enabled.
+The existing `semanticIndexing.llm` and `semanticIndexing.language` settings remain the
+only generation configuration. Export remains explicit through `cache-export`.
+The `.codesemantic4llm` directory is always excluded from source discovery.
+See [Shared LLM summaries in Git](shared-summaries.md) for the complete workflow.

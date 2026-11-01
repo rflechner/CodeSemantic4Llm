@@ -248,7 +248,7 @@ public sealed class FullTextSearchTests : IDisposable
         verify.Open();
         using var version = verify.CreateCommand();
         version.CommandText = "PRAGMA user_version;";
-        Assert.Equal(5L, version.ExecuteScalar());
+        Assert.Equal(6L, version.ExecuteScalar());
     }
 
     private RepositoryScope Scope(string branch) => new(_root, branch);

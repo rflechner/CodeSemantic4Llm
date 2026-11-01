@@ -53,9 +53,10 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
 
         using var find = Command("""
             SELECT symbol_count FROM indexed_files WHERE snapshot_id = $previous AND path = $path
-            AND content_hash = $hash AND analyzer_id = $analyzer AND analyzer_version = $version;
+            AND content_hash = $hash AND analyzer_id = $analyzer AND analyzer_version = $version
+            AND summary_cache_hash = $summaryHash;
             """, ("$previous", _reusableId), ("$path", file.RelativePath), ("$hash", file.ContentHash),
-            ("$analyzer", file.AnalyzerId), ("$version", file.AnalyzerVersion));
+            ("$analyzer", file.AnalyzerId), ("$version", file.AnalyzerVersion), ("$summaryHash", file.SummaryCacheHash));
         var symbolCount = find.ExecuteScalar();
 
         if (symbolCount is null)
@@ -64,7 +65,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         }
 
         using var copy = Command("""
-            INSERT INTO indexed_files SELECT $snapshot, path, content_hash, analyzer_id, analyzer_version, symbol_count
+            INSERT INTO indexed_files SELECT $snapshot, path, content_hash, analyzer_id, analyzer_version, symbol_count, summary_cache_hash
             FROM indexed_files WHERE snapshot_id = $previous AND path = $path;
             INSERT INTO symbols SELECT $snapshot, path, ordinal, language, kind, name, qualified_name, line, column_number,
                 containing_type_line, containing_type_column, summary
@@ -127,10 +128,11 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     {
         EnsureWritable(cancellationToken);
         using var insert = Command("""
-            INSERT INTO indexed_files(snapshot_id, path, content_hash, analyzer_id, analyzer_version, symbol_count)
-            VALUES ($snapshot, $path, $hash, $analyzer, $version, $count);
+            INSERT INTO indexed_files(snapshot_id, path, content_hash, analyzer_id, analyzer_version, symbol_count, summary_cache_hash)
+            VALUES ($snapshot, $path, $hash, $analyzer, $version, $count, $summaryHash);
             """, ("$snapshot", _snapshotId), ("$path", file.RelativePath), ("$hash", file.ContentHash),
-            ("$analyzer", file.AnalyzerId), ("$version", file.AnalyzerVersion), ("$count", symbols.Count));
+            ("$analyzer", file.AnalyzerId), ("$version", file.AnalyzerVersion), ("$count", symbols.Count),
+            ("$summaryHash", file.SummaryCacheHash));
         insert.ExecuteNonQuery();
 
         for (var ordinal = 0; ordinal < symbols.Count; ordinal++)

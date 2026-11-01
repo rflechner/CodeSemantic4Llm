@@ -284,3 +284,11 @@ References: [GitHub NuGet authentication](https://docs.github.com/en/packages/wo
 [NuGet environment credentials](https://learn.microsoft.com/en-us/nuget/consume-packages/consuming-packages-authenticated-feeds),
 [VS Code MCP](https://code.visualstudio.com/docs/agents/reference/mcp-configuration),
 [Copilot CLI MCP](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers).
+
+## Shared summary commands
+
+The installed tool also provides `cache-export <repository-path> [--overwrite]`,
+`watch <repository-path>` and `setup-git <repository-path>`. The latter installs a
+local driver invoking `git-merge-summary <current|other> <ancestor> <current> <other>`.
+See the [shared summary guide](shared-summaries.md) before selecting a Git conflict
+policy, especially for rebases and uncommitted Markdown.
