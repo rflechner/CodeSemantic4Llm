@@ -28,12 +28,35 @@ When all options are omitted, the generated defaults are:
 version: 1
 analyzers:
   - dotnet-csharp
+# MCP tools advertised for this repository. Comment out a line to hide that tool.
+# Removing the whole section advertises every tool. Writing tools also require
+# serve --allow-write, and indexing tools require serve --expose-indexing.
+tools:
+  - get_server_info
+  - find_symbols
+  - search_code
+  - get_type_members
+  - find_usages
+  - get_method_body
+  - get_method
+  - validate_method_body
+  - get_method_diagnostics
+  - get_file_diagnostics
+  - get_type_diagnostics
+  - replace_method_body
+  - replace_method
+  - get_repository_configuration
+  - preview_repository_index
+  - get_repository_index_status
 semanticIndexing:
   language: en
   llm:
     enabled: false
 exclude: []
 ```
+
+Every tool is selected, so preparing a repository only requires commenting out the tools its
+agents should not see. See [selecting the advertised MCP tools](#select-the-advertised-mcp-tools).
 
 `--name "My Project"` writes `projectName: My Project`. The optional name is a display
 label, independent of the checkout path, branch identity and cache location. It is trimmed
@@ -110,6 +133,25 @@ analyzers:
 fileExtensions:
   dotnet-csharp: [.cs, .csharp]
 
+# Optional: the MCP tools this repository advertises; omit the section to advertise all.
+tools:
+  - get_server_info
+  - find_symbols
+  - search_code
+  - get_type_members
+  - find_usages
+  - get_method_body
+  - get_method
+  - validate_method_body
+  - get_method_diagnostics
+  - get_file_diagnostics
+  - get_type_diagnostics
+  # - replace_method_body   # Hidden: the agent edits files with its own tool
+  # - replace_method
+  - get_repository_configuration
+  - preview_repository_index
+  - get_repository_index_status
+
 semanticIndexing:
   language: fr   # Optional; defaults to en
   llm:
@@ -129,6 +171,7 @@ exclude:
 - `projectName` is an optional, non-empty, single-line display name; omission or null leaves it unspecified.
 - `analyzers` is a required, non-empty list of installed analyzer IDs. Currently only `dotnet-csharp` is registered.
 - `fileExtensions` is an optional mapping of enabled analyzer IDs to replacement extension lists.
+- `tools` is an optional, non-empty list of MCP tool names; omitting the section advertises every tool.
 - `semanticIndexing.language` is optional and defaults to `en` (English).
 - `semanticIndexing.llm.enabled` is optional and defaults to `false` (no LLM calls).
 - `semanticIndexing.llm.forceGeneration` defaults to `false`; when LLM calls are enabled,
@@ -138,6 +181,75 @@ exclude:
 - `exclude` is optional. Rules add to, rather than replace, the built-in defaults.
 - Git submodules are **not** excluded automatically; list their checkout paths if they should be skipped.
 - Unknown YAML properties, duplicate keys, missing configuration, and unknown/unimplemented analyzers fail explicitly.
+
+## Select the advertised MCP tools
+
+`tools` lists the MCP tools this repository's server may advertise and accept. Use it when a
+checkout should expose less than the server can do, for example to hide the editing tools from
+an agent that already has its own file-editing tool:
+
+```yaml
+tools:
+  - get_server_info
+  - find_symbols
+  - search_code
+  - get_type_members
+  - find_usages
+  - get_method_body
+  - get_method
+  - validate_method_body
+  - get_method_diagnostics
+  - get_file_diagnostics
+  - get_type_diagnostics
+  # - replace_method_body
+  # - replace_method
+  - get_repository_configuration
+  - preview_repository_index
+  - get_repository_index_status
+```
+
+| Tool | Requires | Purpose |
+| --- | --- | --- |
+| `get_server_info` | | Server name and implementation status. |
+| `find_symbols` | | Finds declarations by exact simple name. |
+| `search_code` | | Ranks declarations from keywords or a question. |
+| `get_type_members` | | Lists the direct members of a type. |
+| `find_usages` | | Finds resolved references to a method or type. |
+| `get_method_body` | | Reads one method body. |
+| `get_method` | | Reads one complete method declaration. |
+| `validate_method_body` | | Checks a proposed body without writing. |
+| `get_method_diagnostics` | | Checks the syntax of one method on disk. |
+| `get_file_diagnostics` | | Checks the syntax of a whole file on disk. |
+| `get_type_diagnostics` | | Checks the syntax inside one type declaration. |
+| `replace_method_body` | `--allow-write` | Validates and replaces one method body. |
+| `replace_method` | `--allow-write` | Validates and replaces one complete method. |
+| `get_repository_configuration` | `--expose-indexing` | Reads the repository's YAML settings. |
+| `preview_repository_index` | `--expose-indexing` | Previews candidate source paths. |
+| `get_repository_index_status` | `--expose-indexing` | Reports the saved snapshot and Git state. |
+
+Rules:
+
+- **Omitting the whole section advertises every tool**, which keeps earlier configurations valid.
+- A section that selects no tool is an **error**. Commenting out every entry reports a problem
+  instead of silently advertising all of them again; delete the section to mean "every tool".
+- Names are trimmed, lowercased and deduplicated. The YAML order does not matter: discovery
+  always returns the catalog order shown above.
+- An unknown name **fails explicitly** with the list of available tools, so a typo cannot
+  silently hide a tool.
+- A selection only **narrows** what the operator granted at startup. Listing `replace_method_body`
+  does not grant source editing: writing tools still require `serve --allow-write` and indexing
+  tools still require `serve --expose-indexing`. A tool that was never registered is refused as
+  an unknown tool.
+- A deselected tool is hidden from `tools/list` **and refused** when a client with a stale tool
+  list calls it anyway, naming the tool and pointing at the repository configuration.
+- The selection is read on each `tools/list` and each tool call, so an edit takes effect as soon
+  as the client refreshes its tool list. Restart the MCP connection for clients that cache it.
+- If the configuration cannot be read, the startup capabilities remain the only restriction and a
+  warning goes to stderr, so file diagnostics stay usable on an unconfigured checkout. Commands
+  that need valid configuration, such as `preview` and `index`, still fail with their usual error.
+
+Selecting tools is a presentation choice: it changes neither indexing, nor stored data, nor the
+index cache identity. Narrowing the list does not require reindexing.
 
 ## Recursive discovery and file extensions
 
@@ -400,6 +512,9 @@ Functional behavior is described in
 behavior in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryPreview.feature`
 and `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryInitialization.feature`,
 and command routing in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleCommandRouting.feature`.
+`tests/CodeSemantic4Llm.FunctionalTests/Features/McpToolSelection.feature` covers the repository
+tool selection: generated configuration, narrowed discovery, refused calls, rejected sections and
+the capabilities a selection cannot grant.
 `tests/CodeSemantic4Llm.FunctionalTests/Features/ServeRepository.feature` covers absolute and
 relative serve paths, environment precedence and MCP preview calls through a real server,
 using [Reqnroll](https://reqnroll.net/) and xUnit v3. The tests create temporary

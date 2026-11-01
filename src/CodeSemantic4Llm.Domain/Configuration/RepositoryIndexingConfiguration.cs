@@ -22,7 +22,8 @@ public sealed class RepositoryIndexingConfiguration
         IEnumerable<string>? exclusions = null,
         SemanticIndexingConfiguration? semanticIndexing = null,
         IReadOnlyDictionary<string, SourceFileExtensions>? fileExtensions = null,
-        string? projectName = null)
+        string? projectName = null,
+        McpToolSelection? tools = null)
     {
         ArgumentNullException.ThrowIfNull(analyzerIds);
 
@@ -47,6 +48,7 @@ public sealed class RepositoryIndexingConfiguration
         SemanticIndexing = semanticIndexing ?? new SemanticIndexingConfiguration();
         FileExtensions = NormalizeFileExtensions(fileExtensions);
         ProjectName = NormalizeProjectName(projectName);
+        Tools = tools ?? McpToolSelection.All;
     }
 
     public int Version => CurrentVersion;
@@ -62,6 +64,13 @@ public sealed class RepositoryIndexingConfiguration
 
     /// <summary>Language used for future natural-language semantic descriptions, not for source parsing.</summary>
     public SemanticIndexingConfiguration SemanticIndexing { get; }
+
+    /// <summary>
+    /// MCP tools this repository allows its server to advertise. Every tool is selected when the
+    /// YAML declares no tools section. A selection never grants a capability the operator withheld
+    /// when starting the process.
+    /// </summary>
+    public McpToolSelection Tools { get; }
 
     /// <summary>
     /// Extension overrides keyed by enabled analyzer ID. An entry replaces that analyzer's

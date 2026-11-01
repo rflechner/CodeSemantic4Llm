@@ -50,6 +50,7 @@ internal static class McpServerHost
         builder.Services.AddSingleton<DiagnosticPages>();
         builder.Services.AddSingleton<CodeDiagnosticOperations>();
         builder.Services.AddSingleton<ProjectToolDescriptions>();
+        builder.Services.AddSingleton<McpToolAvailability>();
 
         // Tool results are JSON inside MCP text, not HTML. Keep C# punctuation and Unicode
         // readable for models; quotes, backslashes and control characters still use JSON escaping.
@@ -63,11 +64,15 @@ internal static class McpServerHost
 
         // Explicit registration keeps the editing tool undiscoverable in read-only mode.
         // A client cannot enable this capability through tool arguments or YAML settings.
+        // The repository's tool selection then filters what these capabilities registered;
+        // it narrows the advertised set and never widens it.
         var mcp = builder.Services.AddMcpServer()
             .WithStdioServerTransport()
             .WithRequestFilters(filters => filters
                 .AddCallToolFilter(McpToolCallLogging.Wrap)
-                .AddListToolsFilter(ProjectToolDescriptions.Wrap))
+                .AddCallToolFilter(McpToolAvailability.WrapCall)
+                .AddListToolsFilter(ProjectToolDescriptions.Wrap)
+                .AddListToolsFilter(McpToolAvailability.WrapList))
             .WithTools<ServerInformationTools>(toolJsonOptions)
             .WithTools<RepositoryCodeTools>(toolJsonOptions)
             .WithTools<RepositoryCodeDiagnosticsTools>(toolJsonOptions);

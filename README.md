@@ -69,6 +69,8 @@ the project unnamed. The name is independent of the repository path and index ca
 IDs are trimmed, lowercased and deduplicated in first occurrence order. All selected
 analyzers must be installed; currently only `dotnet-csharp` is available.
 Each analyzer retains its default extensions, and the command adds no custom exclusions.
+The generated YAML selects every MCP tool under `tools`, so preparing a repository only requires
+commenting out the tools its agents should not see.
 Existing configuration files are preserved and reported as an error.
 Use `init --help` for usage. In Rider, use `init /path/to/repository --lang fr` as the
 program arguments for `CodeSemantic4Llm.Mcp.Server`.
@@ -83,6 +85,13 @@ analyzers:
 # Optional: replaces this analyzer's default extension list (.cs).
 # fileExtensions:
 #   dotnet-csharp: [.cs, .csharp]
+# MCP tools advertised for this repository; init writes every name.
+# Comment out a line to hide that tool. Omit the section to advertise all.
+tools:
+  - get_server_info
+  - find_symbols
+  # - replace_method_body
+  # ... see docs/repository-configuration.md for the complete list
 semanticIndexing:
   language: en   # Optional: use fr, fr-CH, etc.
   llm:
@@ -189,7 +198,12 @@ The file includes complete tool parameters and responses, including source snipp
 See [file logging and troubleshooting](docs/logging.md) for examples and log fields.
 By default it exposes code-focused tools: `get_server_info`,
 `find_symbols`, `search_code`, `get_type_members`, `find_usages`, `get_method`, `get_method_body`,
-`validate_method_body`, and the file/type/method diagnostic tools. Tool descriptions,
+`validate_method_body`, and the file/type/method diagnostic tools. Each checkout's YAML narrows that
+list: commenting out a name under `tools` hides it from discovery and refuses calls to it, while
+deleting the section advertises every tool. A selection can only narrow what the startup switches
+granted, so listing a writing tool never replaces `--allow-write`. See
+[selecting the advertised MCP tools](docs/repository-configuration.md#select-the-advertised-mcp-tools).
+Tool descriptions,
 parameters and responses hide indexing, snapshot details and file hashes. Select declarations
 by `relativePath` and `name` (simple or qualified), adding the identifier `line` and `column`
 only when needed to distinguish overloads or other ambiguous declarations. No temporary
