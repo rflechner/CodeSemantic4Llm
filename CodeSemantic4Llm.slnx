@@ -1,4 +1,14 @@
 <Solution>
+  <Folder Name="/docs/">
+    <File Path="docs/architecture.md" />
+    <File Path="docs/dashboard.md" />
+    <File Path="docs/dotnet-tool.md" />
+    <File Path="docs/index-storage-architecture.png" />
+    <File Path="docs/index-storage-architecture.prompt.txt" />
+    <File Path="docs/indexing.md" />
+    <File Path="docs/logging.md" />
+    <File Path="docs/repository-configuration.md" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/CodeSemantic4Llm.Domain/CodeSemantic4Llm.Domain.csproj" />
     <Project Path="src/CodeSemantic4Llm.Application/CodeSemantic4Llm.Application.csproj" />
