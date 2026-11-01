@@ -31,7 +31,7 @@ public sealed class RepositorySourceWriterTests
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            TemporaryDirectory.TryRemove(root);
         }
     }
 
@@ -54,13 +54,15 @@ public sealed class RepositorySourceWriterTests
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
+            TemporaryDirectory.TryRemove(root);
         }
     }
 
     [Fact]
     public async Task Refuses_parent_traversal_and_symlinked_files()
     {
+        SymbolicLinks.SkipWhenUnsupported();
+
         var root = MakeRoot();
         var outside = MakeRoot();
 
@@ -80,8 +82,8 @@ public sealed class RepositorySourceWriterTests
         }
         finally
         {
-            Directory.Delete(root, recursive: true);
-            Directory.Delete(outside, recursive: true);
+            TemporaryDirectory.TryRemove(root);
+            TemporaryDirectory.TryRemove(outside);
         }
     }
 

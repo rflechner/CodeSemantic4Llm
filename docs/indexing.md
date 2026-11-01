@@ -30,8 +30,17 @@ methods and types across the selected C# files. Only target/usage locations are 
 no source text, copied project files or Roslyn syntax trees are persisted. The reference
 pass loads the selected C# files into memory, so its peak memory scales with the size of
 the compilation. References to framework and other external declarations are not saved.
-AI descriptions and embeddings remain planned. `semanticIndexing.language` is recorded
-for future generated text.
+C# methods, constructors and types store their own usable XML `<summary>` text locally,
+even without LLM generation. The complete documentation is retained as readable text.
+Optional OpenAI-compatible LLM summaries of methods and types are available through
+`semanticIndexing.llm` in each repository YAML. The feature is disabled by default.
+When enabled, declarations without usable documentation are sent to the model; set
+`semanticIndexing.llm.forceGeneration: true` to generate summaries for documented declarations too.
+The C# extractor supplies full declarations (including XML doc comments) to the model;
+only generated summaries are limited to 10 lines.
+If the LLM response contains no usable text summary, a warning is logged to stderr and indexing
+continues, preserving any existing source documentation for that declaration.
+Embeddings remain planned; see [configuration](repository-configuration.md#optional-per-repository-llm-summaries).
 
 **Current limitation:** The reference pass treats all selected C# files as one assembly;
 it does not evaluate `.csproj` boundaries, target frameworks, conditional compilation
@@ -75,12 +84,14 @@ different cache identity. No YAML or source files are copied into the cache.
 
 The versioned schema stores derived declarations, reference locations and
 lookup/invalidation metadata. It is a regenerable cache, not a stable interchange format
-or a source backup. Schema 2 introduced type membership, and schema 3 adds a compact
-reference table indexed by target declaration position. Running `index` upgrades version-one
-and version-two caches on the write path; the old published snapshot remains intact until
-atomic publication. An earlier branch may still return its declarations, but cannot
-answer `find_usages` until reindexed. An interrupted run preserves the older published
-snapshot. MCP reads never migrate storage.
+or a source backup. Schema 2 introduced type membership, schema 3 adds a compact
+reference table indexed by target declaration position, schema 4 adds optional LLM
+summaries to each symbol, and schema 5 adds SQLite FTS5 over the saved symbol names
+and summaries. Running `index` upgrades existing caches and rebuilds the full-text
+index from stored declarations, without making any LLM calls or reading source files.
+The previous published snapshot remains intact until atomic publication. An earlier branch may still return its declarations, but cannot
+answer `find_usages` or `search_code` until upgraded/reindexed as necessary.
+An interrupted run preserves the older published snapshot. MCP reads never migrate storage.
 
 Unsupported schema versions fail without changes; select a fresh cache directory and rerun
 `index`. Deleting an unused cache directory is sufficient to discard its derived data.
@@ -90,7 +101,8 @@ Unsupported schema versions fail without changes; select a fresh cache directory
 Rerun the same command after edits. Content hashes, analyzer identity/version and a
 configuration fingerprint decide whether prior declarations can be reused. New and
 changed files are analyzed; deleted files and old rename locations disappear on publication.
-Changes to analyzer selection, extensions, exclusions or semantic language invalidate reuse.
+Changes to analyzer selection, extensions, exclusions, semantic language or LLM settings
+invalidate reuse. Unchanged files reuse their stored summaries without LLM calls.
 All selected files are read and hashed even when their declarations can be reused.
 References are global semantic relationships: when any selected file is added, deleted
 or changed, all C# references are resolved again against the new compilation. Only an
@@ -100,7 +112,8 @@ target is edited.
 
 One SQLite transaction stages the replacement. Publication switches the branch snapshot
 and removes its old generation atomically. Other branches retain their snapshots. A failed
-or canceled run rolls back; readers continue to see the last completed snapshot. A first
+or canceled run, including an LLM request failure, rolls back; readers continue to see the last
+completed snapshot. A first
 failed run may leave an initialized database with no published snapshot. Concurrent writers
 are serialized by SQLite and fail if the lock timeout is exceeded.
 
@@ -109,6 +122,41 @@ Git state and YAML settings. Detected concurrent changes abort publication. This
 best-effort check rather than an atomic filesystem snapshot: avoid editing or switching
 branches during indexing. The recorded HEAD identifies observed Git history; it does not
 prove that working-tree content matches that commit or remains unchanged afterward.
+
+## Searching saved summaries with FTS5
+
+The `search_code` MCP tool searches the active branch's stored symbol names,
+qualified names and optional summaries. For example:
+
+```json
+{"query":"where is the repository index published?","kind":"method","maxResults":10}
+```
+
+Omit `kind` or send JSON `null` to search all declaration kinds. A concrete value
+is an exact filter: `"method"` excludes classes, for example. For compatibility
+with model clients that stringify missing optional arguments, the MCP endpoint
+also treats the text `"null"` (ignoring surrounding whitespace and case) as no
+kind filter. Other kind values retain their filtering behavior.
+
+SQLite **FTS5** indexes these fields and ranks results with **BM25**, emphasizing
+exact declaration names and qualified names. A bounded set of English and French
+grammatical stop words is ignored; remaining words are interpreted as literal
+Unicode-aware prefix terms. This means `index` can also match `indexing`.
+Queries with quotation marks, punctuation, colons or boolean operators are
+sanitized before building the FTS expression and always bound as SQL parameters.
+
+This is **lexical relevance search, not embedding/vector similarity**. It may
+miss conceptual synonyms when the summary uses different words. Queries work
+without LLM generation (names and available XML summaries are still indexed), but summaries generally
+provide much better discovery by intent.
+
+Searches read only the published, branch-specific SQLite snapshot. They do not
+start the configured LLM, send code over the network, or reread the checkout.
+A maximum of 200 results is returned, with a `hasMore` indication, and ties
+are resolved deterministically by source location. If the cache has not yet
+been upgraded to schema 5, run `index` once on that checkout. Reindex after
+source changes as before; FTS5 rows are updated and removed in the same SQLite
+transaction as their declarations.
 
 ## Querying through MCP
 
@@ -126,7 +174,11 @@ Descriptions, argument schemas and responses omit snapshot IDs, index metadata,
 SQLite details, file hashes and reindexing instructions.
 
 - `find_symbols` returns `symbols` and `hasMore`. Declarations contain their name,
-  qualified name, kind and source location, with no temporary identity token.
+  qualified name, kind, optional documentation or LLM summary and source location, with no temporary identity token.
+- `search_code` accepts `query` and optional exact `kind` (`method`, `class`, etc.)
+  and `maxResults` (default 10; maximum 200). It searches indexed names, qualified names
+  and optional summaries, returning ranked declarations and `hasMore`, without reading
+  source code or sending any request to an LLM. Responses hide snapshot details in both modes.
 - `get_type_members`, `find_usages`, `get_method`, `get_method_body`,
   `validate_method_body`, `replace_method` and `replace_method_body` select code with `relativePath` and `name` (simple or qualified).
   Optional `line` and `column` identify the declaration when names are ambiguous.

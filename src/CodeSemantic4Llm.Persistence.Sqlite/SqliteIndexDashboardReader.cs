@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using CodeSemantic4Llm.Application.Abstractions;
+using CodeSemantic4Llm.Domain.Repositories;
 using Microsoft.Data.Sqlite;
 
 namespace CodeSemantic4Llm.Persistence.Sqlite;
@@ -81,6 +82,31 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
         return new DashboardSummary(references, kinds, languages);
     }
 
+    public DashboardCodeSearchResult SearchCode(
+        string projectId, string branch, string query, string? kind, int maxResults,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        RepositoryScope scope;
+
+        using (var connection = OpenProject(projectId))
+        {
+            scope = new RepositoryScope(ReadRoot(connection), branch);
+            using var transaction = connection.BeginTransaction(deferred: true);
+            RequireSnapshot(connection, transaction, branch);
+        }
+
+        // Resolve only validated cache ids, then reuse the MCP store's query and ordering.
+        // The dashboard can inspect a saved branch even when its checkout is unavailable.
+        var result = new SqliteIndexStore(paths).SearchCode(scope, query, kind, maxResults, cancellationToken);
+        var symbols = result.Symbols.Select(symbol => new DashboardSymbol(
+            symbol.Language, symbol.Kind, symbol.Name, symbol.QualifiedName,
+            symbol.Location.RelativePath, symbol.Location.Line, symbol.Location.Column,
+            symbol.ContainingType?.Line, symbol.ContainingType?.Column, symbol.Summary)).ToArray();
+
+        return new DashboardCodeSearchResult(result.Snapshot, symbols, result.HasMore);
+    }
+
     public DashboardPage<DashboardFile> GetFiles(
         string projectId, string branch, string? search, int offset, int limit,
         CancellationToken cancellationToken = default)
@@ -119,6 +145,7 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
         using var connection = OpenProject(projectId);
         using var transaction = connection.BeginTransaction(deferred: true);
         var snapshotId = RequireSnapshot(connection, transaction, branch);
+        var summaryColumn = ReadSchemaVersion(connection, transaction) >= 4 ? "s.summary" : "NULL";
         var parameters = new (string Name, object? Value)[]
         {
             ("$snapshot", snapshotId), ("$search", EmptyToNull(search)),
@@ -136,9 +163,9 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
 
         return ReadPage(connection, transaction,
             "SELECT COUNT(*) " + from,
-            """
+            $"""
             SELECT s.language, s.kind, s.name, s.qualified_name, s.path, s.line, s.column_number,
-                   s.containing_type_line, s.containing_type_column
+                   s.containing_type_line, s.containing_type_column, {summaryColumn}
             """ + " " + from + " ORDER BY s.qualified_name COLLATE BINARY, s.path COLLATE BINARY, " +
             "s.line, s.column_number, s.ordinal LIMIT $limit OFFSET $offset;",
             parameters, offset, limit,
@@ -146,7 +173,8 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
                 reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
                 reader.GetString(4), reader.GetInt32(5), reader.GetInt32(6),
                 reader.IsDBNull(7) ? null : reader.GetInt32(7),
-                reader.IsDBNull(8) ? null : reader.GetInt32(8)),
+                reader.IsDBNull(8) ? null : reader.GetInt32(8),
+                reader.IsDBNull(9) ? null : reader.GetString(9)),
             cancellationToken);
     }
 

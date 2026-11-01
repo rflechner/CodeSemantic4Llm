@@ -14,6 +14,7 @@ public sealed class GitBranchProvider : IGitBranchProvider
 
         var startInfo = new ProcessStartInfo("git")
         {
+            RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -29,6 +30,10 @@ public sealed class GitBranchProvider : IGitBranchProvider
 
         using var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("Unable to start the Git process.");
+
+        // Git must not inherit the MCP transport's stdin. On Windows, probing that
+        // pipe can block behind the server's pending read before Git even starts.
+        process.StandardInput.Close();
 
         var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);

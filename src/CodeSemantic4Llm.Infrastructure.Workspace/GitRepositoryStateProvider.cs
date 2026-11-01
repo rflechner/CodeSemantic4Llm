@@ -35,7 +35,7 @@ public sealed class GitRepositoryStateProvider : IRepositoryStateProvider
     {
         var startInfo = new ProcessStartInfo("git")
         {
-            RedirectStandardOutput = true, RedirectStandardError = true,
+            RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
             UseShellExecute = false, CreateNoWindow = true
         };
 
@@ -50,6 +50,11 @@ public sealed class GitRepositoryStateProvider : IRepositoryStateProvider
         }
 
         using var process = Process.Start(startInfo) ?? throw new IOException("Unable to start Git.");
+
+        // Git must not inherit the MCP transport's stdin. On Windows, probing that
+        // pipe can block behind the server's pending read before Git even starts.
+        process.StandardInput.Close();
+
         var output = process.StandardOutput.ReadToEndAsync(cancellationToken);
         var error = process.StandardError.ReadToEndAsync(cancellationToken);
 

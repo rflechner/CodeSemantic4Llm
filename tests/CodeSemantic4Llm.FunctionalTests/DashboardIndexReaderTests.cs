@@ -86,6 +86,8 @@ public sealed class DashboardIndexReaderTests : IDisposable
 
         Assert.Throws<KeyNotFoundException>(() =>
             reader.GetSymbols("../somewhere", "main", null, null, null, 0, 50));
+        Assert.Throws<KeyNotFoundException>(() =>
+            reader.SearchCode("../somewhere", "main", "snapshot", null, 10, TestContext.Current.CancellationToken));
         Assert.False(Directory.Exists(_paths.Root));
     }
 
@@ -101,6 +103,12 @@ public sealed class DashboardIndexReaderTests : IDisposable
         Assert.Equal(0, reader.GetSummary(id, "main").ReferenceCount);
         Assert.Equal(0, reader.GetReferences(id, "main", null, null, null, null, 0, 50).Total);
         Assert.Equal(4, reader.GetSymbols(id, "main", null, null, null, 0, 50).Total);
+
+        var before = File.ReadAllBytes(_paths.GetDatabasePath(root));
+        var error = Assert.Throws<InvalidOperationException>(() =>
+            reader.SearchCode(id, "main", "Calculator", null, 10, TestContext.Current.CancellationToken));
+        Assert.Contains("Run the index command again", error.Message);
+        Assert.Equal(before, File.ReadAllBytes(_paths.GetDatabasePath(root)));
     }
 
     [Theory]
@@ -220,9 +228,6 @@ public sealed class DashboardIndexReaderTests : IDisposable
 
     public void Dispose()
     {
-        if (Directory.Exists(_temporaryRoot))
-        {
-            Directory.Delete(_temporaryRoot, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_temporaryRoot);
     }
 }

@@ -11,7 +11,7 @@ namespace CodeSemantic4Llm.FunctionalTests.Steps;
 
 /// <summary>Exercises YAML parsing, analyzer selection and actual filesystem filtering together.</summary>
 [Binding]
-public sealed class RepositoryConfigurationSteps
+public sealed partial class RepositoryConfigurationSteps
 {
     private readonly string _repositoryRoot = Path.Combine(
         Path.GetTempPath(),
@@ -56,6 +56,8 @@ public sealed class RepositoryConfigurationSteps
     [Given("a directory link \"(.*)\" points outside the repository")]
     public void GivenDirectoryLinkPointsOutsideRepository(string relativePath)
     {
+        SymbolicLinks.SkipWhenUnsupported();
+
         var externalRoot = CreateExternalSourceDirectory();
         Directory.CreateSymbolicLink(Path.Combine(_repositoryRoot, relativePath), externalRoot);
     }
@@ -63,12 +65,16 @@ public sealed class RepositoryConfigurationSteps
     [Given("a directory link \"(.*)\" points to the repository root")]
     public void GivenDirectoryLinkPointsToRepositoryRoot(string relativePath)
     {
+        SymbolicLinks.SkipWhenUnsupported();
+
         Directory.CreateSymbolicLink(Path.Combine(_repositoryRoot, relativePath), _repositoryRoot);
     }
 
     [Given("a file link \"(.*)\" points outside the repository")]
     public void GivenFileLinkPointsOutsideRepository(string relativePath)
     {
+        SymbolicLinks.SkipWhenUnsupported();
+
         var externalRoot = CreateExternalSourceDirectory();
         File.CreateSymbolicLink(
             Path.Combine(_repositoryRoot, relativePath), Path.Combine(externalRoot, "External.cs"));
@@ -224,17 +230,11 @@ public sealed class RepositoryConfigurationSteps
     [AfterScenario]
     public void CleanUp()
     {
-        if (Directory.Exists(_repositoryRoot))
-        {
-            Directory.Delete(_repositoryRoot, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_repositoryRoot);
 
         var externalRoot = _repositoryRoot + "-external";
 
-        if (Directory.Exists(externalRoot))
-        {
-            Directory.Delete(externalRoot, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(externalRoot);
     }
 
     private string CreateExternalSourceDirectory()

@@ -5,6 +5,7 @@ namespace CodeSemantic4Llm.Domain.Symbols;
 /// Language-specific data must remain representable in specialized models.
 /// ContainingType identifies the immediate declaring type in the same source file;
 /// it does not infer inheritance or merge partial declarations across files.
+/// Summary contains readable source documentation when available, or an optional generated description.
 /// </summary>
 public sealed record SymbolDefinition(
     string Language,
@@ -12,4 +13,5 @@ public sealed record SymbolDefinition(
     string Name,
     string QualifiedName,
     SourceLocation Location,
-    SourceLocation? ContainingType = null);
+    SourceLocation? ContainingType = null,
+    string? Summary = null);

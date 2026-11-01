@@ -69,6 +69,8 @@ public sealed partial class RepositoryIndexingSteps
     [Given("source links in the indexing checkout point outside it")]
     public void GivenSourceLinks()
     {
+        SymbolicLinks.SkipWhenUnsupported();
+
         var outside = Path.Combine(_workspace, "outside");
         Directory.CreateDirectory(outside);
         File.WriteAllText(Path.Combine(outside, "Outside.cs"), "public class OutsideType {}");
@@ -203,7 +205,7 @@ public sealed partial class RepositoryIndexingSteps
         switch (target)
         {
             case "not Git":
-                Directory.Delete(Path.Combine(_root, ".git"), recursive: true);
+                TemporaryDirectory.Remove(Path.Combine(_root, ".git"));
                 break;
             case "subdirectory":
                 _root = Directory.CreateDirectory(Path.Combine(_root, "nested")).FullName;
@@ -407,16 +409,14 @@ public sealed partial class RepositoryIndexingSteps
     {
         _cancellation?.Dispose();
 
-        if (Directory.Exists(_workspace))
-        {
-            Directory.Delete(_workspace, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_workspace);
     }
 
     private CancellationToken Token => _cancellation?.Token ?? TestContext.Current.CancellationToken;
 
     private IndexRepository CreateIndexer() => new(_stateProvider, new YamlRepositoryConfigurationLoader(),
-        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer], [new CSharpReferenceAnalyzer()]);
+        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer], [new CSharpReferenceAnalyzer()],
+        [new CSharpSymbolSourceExtractor()], _summaryGenerator);
 
     private RepositoryIndexTools CreateMcpTools()
     {
@@ -426,7 +426,7 @@ public sealed partial class RepositoryIndexingSteps
         }).Build();
         return new RepositoryIndexTools(configuration, _stateProvider, Store,
             new FindSymbols(Store, _stateProvider), new GetTypeMembers(Store, _stateProvider),
-            new FindUsages(Store, _stateProvider));
+            new FindUsages(Store, _stateProvider), new SearchCode(Store, _stateProvider));
     }
 
     private void WriteSource(string path, string content)

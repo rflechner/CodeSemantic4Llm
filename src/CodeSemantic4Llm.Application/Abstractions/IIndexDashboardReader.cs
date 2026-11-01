@@ -1,3 +1,5 @@
+using CodeSemantic4Llm.Domain.Repositories;
+
 namespace CodeSemantic4Llm.Application.Abstractions;
 
 /// <summary>
@@ -21,6 +23,14 @@ public interface IIndexDashboardReader
     DashboardPage<DashboardSymbol> GetSymbols(
         string projectId, string branch, string? search, string? kind, string? file,
         int offset, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Searches names and saved summaries with the same ranking as MCP code search.
+    /// Uses the selected published branch without checking the working tree or invoking a model.
+    /// </summary>
+    DashboardCodeSearchResult SearchCode(
+        string projectId, string branch, string query, string? kind, int maxResults,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Returns recorded semantic usages. Target coordinates, when supplied, identify one declaration;
@@ -55,7 +65,12 @@ public sealed record DashboardFile(
 /// <summary>A declaration, including its exact source address and optional immediate containing type.</summary>
 public sealed record DashboardSymbol(
     string Language, string Kind, string Name, string QualifiedName,
-    string Path, int Line, int Column, int? ContainingTypeLine, int? ContainingTypeColumn);
+    string Path, int Line, int Column, int? ContainingTypeLine, int? ContainingTypeColumn,
+    string? Summary = null);
+
+/// <summary>Ranked matches and their exact saved snapshot; HasMore indicates a truncated result set.</summary>
+public sealed record DashboardCodeSearchResult(
+    RepositoryIndexSnapshot Snapshot, IReadOnlyList<DashboardSymbol> Symbols, bool HasMore);
 
 /// <summary>A saved relation between a target declaration and an occurrence elsewhere in the checkout.</summary>
 public sealed record DashboardReference(

@@ -12,7 +12,8 @@ namespace CodeSemantic4Llm.Mcp.Server.Tools;
 [McpServerToolType]
 public sealed class RepositoryIndexTools(
     IConfiguration configuration, IRepositoryStateProvider stateProvider, IIndexStore indexStore,
-    FindSymbols findSymbols, GetTypeMembers getTypeMembers, FindUsages findUsages)
+    FindSymbols findSymbols, GetTypeMembers getTypeMembers, FindUsages findUsages,
+    SearchCode searchCode)
 {
     [McpServerTool, Description("Returns the saved index snapshot and observed Git state. This does not verify working-tree freshness.")]
     public async Task<RepositoryIndexStatus> GetRepositoryIndexStatusAsync(CancellationToken cancellationToken = default)
@@ -26,6 +27,14 @@ public sealed class RepositoryIndexTools(
         string name, [Description("Maximum results, from 1 to 200.")] int maxResults = 20,
         CancellationToken cancellationToken = default) =>
         findSymbols.ExecuteAsync(GetRepositoryRoot(), name, maxResults, cancellationToken);
+
+    /// <summary>Searches the published snapshot directly; MCP search uses the source-addressed presentation.</summary>
+    public Task<SymbolSearchResult> SearchCodeAsync(
+        [Description("Natural-language question or search keywords.")] string query,
+        [Description("Optional exact symbol kind, for example method or class.")] string? kind = null,
+        [Description("Maximum ranked results, from 1 to 200.")] int maxResults = 10,
+        CancellationToken cancellationToken = default) =>
+        searchCode.ExecuteAsync(GetRepositoryRoot(), query, kind, maxResults, cancellationToken);
 
     /// <summary>Queries members against an explicit snapshot for direct application callers.</summary>
     public Task<TypeMemberPage> GetTypeMembersAsync(

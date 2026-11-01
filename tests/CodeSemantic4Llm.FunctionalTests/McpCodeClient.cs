@@ -61,6 +61,13 @@ internal sealed class McpCodeClient : IAsyncDisposable
         }
     }
 
+    public async Task<JsonElement> ListToolsAsync()
+    {
+        var id = ++_requestId;
+        await SendAsync(JsonSerializer.Serialize(new { jsonrpc = "2.0", id, method = "tools/list" }));
+        return await ReceiveAsync(id);
+    }
+
     public async Task<JsonElement> CallAsync(string name, object arguments)
     {
         var id = ++_requestId;

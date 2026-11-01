@@ -26,10 +26,15 @@ public sealed class IndexRepository(
     IRepositorySourceReader sourceReader,
     IIndexStore indexStore,
     IEnumerable<ISourceAnalyzer> analyzers,
-    IEnumerable<ISourceReferenceAnalyzer>? referenceAnalyzers = null)
+    IEnumerable<ISourceReferenceAnalyzer>? referenceAnalyzers = null,
+    IEnumerable<ISymbolSourceExtractor>? summaryExtractors = null,
+    ISymbolSummaryGenerator? summaryGenerator = null)
 {
     private readonly IReadOnlyList<ISourceAnalyzer> _analyzers = analyzers.ToArray();
     private readonly IReadOnlyList<ISourceReferenceAnalyzer> _referenceAnalyzers = referenceAnalyzers?.ToArray() ?? [];
+    private readonly IReadOnlyDictionary<string, ISymbolSourceExtractor> _summaryExtractors =
+        summaryExtractors?.ToDictionary(item => item.AnalyzerId, StringComparer.OrdinalIgnoreCase)
+        ?? new Dictionary<string, ISymbolSourceExtractor>(StringComparer.OrdinalIgnoreCase);
 
     public async Task<RepositoryIndexingResult> ExecuteAsync(
         string repositoryRoot,
@@ -41,6 +46,12 @@ public sealed class IndexRepository(
         var root = state.Scope.RootPath;
         var configuration = await configurationLoader.LoadAsync(root, cancellationToken);
         var selectedAnalyzers = new ConfiguredSourceAnalyzers(configuration, _analyzers);
+
+        if (configuration.SemanticIndexing.Llm.Enabled && summaryGenerator is null)
+        {
+            throw new InvalidOperationException("LLM summary indexing is enabled but no summary generator is registered.");
+        }
+
         var fingerprint = Fingerprint(configuration, selectedAnalyzers);
         var candidates = Discover(root, configuration, selectedAnalyzers, progress, cancellationToken);
 
@@ -66,7 +77,9 @@ public sealed class IndexRepository(
             else
             {
                 var symbols = await adapter.AnalyzeAsync(source.Document, cancellationToken);
-                update.AddFile(file, symbols, cancellationToken);
+                var described = await SummarizeSymbolsAsync(
+                    source.Document, candidate.Analyzer, symbols, configuration.SemanticIndexing, cancellationToken);
+                update.AddFile(file, described, cancellationToken);
             }
 
             progress?.Report(new(RepositoryIndexingPhase.Indexing, index + 1, candidates.Count));
@@ -93,6 +106,61 @@ public sealed class IndexRepository(
         progress?.Report(new(RepositoryIndexingPhase.Completed, candidates.Count, candidates.Count));
 
         return new RepositoryIndexingResult(snapshot, candidates.Count - reused, reused);
+    }
+
+    private async Task<IReadOnlyList<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition>> SummarizeSymbolsAsync(
+        SourceDocument document, ConfiguredSourceAnalyzer analyzer,
+        IReadOnlyList<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition> symbols,
+        SemanticIndexingConfiguration settings, CancellationToken cancellationToken)
+    {
+        if (!settings.Llm.Enabled)
+        {
+            return symbols;
+        }
+
+        var pending = symbols.Where(symbol => settings.Llm.ForceGeneration || string.IsNullOrWhiteSpace(symbol.Summary)).ToArray();
+
+        if (pending.Length == 0)
+        {
+            return symbols;
+        }
+
+        if (!_summaryExtractors.TryGetValue(analyzer.AnalyzerId, out var extractor))
+        {
+            throw new InvalidOperationException(
+                $"LLM summary extraction is not available for analyzer '{analyzer.AnalyzerId}'.");
+        }
+
+        var sourceByLocation = extractor.Extract(document, pending, cancellationToken);
+        var described = new List<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition>(symbols.Count);
+
+        foreach (var symbol in symbols)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!sourceByLocation.TryGetValue(symbol.Location, out var snippet))
+            {
+                described.Add(symbol);
+                continue;
+            }
+
+            var summary = await summaryGenerator!.SummarizeAsync(symbol, snippet, settings, cancellationToken);
+
+            if (string.IsNullOrWhiteSpace(summary))
+            {
+                // Missing generated text must not discard source documentation or stop indexing.
+                described.Add(symbol);
+                continue;
+            }
+
+            // Only the generated summary is persisted. The source snippet stays transient.
+            described.Add(symbol with { Summary = string.Join("\n", summary
+                .Replace("\r", "", StringComparison.Ordinal)
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Take(10)) });
+        }
+
+        return described;
     }
 
     private List<IndexingSource> Discover(
@@ -184,10 +252,27 @@ public sealed class IndexRepository(
     private string Fingerprint(RepositoryIndexingConfiguration configuration, ConfiguredSourceAnalyzers analyzers)
     {
         // ProjectName is display metadata; renaming it does not change derived declarations.
+        // Inline API keys only authenticate requests; rotating one does not change derived content.
         var settings = JsonSerializer.Serialize(new
         {
             configuration.Version,
             configuration.SemanticIndexing.Language,
+            Llm = new
+            {
+                configuration.SemanticIndexing.Llm.Enabled,
+                configuration.SemanticIndexing.Llm.ForceGeneration,
+                Url = configuration.SemanticIndexing.Llm.BaseUrl?.AbsoluteUri,
+                configuration.SemanticIndexing.Llm.Model,
+                configuration.SemanticIndexing.Llm.ApiKeyEnvironmentVariable,
+                configuration.SemanticIndexing.Llm.ReasoningEffort,
+                configuration.SemanticIndexing.Llm.MaxCompletionTokens,
+                GeneratorVersion = configuration.SemanticIndexing.Llm.Enabled
+                    ? summaryGenerator?.GetType().Assembly.ManifestModule.ModuleVersionId.ToString("N") : null,
+                Extractors = configuration.SemanticIndexing.Llm.Enabled
+                    ? _summaryExtractors.OrderBy(item => item.Key, StringComparer.Ordinal)
+                        .Select(item => new { item.Key, Version = item.Value.GetType().Assembly.ManifestModule.ModuleVersionId })
+                    : null
+            },
             configuration.Exclusions,
             ReferenceAnalyzers = _referenceAnalyzers.OrderBy(entry => entry.AnalyzerId, StringComparer.Ordinal)
                 .Select(entry => new { entry.AnalyzerId, entry.IndexVersion }),

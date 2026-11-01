@@ -28,10 +28,35 @@ When all options are omitted, the generated defaults are:
 version: 1
 analyzers:
   - dotnet-csharp
+# MCP tools advertised for this repository. Comment out a line to hide that tool.
+# Removing the whole section advertises every tool. Writing tools also require
+# serve --allow-write, and indexing tools require serve --expose-indexing.
+tools:
+  - get_server_info
+  - find_symbols
+  - search_code
+  - get_type_members
+  - find_usages
+  - get_method_body
+  - get_method
+  - validate_method_body
+  - get_method_diagnostics
+  - get_file_diagnostics
+  - get_type_diagnostics
+  - replace_method_body
+  - replace_method
+  - get_repository_configuration
+  - preview_repository_index
+  - get_repository_index_status
 semanticIndexing:
   language: en
+  llm:
+    enabled: false
 exclude: []
 ```
+
+Every tool is selected, so preparing a repository only requires commenting out the tools its
+agents should not see. See [selecting the advertised MCP tools](#select-the-advertised-mcp-tools).
 
 `--name "My Project"` writes `projectName: My Project`. The optional name is a display
 label, independent of the checkout path, branch identity and cache location. It is trimmed
@@ -45,6 +70,20 @@ remains valid; omission or YAML `null` means there is no configured display name
 is returned by `get_repository_configuration` and `preview_repository_index`, and shown
 by the console preview when present. Changing only this label does not invalidate reusable
 declarations or create a different index cache.
+
+MCP tool discovery prefixes every exposed tool description with `In project <name>, `,
+using `projectName` from the selected checkout. For example, with `projectName: TinyHarness`,
+`get_file_diagnostics` starts with `In project TinyHarness, Returns syntax errors and warnings...`.
+This helps agents connected to several project servers choose the correct instance. Use distinct
+display names for projects that agents need to distinguish. Tool names and argument schemas stay
+the same, including when editing or indexing tools are enabled.
+
+If the display name is omitted or null, discovery uses the checkout directory name. Missing,
+invalid or unreadable YAML also falls back to that directory name with a warning on stderr;
+discovery remains available, while operations requiring valid configuration still report their
+usual errors. Without a selected repository, descriptions remain generic. Each `tools/list`
+request reads the current name without indexing or creating a cache. After changing it, refresh
+the client's tool list or restart the MCP connection if the client caches descriptions.
 
 `--lang` selects `semanticIndexing.language`, using the same validation and case
 normalization as the YAML loader (for example, `FR-ch` becomes `fr-CH`). Its default
@@ -94,8 +133,33 @@ analyzers:
 fileExtensions:
   dotnet-csharp: [.cs, .csharp]
 
+# Optional: the MCP tools this repository advertises; omit the section to advertise all.
+tools:
+  - get_server_info
+  - find_symbols
+  - search_code
+  - get_type_members
+  - find_usages
+  - get_method_body
+  - get_method
+  - validate_method_body
+  - get_method_diagnostics
+  - get_file_diagnostics
+  - get_type_diagnostics
+  # - replace_method_body   # Hidden: the agent edits files with its own tool
+  # - replace_method
+  - get_repository_configuration
+  - preview_repository_index
+  - get_repository_index_status
+
 semanticIndexing:
   language: fr   # Optional; defaults to en
+  llm:
+    enabled: true
+    baseUrl: http://127.0.0.1:1234/v1
+    model: my-local-model
+    # apiKey: your-api-key
+    # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 
 exclude:
   - submodules/**
@@ -107,10 +171,85 @@ exclude:
 - `projectName` is an optional, non-empty, single-line display name; omission or null leaves it unspecified.
 - `analyzers` is a required, non-empty list of installed analyzer IDs. Currently only `dotnet-csharp` is registered.
 - `fileExtensions` is an optional mapping of enabled analyzer IDs to replacement extension lists.
+- `tools` is an optional, non-empty list of MCP tool names; omitting the section advertises every tool.
 - `semanticIndexing.language` is optional and defaults to `en` (English).
+- `semanticIndexing.llm.enabled` is optional and defaults to `false` (no LLM calls).
+- `semanticIndexing.llm.forceGeneration` defaults to `false`; when LLM calls are enabled,
+  `true` generates summaries even for declarations with an existing XML summary.
+- When enabled, `semanticIndexing.llm.baseUrl` (HTTP(S) OpenAI-compatible API root)
+  and `semanticIndexing.llm.model` are required. `apiKey` and `apiKeyEnvironmentVariable` are optional.
 - `exclude` is optional. Rules add to, rather than replace, the built-in defaults.
 - Git submodules are **not** excluded automatically; list their checkout paths if they should be skipped.
 - Unknown YAML properties, duplicate keys, missing configuration, and unknown/unimplemented analyzers fail explicitly.
+
+## Select the advertised MCP tools
+
+`tools` lists the MCP tools this repository's server may advertise and accept. Use it when a
+checkout should expose less than the server can do, for example to hide the editing tools from
+an agent that already has its own file-editing tool:
+
+```yaml
+tools:
+  - get_server_info
+  - find_symbols
+  - search_code
+  - get_type_members
+  - find_usages
+  - get_method_body
+  - get_method
+  - validate_method_body
+  - get_method_diagnostics
+  - get_file_diagnostics
+  - get_type_diagnostics
+  # - replace_method_body
+  # - replace_method
+  - get_repository_configuration
+  - preview_repository_index
+  - get_repository_index_status
+```
+
+| Tool | Requires | Purpose |
+| --- | --- | --- |
+| `get_server_info` | | Server name and implementation status. |
+| `find_symbols` | | Finds declarations by exact simple name. |
+| `search_code` | | Ranks declarations from keywords or a question. |
+| `get_type_members` | | Lists the direct members of a type. |
+| `find_usages` | | Finds resolved references to a method or type. |
+| `get_method_body` | | Reads one method body. |
+| `get_method` | | Reads one complete method declaration. |
+| `validate_method_body` | | Checks a proposed body without writing. |
+| `get_method_diagnostics` | | Checks the syntax of one method on disk. |
+| `get_file_diagnostics` | | Checks the syntax of a whole file on disk. |
+| `get_type_diagnostics` | | Checks the syntax inside one type declaration. |
+| `replace_method_body` | `--allow-write` | Validates and replaces one method body. |
+| `replace_method` | `--allow-write` | Validates and replaces one complete method. |
+| `get_repository_configuration` | `--expose-indexing` | Reads the repository's YAML settings. |
+| `preview_repository_index` | `--expose-indexing` | Previews candidate source paths. |
+| `get_repository_index_status` | `--expose-indexing` | Reports the saved snapshot and Git state. |
+
+Rules:
+
+- **Omitting the whole section advertises every tool**, which keeps earlier configurations valid.
+- A section that selects no tool is an **error**. Commenting out every entry reports a problem
+  instead of silently advertising all of them again; delete the section to mean "every tool".
+- Names are trimmed, lowercased and deduplicated. The YAML order does not matter: discovery
+  always returns the catalog order shown above.
+- An unknown name **fails explicitly** with the list of available tools, so a typo cannot
+  silently hide a tool.
+- A selection only **narrows** what the operator granted at startup. Listing `replace_method_body`
+  does not grant source editing: writing tools still require `serve --allow-write` and indexing
+  tools still require `serve --expose-indexing`. A tool that was never registered is refused as
+  an unknown tool.
+- A deselected tool is hidden from `tools/list` **and refused** when a client with a stale tool
+  list calls it anyway, naming the tool and pointing at the repository configuration.
+- The selection is read on each `tools/list` and each tool call, so an edit takes effect as soon
+  as the client refreshes its tool list. Restart the MCP connection for clients that cache it.
+- If the configuration cannot be read, the startup capabilities remain the only restriction and a
+  warning goes to stderr, so file diagnostics stay usable on an unconfigured checkout. Commands
+  that need valid configuration, such as `preview` and `index`, still fail with their usual error.
+
+Selecting tools is a presentation choice: it changes neither indexing, nor stored data, nor the
+index cache identity. Narrowing the list does not require reindexing.
 
 ## Recursive discovery and file extensions
 
@@ -156,8 +295,8 @@ extension selections. No source contents are read or copied during discovery.
 ## Language of semantic descriptions
 
 The optional `semanticIndexing.language` setting selects the human language in which
-**future AI-generated semantic descriptions, summaries, and natural-language index text**
-will be written. It is separate from `analyzers`, which choose the programming languages
+**LLM-generated summaries and future natural-language index text**
+are written. It is separate from `analyzers`, which choose the programming languages
 to parse. For example, `dotnet-csharp` can analyze French-named C# code while descriptions
 are generated in English, French or another supported language.
 
@@ -170,15 +309,116 @@ are generated in English, French or another supported language.
 Codes are case-normalized using the supported subset of **BCP 47**: a two- or three-letter
 language, optional four-letter script, and optional two-letter/three-digit region.
 Incorrect formats such as `english`, `fr_CH` or an empty value fail validation.
-The code is validated syntactically; actual language support will depend on the semantic
-generation model when that feature is implemented.
+The code is validated syntactically; actual language support depends on the selected model.
+Changing the language invalidates previously generated descriptions through the index
+configuration fingerprint.
 
-**Current status:** the option is parsed, validated and included in configuration, preview
-responses and persisted snapshots. Changing it invalidates reuse for the next `index` run
-through the configuration fingerprint. Natural-language descriptions and vectors are not
-generated yet. When implemented, language-dependent text must be regenerated without
-translating source code or copying source files. Separate invalidation for declarations and
-generated text can then avoid unnecessary parsing.
+## Optional per-repository LLM summaries
+
+Set `semanticIndexing.llm.enabled: true` in each checkout's YAML to opt in.
+Only this repository sends snippets to the configured LLM endpoint. Without this option
+(or when false), indexing remains fully offline and does not call an LLM.
+
+- `baseUrl` is an OpenAI-compatible API root, such as `http://127.0.0.1:1234/v1`
+  for LM Studio. CodeSemantic4Llm posts to `{baseUrl}/chat/completions`.
+- `model` is sent in the `model` field. Use the model identifier advertised by your server.
+- `reasoningEffort` optionally requests a reasoning level: `none`, `minimal`, `low`,
+  `medium`, `high`, `xhigh`, or `max`. Values are trimmed and case-normalized;
+  unknown or blank values fail validation. Omit it to keep the provider's default.
+- `maxCompletionTokens` optionally sets a positive completion token ceiling.
+  On reasoning APIs, this budget includes reasoning and the visible summary.
+- `apiKey` supplies an optional Bearer token directly in YAML. Surrounding whitespace
+  is removed; an empty or whitespace-only value is treated as absent. A non-empty value
+  takes priority over `apiKeyEnvironmentVariable`, even if that variable is unset.
+- `apiKeyEnvironmentVariable` names a fallback environment variable containing a Bearer
+  token. It is read only when `apiKey` is absent. Set it in the environment of the process
+  running `index`; a missing or blank fallback value fails the request. If neither option
+  is configured, requests omit the Authorization header.
+- Inline keys are stored as plain text in repository YAML; keep real keys out of version
+  control. MCP configuration responses omit `apiKey`, including their payload logs.
+  Keys are not stored in SQLite, and rotating an inline key does not regenerate summaries.
+- The base URL supports only HTTP(S), without embedded credentials or query strings.
+  The API must implement OpenAI-compatible chat completions; vendor-specific endpoints
+  requiring different paths or authentication need a compatible gateway.
+
+### Prefer source documentation
+
+C# types (classes, structs, interfaces and records), methods and constructors use their own
+non-empty XML `<summary>` as the indexed description by default. Roslyn extracts the attached
+documentation, preserving the complete summary text rather than limiting it to ten lines.
+Comment markers and XML markup are removed; entities, inline references such as `<see>` and
+`<paramref>`, and paragraph boundaries become readable text. Other documentation sections,
+such as `<param>`, `<returns>` and `<remarks>`, are not part of the summary.
+
+These descriptions are stored and searchable even with `llm.enabled: false`. They retain their
+authored language; `semanticIndexing.language` only controls generated descriptions. Missing,
+empty or malformed summaries fall back to LLM generation when enabled. Documentation is read
+only from the declaration itself: inherited summaries, `<inheritdoc>` and external `<include>`
+files are not resolved. A method's documentation is not used as its containing class's summary.
+
+To generate summaries even when documentation exists, add this setting to the existing LLM config:
+
+```yaml
+semanticIndexing:
+  llm:
+    # Keep enabled: true, baseUrl, model and any authentication settings.
+    forceGeneration: true
+```
+
+The override does not enable LLM calls by itself. Changing it invalidates reuse on the next
+index run; unchanged files still reuse their summaries when it remains enabled. Switching it
+back to `false` restores available source documentation on the next run. Adding, editing or
+removing documentation updates the stored summary and search entries during re-indexing.
+
+When a declaration needs generation, the indexer sends the **whole C# method**, including its preceding XML documentation
+comments (`summary`, `param`, `returns`, etc.), or the **whole class/type
+declaration**, including its members, to the selected model. The prompt requests an
+accurate, concise summary in `semanticIndexing.language`. Generated summaries are limited
+to **10 non-empty lines per declaration**. They are saved with the symbol in SQLite,
+returned by MCP symbol queries and shown in the dashboard declaration inspector.
+Source snippets and prompt bodies are never saved in the index cache.
+
+LLM summarization is opt-in because sending source to any HTTP endpoint can expose
+proprietary code. Use a trusted local endpoint or an explicitly authorized service.
+An unresponsive or failed LLM request aborts the new index generation: the previous
+published snapshot remains readable. Changing the model, URL, language, enable flag,
+reasoning effort, completion budget, documentation override or source content invalidates the appropriate
+reuse. Unchanged files preserve their summaries; no vector embeddings are generated yet.
+
+### Reducing reasoning during summary generation
+
+For an endpoint and model supporting the OpenAI Chat Completions reasoning parameter,
+add these fields to the existing `semanticIndexing.llm` configuration:
+
+```yaml
+semanticIndexing:
+  llm:
+    # Keep your existing enabled, baseUrl, model and authentication settings.
+    reasoningEffort: low
+    maxCompletionTokens: 2048
+```
+
+The generator sends `reasoning_effort: "low"`. Lower effort can reduce latency and
+reasoning token usage, but may affect summary quality. Support depends on the
+provider and model: `none` is not universally available, and an OpenAI-compatible
+endpoint need not implement this parameter. See the
+[OpenAI reasoning guide](https://developers.openai.com/api/docs/guides/reasoning).
+When switching models, choose a supported level or omit the setting. The generator
+does not infer capabilities from model names or silently retry a rejected request
+with different settings.
+
+Setting either option uses `max_completion_tokens` instead of `max_tokens`, which
+some reasoning models reject. With an effort other than `none`, the default ceiling
+is 2,048 tokens to leave room for reasoning; with `reasoningEffort: none` alone,
+it is 320. An explicit `maxCompletionTokens` overrides the default, whether or not
+an effort is configured. This is a ceiling, not a requested output length; the summary prompt and
+10-line storage limit still apply. Increase the budget if reasoning consumes it
+before a text summary is produced. See the
+[Chat Completions reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create).
+
+When both options are omitted, requests retain the existing `max_tokens: 320` and
+omit `reasoning_effort` entirely. No live provider latency or quality guarantee is
+implied by these settings; compare summaries and timings with each model you test.
 
 ## Exclusion rules
 
@@ -272,6 +512,9 @@ Functional behavior is described in
 behavior in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryPreview.feature`
 and `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleRepositoryInitialization.feature`,
 and command routing in `tests/CodeSemantic4Llm.FunctionalTests/Features/ConsoleCommandRouting.feature`.
+`tests/CodeSemantic4Llm.FunctionalTests/Features/McpToolSelection.feature` covers the repository
+tool selection: generated configuration, narrowed discovery, refused calls, rejected sections and
+the capabilities a selection cannot grant.
 `tests/CodeSemantic4Llm.FunctionalTests/Features/ServeRepository.feature` covers absolute and
 relative serve paths, environment precedence and MCP preview calls through a real server,
 using [Reqnroll](https://reqnroll.net/) and xUnit v3. The tests create temporary

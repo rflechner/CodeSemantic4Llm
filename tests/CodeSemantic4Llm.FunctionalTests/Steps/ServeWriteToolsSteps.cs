@@ -22,6 +22,7 @@ public sealed partial class ServeRepositorySteps
             "indexing" => ["serve", SelectedRoot, "--expose-indexing"],
             "indexing-write" => ["serve", SelectedRoot, "--expose-indexing", "--allow-write"],
             "default" => [],
+            "unconfigured" => [],
             _ => throw new ArgumentException($"Unknown mode '{mode}'.")
         };
 
@@ -66,6 +67,10 @@ public sealed partial class ServeRepositorySteps
             await errors;
         }
     }
+
+    [Then("MCP tool descriptions do not claim a selected project")]
+    public void ThenNoSelectedProject() => Assert.All(_toolDefinitions.GetProperty("tools").EnumerateArray(),
+        tool => Assert.DoesNotContain("In project ", tool.GetProperty("description").GetString()));
 
     [Then("MCP advertises the method body reader")]
     public void ThenMethodReaderAdvertised()

@@ -1,6 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>codesemantic4llm</ToolCommandName>
+    <PackageId>CodeSemantic4Llm.Mcp.Server</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Romain Flechner</Authors>
+    <Description>Local-first MCP server for branch-aware C# code indexing, navigation and guarded editing.</Description>
+    <PackageTags>mcp;model-context-protocol;dotnet-tool;code-indexing;roslyn</PackageTags>
+    <PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/rflechner/CodeSemantic4Llm</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/rflechner/CodeSemantic4Llm</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../CodeSemantic4Llm.Application/CodeSemantic4Llm.Application.csproj" />
@@ -10,6 +21,7 @@
     <ProjectReference Include="../CodeSemantic4Llm.Persistence.Sqlite/CodeSemantic4Llm.Persistence.Sqlite.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="Markdig" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" />
     <PackageReference Include="ModelContextProtocol" />

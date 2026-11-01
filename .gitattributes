@@ -1,0 +1,5 @@
+# Normalize line endings so raw string literals in tests do not depend on the checkout.
+# Git stores text as LF; every working tree receives LF, including on Windows.
+* text=auto eol=lf
+
+*.png binary

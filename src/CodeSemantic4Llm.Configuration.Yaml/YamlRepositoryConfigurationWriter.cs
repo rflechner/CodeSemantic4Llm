@@ -75,9 +75,53 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
                 entry => entry.Key, entry => entry.Value.ToArray());
         }
 
-        document["semanticIndexing"] = new Dictionary<string, string>
+        document["tools"] = configuration.Tools.EnabledToolNames.ToArray();
+
+        var llm = configuration.SemanticIndexing.Llm;
+        var llmDocument = new Dictionary<string, object>
         {
-            ["language"] = configuration.SemanticIndexing.Language
+            ["enabled"] = llm.Enabled
+        };
+
+        if (llm.ForceGeneration)
+        {
+            llmDocument["forceGeneration"] = true;
+        }
+
+        if (llm.BaseUrl is not null)
+        {
+            llmDocument["baseUrl"] = llm.BaseUrl.ToString();
+        }
+
+        if (llm.Model is not null)
+        {
+            llmDocument["model"] = llm.Model;
+        }
+
+        if (llm.ApiKeyEnvironmentVariable is not null)
+        {
+            llmDocument["apiKeyEnvironmentVariable"] = llm.ApiKeyEnvironmentVariable;
+        }
+
+        if (llm.ApiKey is not null)
+        {
+            llmDocument["apiKey"] = llm.ApiKey;
+        }
+
+        if (llm.ReasoningEffort is not null)
+        {
+            llmDocument["reasoningEffort"] = llm.ReasoningEffort;
+        }
+
+        if (llm.MaxCompletionTokens is { } maxCompletionTokens)
+        {
+            llmDocument["maxCompletionTokens"] = maxCompletionTokens;
+        }
+
+        document["semanticIndexing"] = new Dictionary<string, object>
+        {
+            ["language"] = configuration.SemanticIndexing.Language,
+            ["llm"] = llmDocument
         };
 
         // Built-in exclusions apply when loading; only repository-specific rules belong in YAML.
@@ -85,7 +129,32 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
             .Except(RepositoryIndexingConfiguration.BuiltInExclusions, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        return Serializer.Serialize(document);
+        return AnnotateToolSelection(Serializer.Serialize(document));
+    }
+
+    /// <summary>
+    /// Explains the generated tool list inside the file itself. The serializer emits no comments,
+    /// so the guidance is inserted above the top-level sequence this writer just produced.
+    /// </summary>
+    private static string AnnotateToolSelection(string yaml)
+    {
+        var newLine = yaml.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var lines = yaml.Split(newLine).ToList();
+        var toolsIndex = lines.IndexOf("tools:");
+
+        if (toolsIndex < 0)
+        {
+            return yaml;
+        }
+
+        lines.InsertRange(toolsIndex,
+        [
+            "# MCP tools advertised for this repository. Comment out a line to hide that tool.",
+            "# Removing the whole section advertises every tool. Writing tools also require",
+            "# serve --allow-write, and indexing tools require serve --expose-indexing."
+        ]);
+
+        return string.Join(newLine, lines);
     }
 
     private static async Task WriteTemporaryFileAsync(

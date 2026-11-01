@@ -72,9 +72,13 @@ internal static class DashboardHost
                     throw new ArgumentException("Filter is too long.");
                 }
 
-                return reader.GetSymbols(project, branch, search, kind, file,
+                var page = reader.GetSymbols(project, branch, search, kind, file,
                     offset, limit, context.RequestAborted);
+                return new DashboardPage<DashboardSymbolResponse>(
+                    page.Items.Select(DashboardSymbolResponse.From).ToArray(), page.Total, page.Offset, page.Limit);
             }));
+
+        app.MapGet("/api/search", (HttpContext context) => SearchCode(context, reader));
 
         app.MapGet("/api/references", (HttpContext context) =>
             QueryPage(context, (project, branch, search, offset, limit) =>
@@ -125,6 +129,42 @@ internal static class DashboardHost
         }
 
         return 0;
+    }
+
+    private static IResult SearchCode(HttpContext context, IIndexDashboardReader reader)
+    {
+        if (!TryScope(context.Request, out var project, out var branch))
+        {
+            return BadRequest("Select a project and branch.");
+        }
+
+        var values = context.Request.Query;
+        var query = values["q"].ToString();
+        var kind = values["kind"].ToString();
+        var limit = 10;
+
+        if (kind.Length > 64)
+        {
+            return BadRequest("Symbol kind must contain at most 64 characters.");
+        }
+
+        if (values.ContainsKey("limit")
+            && (!int.TryParse(values["limit"], NumberStyles.None, CultureInfo.InvariantCulture, out limit)
+                || limit is < 1 or > 200))
+        {
+            return BadRequest("Limit must be between 1 and 200.");
+        }
+
+        return Respond(() =>
+        {
+            var result = reader.SearchCode(project, branch, query, kind, limit, context.RequestAborted);
+            return new
+            {
+                result.Snapshot,
+                Symbols = result.Symbols.Select(DashboardSymbolResponse.From).ToArray(),
+                result.HasMore
+            };
+        });
     }
 
     private static IResult QueryPage(

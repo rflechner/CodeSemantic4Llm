@@ -1,9 +1,13 @@
 using CodeSemantic4Llm.Mcp.Server;
 using CodeSemantic4Llm.Mcp.Server.Commands;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 var services = new ServiceCollection();
+services.AddLogging(logging => logging
+    .SetMinimumLevel(LogLevel.Warning)
+    .AddConsole(options => options.LogToStandardErrorThreshold = LogLevel.Trace));
 services.AddRepositoryServices();
 
 var errorConsole = AnsiConsole.Create(new AnsiConsoleSettings

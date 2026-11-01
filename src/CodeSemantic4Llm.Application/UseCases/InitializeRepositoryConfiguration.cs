@@ -19,6 +19,8 @@ public sealed class InitializeRepositoryConfiguration(
     /// replace that default, preserve first occurrence order, and must all be available.
     /// Analyzer extensions retain their defaults, without adding user exclusions.
     /// The optional project name is a display label and does not determine index storage paths.
+    /// Every MCP tool is selected, so an operator only has to comment out the tools this
+    /// repository should not advertise.
     /// </summary>
     public Task<string> ExecuteAsync(
         string repositoryRoot,

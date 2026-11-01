@@ -102,10 +102,7 @@ public sealed partial class ServeRepositorySteps
     [AfterScenario]
     public void Cleanup()
     {
-        if (Directory.Exists(_workspace))
-        {
-            Directory.Delete(_workspace, recursive: true);
-        }
+        TemporaryDirectory.TryRemove(_workspace);
     }
 
     private async Task DiagnoseRepositoryThroughMcpAsync(string[] arguments, string? environmentRoot, string relativePath)
@@ -126,11 +123,13 @@ public sealed partial class ServeRepositorySteps
             Assert.True(initialization.TryGetProperty("serverInfo", out _));
 
             await SendAsync(process, """{"jsonrpc":"2.0","method":"notifications/initialized"}""", timeout.Token);
+            await SendAsync(process, """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""", timeout.Token);
+            _toolDefinitions = await ReceiveAsync(process, 2, timeout.Token);
             await SendAsync(process,
-                JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 2, method = "tools/call",
+                JsonSerializer.Serialize(new { jsonrpc = "2.0", id = 3, method = "tools/call",
                     @params = new { name = "get_file_diagnostics", arguments = new { relativePath } } }),
                 timeout.Token);
-            var result = await ReceiveAsync(process, 2, timeout.Token);
+            var result = await ReceiveAsync(process, 3, timeout.Token);
             Assert.False(result.TryGetProperty("isError", out var isError) && isError.GetBoolean(), result.ToString());
             using var content = JsonDocument.Parse(result.GetProperty("content")[0].GetProperty("text").GetString()!);
             _repositoryDiagnostics = content.RootElement.Clone();
@@ -190,6 +189,8 @@ public sealed partial class ServeRepositorySteps
 
     private void AssertSelectedFile(string root, string path)
     {
+        Assert.All(_toolDefinitions.GetProperty("tools").EnumerateArray(), tool =>
+            Assert.StartsWith($"In project {Path.GetFileName(root)}, ", tool.GetProperty("description").GetString()));
         Assert.Equal(path, _repositoryDiagnostics.GetProperty("relativePath").GetString());
         Assert.True(_repositoryDiagnostics.GetProperty("isValid").GetBoolean());
         Assert.True(File.Exists(Path.Combine(root, path)));
@@ -208,15 +209,18 @@ public sealed partial class ServeRepositorySteps
     {
         // Child processes report a physical working directory, including macOS's /var -> /private/var link.
         var directory = new DirectoryInfo(path);
-        var target = directory.ResolveLinkTarget(returnFinalTarget: true);
 
-        if (target is not null)
+        // A filesystem or drive root has no parent and is never a link. Windows additionally
+        // refuses to resolve a link target for 'C:\', so the root must be returned before asking.
+        if (directory.Parent is null)
         {
-            return ResolveDirectoryPath(target.FullName);
+            return directory.FullName;
         }
 
-        return directory.Parent is null
-            ? directory.FullName
+        var target = directory.ResolveLinkTarget(returnFinalTarget: true);
+
+        return target is not null
+            ? ResolveDirectoryPath(target.FullName)
             : Path.Combine(ResolveDirectoryPath(directory.Parent.FullName), directory.Name);
     }
 }

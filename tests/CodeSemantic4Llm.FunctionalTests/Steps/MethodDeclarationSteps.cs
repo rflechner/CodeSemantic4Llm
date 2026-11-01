@@ -35,7 +35,9 @@ public sealed partial class RepositoryIndexingSteps
             arguments["offset"] = nextOffset.GetInt64();
         } while (true);
 
-        Assert.Equal("    [Old]\n    public int Run(int value) => value;", text.ToString());
+        var source = File.ReadAllText(Path.Combine(_root, "Worker.cs"));
+        var newLine = source.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        Assert.Equal("    [Old]" + newLine + "    public int Run(int value) => value;", text.ToString());
         var replacement = MethodAddress(method);
         replacement["newMethod"] = newMethod;
         _declarationWrite = await CodeCallAsync(client, "replace_method", replacement);

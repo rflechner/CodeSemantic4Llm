@@ -69,12 +69,22 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
 
             var semanticIndexing = document.SemanticIndexing is null
                 ? new SemanticIndexingConfiguration()
-                : new SemanticIndexingConfiguration(document.SemanticIndexing.Language);
+                : new SemanticIndexingConfiguration(document.SemanticIndexing.Language,
+                    document.SemanticIndexing.Llm is null ? null : new LlmSummaryConfiguration(
+                        document.SemanticIndexing.Llm.Enabled,
+                        document.SemanticIndexing.Llm.BaseUrl,
+                        document.SemanticIndexing.Llm.Model,
+                        document.SemanticIndexing.Llm.ApiKeyEnvironmentVariable,
+                        document.SemanticIndexing.Llm.ApiKey,
+                        document.SemanticIndexing.Llm.ReasoningEffort,
+                        document.SemanticIndexing.Llm.MaxCompletionTokens,
+                        document.SemanticIndexing.Llm.ForceGeneration));
 
             var fileExtensions = MapFileExtensions(document.FileExtensions);
+            var tools = MapTools(document.Tools);
 
             return new RepositoryIndexingConfiguration(
-                document.Analyzers, document.Exclude, semanticIndexing, fileExtensions, document.ProjectName);
+                document.Analyzers, document.Exclude, semanticIndexing, fileExtensions, document.ProjectName, tools);
         }
         catch (YamlException exception)
         {
@@ -86,6 +96,28 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
             throw new RepositoryConfigurationException(
                 $"Invalid indexing configuration in '{configurationPath}': {exception.Message}", exception);
         }
+    }
+
+    /// <summary>
+    /// Returns null when the repository declares no tools section, which selects every tool.
+    /// An explicitly written section must name at least one tool: commenting out every entry is
+    /// a configuration error rather than a silent return to advertising all of them.
+    /// </summary>
+    private static McpToolSelection? MapTools(List<string>? tools)
+    {
+        if (ReferenceEquals(tools, RepositoryYamlDocument.MissingTools))
+        {
+            return null;
+        }
+
+        if (tools is null || tools.Count == 0)
+        {
+            throw new RepositoryConfigurationException(
+                "The tools section must list at least one MCP tool. " +
+                "Remove the section to advertise every tool.");
+        }
+
+        return new McpToolSelection(tools);
     }
 
     private static IReadOnlyDictionary<string, SourceFileExtensions> MapFileExtensions(
@@ -105,6 +137,13 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
 
     private sealed class RepositoryYamlDocument
     {
+        /// <summary>
+        /// Identifies a document whose tools section is absent. The deserializer replaces this
+        /// instance for any written section, including an empty one, so reference identity
+        /// distinguishes "no section" from "a section that selects nothing".
+        /// </summary>
+        internal static readonly List<string> MissingTools = [];
+
         public int Version { get; set; }
 
         public string? ProjectName { get; set; }
@@ -112,6 +151,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         public List<string>? Analyzers { get; set; }
 
         public List<string>? Exclude { get; set; }
+
+        public List<string>? Tools { get; set; } = MissingTools;
 
         public Dictionary<string, List<string>?>? FileExtensions { get; set; } = new();
 
@@ -121,5 +162,26 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
     private sealed class SemanticIndexingYamlDocument
     {
         public string? Language { get; set; } = SemanticIndexingConfiguration.DefaultLanguage;
+
+        public LlmSummaryYamlDocument? Llm { get; set; }
+    }
+
+    private sealed class LlmSummaryYamlDocument
+    {
+        public bool Enabled { get; set; }
+
+        public bool ForceGeneration { get; set; }
+
+        public string? BaseUrl { get; set; }
+
+        public string? Model { get; set; }
+
+        public string? ApiKeyEnvironmentVariable { get; set; }
+
+        public string? ApiKey { get; set; }
+
+        public string? ReasoningEffort { get; set; }
+
+        public int? MaxCompletionTokens { get; set; }
     }
 }

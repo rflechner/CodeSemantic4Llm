@@ -55,8 +55,9 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         using var connection = IndexDatabase.Open(path, scope.RootPath, writable: false);
         using var transaction = connection.BeginTransaction(deferred: true);
         var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
-        using var command = IndexDatabase.Command(connection, transaction, """
-            SELECT language, kind, name, qualified_name, path, line, column_number, containing_type_line, containing_type_column
+        var summaryColumn = IndexDatabase.SummaryColumn(connection, transaction);
+        using var command = IndexDatabase.Command(connection, transaction, $"""
+            SELECT language, kind, name, qualified_name, path, line, column_number, containing_type_line, containing_type_column, {summaryColumn}
             FROM symbols WHERE snapshot_id = $snapshot AND name = $name COLLATE BINARY
             ORDER BY path COLLATE BINARY, line, column_number, ordinal LIMIT $limit;
             """, ("$snapshot", snapshot.SnapshotId), ("$name", name), ("$limit", maxResults + 1));
@@ -71,6 +72,68 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
 
         var hasMore = symbols.Count > maxResults;
         return new SymbolSearchResult(snapshot, symbols.Take(maxResults).ToArray(), hasMore);
+    }
+
+    /// <inheritdoc />
+    public SymbolSearchResult SearchCode(
+        RepositoryScope scope, string query, string? kind, int maxResults,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
+
+        if (maxResults > 200)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxResults), "Limit must not exceed 200.");
+        }
+
+        var match = FullTextSearchQuery.Build(query);
+        var path = paths.GetDatabasePath(scope.RootPath);
+
+        if (!File.Exists(path))
+        {
+            throw MissingIndex();
+        }
+
+        using var connection = IndexDatabase.Open(path, scope.RootPath, writable: false);
+        using var transaction = connection.BeginTransaction(deferred: true);
+        var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
+
+        using (var version = IndexDatabase.Command(connection, transaction, "PRAGMA user_version;"))
+        {
+            if (Convert.ToInt32(version.ExecuteScalar()) < 5)
+            {
+                throw new InvalidOperationException(
+                    "This index does not contain full-text search metadata. Run the index command again.");
+            }
+        }
+
+        using var command = IndexDatabase.Command(connection, transaction, """
+            SELECT s.language, s.kind, s.name, s.qualified_name, s.path,
+                   s.line, s.column_number, s.containing_type_line, s.containing_type_column, s.summary
+            FROM symbol_search
+            JOIN symbols s ON s.rowid = symbol_search.rowid
+            WHERE symbol_search MATCH $match
+              AND s.snapshot_id = $snapshot
+              AND ($kind IS NULL OR s.kind = $kind COLLATE BINARY)
+            ORDER BY bm25(symbol_search, 8.0, 4.0, 1.0),
+                     s.path COLLATE BINARY, s.line, s.column_number, s.ordinal
+            LIMIT $limit;
+            """,
+            ("$match", match), ("$snapshot", snapshot.SnapshotId),
+            ("$kind", string.IsNullOrWhiteSpace(kind) ? null : kind.Trim()),
+            ("$limit", maxResults + 1));
+
+        using var reader = command.ExecuteReader();
+        var symbols = new List<SymbolDefinition>(maxResults + 1);
+
+        while (reader.Read())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            symbols.Add(ReadSymbol(reader));
+        }
+
+        return new SymbolSearchResult(snapshot, symbols.Take(maxResults).ToArray(), symbols.Count > maxResults);
     }
 
     public IReadOnlyList<IndexedDeclaration> SelectDeclarations(
@@ -88,9 +151,10 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         using var connection = IndexDatabase.Open(path, scope.RootPath, writable: false);
         using var transaction = connection.BeginTransaction(deferred: true);
         var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
-        using var command = IndexDatabase.Command(connection, transaction, """
+        var summaryColumn = IndexDatabase.SummaryColumn(connection, transaction, "s.");
+        using var command = IndexDatabase.Command(connection, transaction, $"""
             SELECT s.language, s.kind, s.name, s.qualified_name, s.path, s.line, s.column_number,
-                   s.containing_type_line, s.containing_type_column, f.content_hash
+                   s.containing_type_line, s.containing_type_column, {summaryColumn}, f.content_hash
             FROM symbols s JOIN indexed_files f ON f.snapshot_id = s.snapshot_id AND f.path = s.path
             WHERE s.snapshot_id = $snapshot AND s.path = $path
                 AND (s.name = $name COLLATE BINARY OR s.qualified_name = $name COLLATE BINARY
@@ -108,7 +172,7 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         while (reader.Read())
         {
             cancellationToken.ThrowIfCancellationRequested();
-            declarations.Add(new IndexedDeclaration(snapshot, ReadSymbol(reader), reader.GetString(9)));
+            declarations.Add(new IndexedDeclaration(snapshot, ReadSymbol(reader), reader.GetString(10)));
         }
 
         return declarations;
@@ -152,8 +216,9 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
             }
         }
 
-        using var targetCommand = IndexDatabase.Command(connection, transaction, """
-            SELECT language, kind, name, qualified_name, path, line, column_number, containing_type_line, containing_type_column
+        var summaryColumn = IndexDatabase.SummaryColumn(connection, transaction);
+        using var targetCommand = IndexDatabase.Command(connection, transaction, $"""
+            SELECT language, kind, name, qualified_name, path, line, column_number, containing_type_line, containing_type_column, {summaryColumn}
             FROM symbols WHERE snapshot_id = $snapshot AND path = $path AND line = $line AND column_number = $column
                 AND kind IN ('method', 'class', 'struct', 'interface', 'record', 'enum', 'delegate');
             """, ("$snapshot", snapshotId), ("$path", targetLocation.RelativePath),
@@ -211,9 +276,10 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
                 "The active index snapshot changed. Call find_symbols again before editing a method.");
         }
 
-        using var command = IndexDatabase.Command(connection, transaction, """
+        var summaryColumn = IndexDatabase.SummaryColumn(connection, transaction, "s.");
+        using var command = IndexDatabase.Command(connection, transaction, $"""
             SELECT s.language, s.kind, s.name, s.qualified_name, s.path, s.line, s.column_number,
-                   s.containing_type_line, s.containing_type_column, f.content_hash
+                   s.containing_type_line, s.containing_type_column, {summaryColumn}, f.content_hash
             FROM symbols s
             JOIN indexed_files f ON f.snapshot_id = s.snapshot_id AND f.path = s.path
             WHERE s.snapshot_id = $snapshot AND s.path = $path
@@ -223,7 +289,7 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
 
         using var reader = command.ExecuteReader();
         return reader.Read()
-            ? new IndexedMethod(snapshot, ReadSymbol(reader), reader.GetString(9))
+            ? new IndexedMethod(snapshot, ReadSymbol(reader), reader.GetString(10))
             : throw new InvalidOperationException(
                 "No indexed method exists at this declaration location. Use find_symbols with kind 'method'.");
     }
@@ -245,8 +311,9 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
         ValidateMemberSnapshot(connection, transaction, snapshot, snapshotId);
         var type = ReadType(connection, transaction, snapshotId, typeLocation);
-        using var command = IndexDatabase.Command(connection, transaction, """
-            SELECT language, kind, name, qualified_name, path, line, column_number, containing_type_line, containing_type_column
+        var summaryColumn = IndexDatabase.SummaryColumn(connection, transaction);
+        using var command = IndexDatabase.Command(connection, transaction, $"""
+            SELECT language, kind, name, qualified_name, path, line, column_number, containing_type_line, containing_type_column, {summaryColumn}
             FROM symbols WHERE snapshot_id = $snapshot AND path = $path
                 AND containing_type_line = $line AND containing_type_column = $column
                 AND ($kind IS NULL OR kind = $kind COLLATE BINARY)
@@ -286,8 +353,9 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
     private static SymbolDefinition ReadType(
         SqliteConnection connection, SqliteTransaction transaction, long snapshotId, SourceLocation location)
     {
-        using var command = IndexDatabase.Command(connection, transaction, """
-            SELECT language, kind, name, qualified_name, path, line, column_number, containing_type_line, containing_type_column
+        var summaryColumn = IndexDatabase.SummaryColumn(connection, transaction);
+        using var command = IndexDatabase.Command(connection, transaction, $"""
+            SELECT language, kind, name, qualified_name, path, line, column_number, containing_type_line, containing_type_column, {summaryColumn}
             FROM symbols WHERE snapshot_id = $snapshot AND path = $path AND line = $line AND column_number = $column
                 AND kind IN ('class', 'struct', 'interface', 'record', 'enum');
             """, ("$snapshot", snapshotId), ("$path", location.RelativePath), ("$line", location.Line), ("$column", location.Column));
@@ -301,7 +369,8 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         var path = reader.GetString(4);
         var containingType = reader.IsDBNull(7) ? null : new SourceLocation(path, reader.GetInt32(7), reader.GetInt32(8));
         return new SymbolDefinition(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-            new SourceLocation(path, reader.GetInt32(5), reader.GetInt32(6)), containingType);
+            new SourceLocation(path, reader.GetInt32(5), reader.GetInt32(6)), containingType,
+            reader.IsDBNull(9) ? null : reader.GetString(9));
     }
 
     internal static RepositoryIndexSnapshot? ReadSnapshot(

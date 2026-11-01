@@ -51,7 +51,9 @@ public sealed partial class RepositoryIndexingSteps
     public void ThenDirectEditPreservesOtherMembers()
     {
         var source = File.ReadAllText(Path.Combine(_root, "Worker.cs"));
-        Assert.Equal(_sourceBeforeCodeWrite!.Replace("=> 1;", "{\n        return 42;\n    }", StringComparison.Ordinal), source);
+        var newLine = _sourceBeforeCodeWrite!.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var replacement = "{" + newLine + "        return 42;" + newLine + "    }";
+        Assert.Equal(_sourceBeforeCodeWrite.Replace("=> 1;", replacement, StringComparison.Ordinal), source);
     }
 
     [When(@"MCP directly replaces Run with (\d+) syntax errors")]

@@ -27,7 +27,9 @@ public sealed class CSharpSourceAnalyzer : ISourceAnalyzer
     {
         ArgumentNullException.ThrowIfNull(document);
 
-        var syntaxTree = CSharpSyntaxTree.ParseText(document.Content, cancellationToken: cancellationToken);
+        var syntaxTree = CSharpSyntaxTree.ParseText(document.Content,
+            CSharpParseOptions.Default.WithDocumentationMode(DocumentationMode.Diagnose),
+            cancellationToken: cancellationToken);
         var root = syntaxTree.GetRoot(cancellationToken);
         var symbols = new List<SymbolDefinition>();
 
@@ -52,7 +54,8 @@ public sealed class CSharpSourceAnalyzer : ISourceAnalyzer
                     name,
                     qualifiedName,
                     GetLocation(document.RelativePath, identifier),
-                    containingType is null ? null : GetLocation(document.RelativePath, containingType.Identifier)));
+                    containingType is null ? null : GetLocation(document.RelativePath, containingType.Identifier),
+                    CSharpDocumentationSummary.Read(member)));
             }
         }
 

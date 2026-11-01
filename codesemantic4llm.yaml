@@ -11,10 +11,21 @@ analyzers:
 # fileExtensions:
 #   dotnet-csharp: [.cs, .csharp]
 
-# Language for future AI-generated semantic summaries (independent of source language).
-# Optional: defaults to en when omitted. Examples: fr, fr-CH.
+# Natural-language summary language (independent of the source language).
+# Existing XML summaries are indexed locally. LLM calls are disabled by default.
+# When enabled, declarations without summaries are sent to the configured endpoint.
 semanticIndexing:
   language: en
+  llm:
+    enabled: false
+    # forceGeneration: true # Replace existing XML summaries using the LLM when enabled.
+    # baseUrl: http://127.0.0.1:1234/v1
+    # model: your-local-model
+    # Optional generation settings; support depends on the model and endpoint.
+    # reasoningEffort: low
+    # maxCompletionTokens: 2048
+    # apiKey: your-api-key # Takes priority over apiKeyEnvironmentVariable when non-empty.
+    # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 
 # User-defined excludes extend the built-in defaults for **/.git/**, **/bin/** and **/obj/**.
 # Git submodules are NOT automatically excluded; opt out by path as needed.

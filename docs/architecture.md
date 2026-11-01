@@ -239,6 +239,39 @@ atomic compare-and-swap. Concurrent checkout edits may still race. No new code o
 source copies are persisted into the central index; a successful write marks the
 index stale and requires an explicit reindex.
 
+## Repository-selected MCP tools
+
+`McpToolCatalog` declares every tool a repository server can advertise, with the capability it
+belongs to. The catalog is domain vocabulary rather than transport detail: it is the contract
+offered to agents, and both the YAML loader and the `init` use case need it, while the MCP host
+remains the only place that registers tools. A functional scenario serves a checkout with every
+capability granted and asserts that discovery returns exactly the catalog, so registration and
+catalog cannot drift apart.
+
+`McpToolSelection` is the validated set a repository allows. Unknown names fail explicitly with
+the available list, mirroring unsupported analyzer IDs; names are trimmed, lowercased and
+deduplicated, and discovery always returns catalog order. A repository that declares no `tools`
+section selects every tool, so earlier configurations keep working. A section that selects
+nothing is an error instead of a silent return to advertising everything, because commenting out
+every entry expresses the opposite intent. Distinguishing an absent section from an empty one is
+the loader's responsibility; the domain only sees a selection or none.
+
+A selection **narrows** and never widens. `RepositoryWriteAccess` and `McpToolExposure` still
+decide which tool classes are registered at all, so listing `replace_method_body` in YAML cannot
+grant source editing, and an unregistered tool is refused as unknown. On top of that
+registration, a list-tools filter hides deselected tools and a call-tools filter refuses them, so
+a client holding a stale tool list cannot reach a tool the repository withdrew. Filtering the
+response rather than the registrations keeps the SDK's reusable tool definitions untouched, as
+project descriptions already do.
+
+The selection is read per request, like the project display name, so an operator's edit applies
+after the client refreshes its tool list. When the configuration cannot be read, the process
+capabilities remain the only restriction and a warning goes to stderr: discovery and file
+diagnostics must stay usable on an unconfigured or broken checkout, and withholding every tool
+there would make the server useless rather than safer. Operations that require valid
+configuration keep failing as before. A selection is a presentation choice: it does not affect
+analysis fingerprints, stored data or cache identity, so narrowing it never requires reindexing.
+
 ## Planned index storage
 
 ![Planned index storage: each original Git checkout has codesemantic4llm.yaml at its root; a separate central store holds one SQLite index per checkout, branch snapshots, and caches shared across branches, without source-file copies.](index-storage-architecture.png)

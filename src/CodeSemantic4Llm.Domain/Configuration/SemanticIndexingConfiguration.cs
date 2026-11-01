@@ -16,7 +16,7 @@ public sealed class SemanticIndexingConfiguration
         RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
         TimeSpan.FromMilliseconds(100));
 
-    public SemanticIndexingConfiguration(string? language = DefaultLanguage)
+    public SemanticIndexingConfiguration(string? language = DefaultLanguage, LlmSummaryConfiguration? llm = null)
     {
         if (string.IsNullOrWhiteSpace(language))
         {
@@ -53,8 +53,12 @@ public sealed class SemanticIndexingConfiguration
         }
 
         Language = string.Join("-", segments);
+        Llm = llm ?? new LlmSummaryConfiguration();
     }
 
     /// <summary>Normalized human-language tag for future semantic descriptions.</summary>
     public string Language { get; }
+
+    /// <summary>Opt-in LLM descriptions for indexed methods and type declarations.</summary>
+    public LlmSummaryConfiguration Llm { get; }
 }

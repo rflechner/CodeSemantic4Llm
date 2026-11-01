@@ -53,7 +53,7 @@ public sealed partial class ServeRepositorySteps
                 timeout.Token);
 
             // No shutdown is needed to make the most recent failure available to the operator.
-            _fileLogText = File.ReadAllText(ServerLogPath);
+            _fileLogText = SharedLogFile.ReadAllText(ServerLogPath);
         }
         finally
         {
