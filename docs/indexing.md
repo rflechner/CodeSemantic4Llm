@@ -164,7 +164,7 @@ MCP startup never indexes automatically. It selects the checkout from `serve [re
 falling back to `CODESEMANTIC4LLM_REPOSITORY_ROOT` when the argument is omitted, and uses the
 same cache path as the CLI. The argument accepts an existing absolute or relative directory;
 relative paths are resolved against the process working directory. See the
-[MCP client configuration example](../README.md#mcp-client-configuration).
+[MCP client configuration example](../README.md#mcp-client-configuration-when-running-from-a-source-build).
 
 ### Default code-focused interface
 

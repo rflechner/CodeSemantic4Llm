@@ -112,11 +112,12 @@ Invalid arguments, project names, languages and analyzer selections leave the ta
 
 `init --help` and `init -h` show usage without accessing the repository. Exit codes are
 0 for success/help, 1 for invalid input, existing configuration or filesystem errors,
-and 130 for cancellation. Top-level `--help` lists `init`, `preview`, `index`, and `serve`.
-Spectre.Console generates help from the command settings. Results and help use stdout;
-parsing, validation and operation errors use stderr. Unknown commands and options fail
-instead of starting the MCP server. `serve [repository-path]`, or an invocation without
-arguments, starts the stdio MCP server with logs confined to stderr. The optional path
+and 130 for cancellation. Top-level `--help` lists `init`, `preview`, `index`,
+`dashboard`, and `serve`. Spectre.Console generates help from the command settings.
+Results and help use stdout; parsing, validation and operation errors use stderr.
+Unknown commands and options fail instead of starting the MCP server.
+`serve [repository-path]`, or an invocation without arguments, starts the stdio MCP
+server with logs confined to stderr. The optional path
 overrides `CODESEMANTIC4LLM_REPOSITORY_ROOT` for this server instance.
 
 ## Example
@@ -488,7 +489,8 @@ server starts. `serve --help` describes the optional argument without starting M
 Startup does not require Git metadata or YAML to initialize the MCP protocol, and does
 not index automatically. Repository tools validate the YAML and Git state when needed.
 Without either selection method, repository tools report a configuration error while
-repository-independent tools remain available. See the [mcp.json example](../README.md#mcp-client-configuration).
+repository-independent tools remain available. See the
+[mcp.json example](../README.md#mcp-client-configuration-when-running-from-a-source-build).
 
 The `get_repository_configuration` MCP tool returns the validated settings, including
 `projectName` (null when unspecified), `semanticIndexing.language` (default `en`), built-in exclusions, and the requested
