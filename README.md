@@ -1,5 +1,9 @@
 # CodeSemantic4Llm
 
+> **Experimental proof of concept — nothing here is production software.**
+> This repository exists to test a hypothesis, not to ship a product. Expect
+> incomplete features, changing storage layouts and breaking changes.
+
 **CodeSemantic4Llm** is an experimental, local-first MCP server for semantic code indexing.
 The goal is to let coding agents retrieve small, relevant slices of a repository instead of repeatedly loading large source files into the LLM context.
 
@@ -9,6 +13,27 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 > full MSBuild project resolution; optional OpenAI-compatible LLM summaries are implemented
 > for C# methods and types, with local FTS5/BM25 keyword search over stored
 > names and summaries. Embeddings and TypeScript analysis remain planned.
+
+## What this POC tries to find out
+
+Two questions motivate the whole experiment:
+
+1. **Can a precise semantic index make small local LLMs genuinely useful on real codebases?**
+   Small models that run on a developer machine have little context and are easily
+   derailed by large, partially relevant file dumps. If an index can answer
+   "where is this symbol declared?", "who calls it?" or "which code is relevant here?"
+   with a handful of accurate lines, a mini model may gain enough velocity and
+   reliability to be worth using for everyday navigation and editing tasks.
+
+2. **Can the same index save tokens on paid agents?**
+   Hosted agents pay for every file they read. Replacing speculative, repeated
+   whole-file reads with targeted queries should cut context size and token
+   consumption measurably — while keeping reliable access to code structure.
+
+Everything in this repository — the analyzers, the SQLite schema, the MCP tools,
+the optional LLM summaries — is a means to answer those two questions. Design
+decisions are deliberately reversible, and planned capabilities are documented
+as planned rather than presented as finished.
 
 ## Install as a .NET tool
 
