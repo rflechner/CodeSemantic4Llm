@@ -89,6 +89,7 @@ internal sealed class SharedSummaryTestRepository : IDisposable
         public string Text { get; set; } = "Calculates a nebula invoice.";
         public string CacheVersion { get; set; } = "prompt-v1";
         public bool Fail { get; set; }
+        public bool Timeout { get; set; }
         public Action? OnGenerate { get; set; }
 
         public Task<string> SummarizeAsync(SymbolDefinition symbol, string declarationSource,
@@ -97,7 +98,11 @@ internal sealed class SharedSummaryTestRepository : IDisposable
             cancellationToken.ThrowIfCancellationRequested();
             Calls++;
             OnGenerate?.Invoke();
-            if (Fail) throw new IOException("Generation failed.");
+            if (Fail)
+            {
+                if (Timeout) throw new TaskCanceledException("The LLM provider timed out.");
+                throw new IOException("Generation failed.");
+            }
             return Task.FromResult(Text);
         }
     }

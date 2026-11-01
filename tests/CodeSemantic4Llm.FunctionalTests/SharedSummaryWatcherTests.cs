@@ -38,14 +38,17 @@ public sealed class SharedSummaryWatcherTests
         }
     }
 
-    [Fact]
-    public async Task Watcher_retries_after_a_failed_generation_and_keeps_previous_snapshot()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Watcher_retries_after_a_failed_generation_and_keeps_previous_snapshot(bool providerTimeout)
     {
         using var repo = new SharedSummaryTestRepository();
         await repo.InitializeAsync();
         var first = await repo.Indexer.ExecuteAsync(repo.Root, cancellationToken: repo.Token);
         File.AppendAllText(Path.Combine(repo.Root, "Sample.cs"), "\nclass Retry {}\n");
         repo.Generator.Fail = true;
+        repo.Generator.Timeout = providerTimeout;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(repo.Token);
         var reports = new ConcurrentQueue<string>();
         var running = new RepositoryIndexWatcher(repo.Indexer, new GitSummaryIntegration())

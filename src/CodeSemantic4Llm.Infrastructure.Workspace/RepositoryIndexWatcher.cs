@@ -56,8 +56,9 @@ public sealed class RepositoryIndexWatcher(IndexRepository indexer, GitSummaryIn
                 var result = await indexer.ExecuteAsync(root, cancellationToken: cancellationToken);
                 report?.Invoke($"Index verified: {result.AnalyzedFiles} analyzed, {result.ReusedFiles} reused.");
             }
-            catch (Exception exception) when (exception is not OperationCanceledException)
+            catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
+                // An HTTP timeout can also be an OperationCanceledException; only operator cancellation stops watching.
                 // The index transaction has rolled back. The next event or timer tick retries the checkout.
                 report?.Invoke("Index reconciliation failed; the previous snapshot remains available: " + exception.Message);
             }
