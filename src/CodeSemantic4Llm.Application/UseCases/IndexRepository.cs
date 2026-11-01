@@ -290,6 +290,7 @@ public sealed class IndexRepository(
                 configuration.SemanticIndexing.Llm.Model,
                 configuration.SemanticIndexing.Llm.ReasoningEffort,
                 configuration.SemanticIndexing.Llm.MaxCompletionTokens,
+                configuration.SemanticIndexing.Llm.SystemPrompt,
                 GeneratorVersion = configuration.SemanticIndexing.Llm.Enabled
                     ? summaryGenerator?.CacheVersion : null,
                 Extractors = configuration.SemanticIndexing.Llm.Enabled

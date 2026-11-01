@@ -44,6 +44,30 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
     }
 
     [Theory]
+    [InlineData("Summarize in {lang}.\nReturn {\"language\": \"{lang}\"}. Keep {0}, {Lang} and {}.",
+        "Summarize in fr-CH.\nReturn {\"language\": \"fr-CH\"}. Keep {0}, {Lang} and {}.")]
+    [InlineData("Describe public void Run() { }.", "Describe public void Run() { }.")]
+    public async Task Custom_system_prompt_replaces_only_named_language_tokens(string prompt, string expected)
+    {
+        var handler = new RecordingHandler();
+        using var client = new HttpClient(handler);
+        var generator = new OpenAiSymbolSummaryGenerator(client, NullLogger<OpenAiSymbolSummaryGenerator>.Instance);
+        var configuration = new SemanticIndexingConfiguration("FR-ch", new LlmSummaryConfiguration(
+            true, "http://localhost:1234/v1", "local-test-model", systemPrompt: prompt));
+        var symbol = new SymbolDefinition("csharp", "method", "Run", "Demo.Run",
+            new SourceLocation("Demo.cs", 1, 1));
+
+        await generator.SummarizeAsync(symbol, "public void Run() {}", configuration,
+            TestContext.Current.CancellationToken);
+
+        using var request = JsonDocument.Parse(handler.Payload!);
+        var messages = request.RootElement.GetProperty("messages");
+        Assert.Equal("system", messages[0].GetProperty("role").GetString());
+        Assert.Equal(expected, messages[0].GetProperty("content").GetString());
+        Assert.Contains("public void Run() {}", messages[1].GetProperty("content").GetString());
+    }
+
+    [Theory]
     [InlineData("{}")]
     [InlineData("{\"choices\":null}")]
     [InlineData("{\"choices\":{}}")]

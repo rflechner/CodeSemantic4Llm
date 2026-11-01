@@ -43,7 +43,8 @@ internal sealed class SharedSummaryTestRepository : IDisposable
 
     public void UseFreshDatabase() => Paths = new(Path.Combine(Workspace, "cache-" + Guid.NewGuid().ToString("N")));
 
-    public void WriteConfiguration(string model = "test-model", string language = "en", string apiKey = "private-key") =>
+    public void WriteConfiguration(
+        string model = "test-model", string language = "en", string apiKey = "private-key", string? systemPrompt = null) =>
         File.WriteAllText(Path.Combine(Root, "codesemantic4llm.yaml"), $$"""
             version: 1
             analyzers: [dotnet-csharp]
@@ -55,6 +56,7 @@ internal sealed class SharedSummaryTestRepository : IDisposable
                 baseUrl: http://localhost:1234/v1
                 model: {{model}}
                 apiKey: {{apiKey}}
+                systemPrompt: {{System.Text.Json.JsonSerializer.Serialize(systemPrompt)}}
             """);
 
     public async Task<string> GitAsync(params string[] arguments)

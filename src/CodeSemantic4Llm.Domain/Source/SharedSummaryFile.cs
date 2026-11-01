@@ -14,7 +14,9 @@ public sealed record SummaryProfile(string ModelHash, string PromptHash, string 
         {
             Url = settings.Llm.BaseUrl?.AbsoluteUri.TrimEnd('/'), settings.Llm.Model,
             settings.Llm.ReasoningEffort, settings.Llm.MaxCompletionTokens, settings.Llm.ForceGeneration
-        })), Hash(promptVersion), Hash(settings.Language));
+        })),
+        Hash(JsonSerializer.Serialize(new { promptVersion, settings.Llm.SystemPrompt })),
+        Hash(settings.Language));
 
     public static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
 }

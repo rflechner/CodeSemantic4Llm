@@ -71,7 +71,7 @@ public sealed class OpenAiSymbolSummaryGenerator(
                 new
                 {
                     role = "system",
-                    content = SummaryPrompt.SystemMessage(configuration.Language)
+                    content = SummaryPrompt.SystemMessage(configuration.Language, settings.SystemPrompt)
                 },
                 new
                 {
