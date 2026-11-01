@@ -11,12 +11,18 @@ Feature: Initialize repository configuration from a terminal
     Then repository initialization succeeds
     And the generated configuration uses language "en" and the default C# settings
     And the generated configuration has no project name
+    And the generated configuration includes an inactive editable system prompt
     And the initialized repository can be previewed with built-in exclusions
 
     Examples:
       | path     |
       | absolute |
       | relative |
+
+  Scenario: The commented system prompt can be enabled without further YAML changes
+    When I initialize the target repository with language "fr"
+    And I uncomment the generated system prompt block
+    Then the generated system prompt matches the built-in template
 
   Scenario Outline: Choose and normalize the semantic description language
     When I initialize the target repository with language "<language>"

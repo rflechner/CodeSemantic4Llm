@@ -1,5 +1,6 @@
 using CodeSemantic4Llm.Analysis.CSharp;
 using CodeSemantic4Llm.Application.Abstractions;
+using CodeSemantic4Llm.Application.Configuration;
 using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Configuration.Yaml;
 using CodeSemantic4Llm.Domain.Configuration;
@@ -110,6 +111,41 @@ public sealed class RepositoryInitializationSteps
         Assert.Equal(language, configuration.SemanticIndexing.Language);
         Assert.Equal(RepositoryIndexingConfiguration.BuiltInExclusions, configuration.Exclusions);
         Assert.Empty(configuration.FileExtensions);
+    }
+
+    [Then("the generated configuration includes an inactive editable system prompt")]
+    public async Task ThenCommentedSystemPrompt()
+    {
+        var configuration = await new YamlRepositoryConfigurationLoader().LoadAsync(
+            RepositoryRoot, TestContext.Current.CancellationToken);
+        var yaml = File.ReadAllText(ConfigurationPath);
+
+        Assert.Null(configuration.SemanticIndexing.Llm.SystemPrompt);
+        Assert.False(configuration.SemanticIndexing.Llm.Enabled);
+        Assert.Contains("    # systemPrompt: |-", yaml);
+        Assert.Contains("language {lang}", yaml);
+        Assert.DoesNotContain("language {0}", yaml);
+    }
+
+    [When("I uncomment the generated system prompt block")]
+    public void WhenUncommentSystemPrompt()
+    {
+        var yaml = File.ReadAllText(ConfigurationPath)
+            .Replace("    # systemPrompt: |-", "    systemPrompt: |-", StringComparison.Ordinal)
+            .Replace("    #   ", "      ", StringComparison.Ordinal);
+        File.WriteAllText(ConfigurationPath, yaml);
+    }
+
+    [Then("the generated system prompt matches the built-in template")]
+    public async Task ThenGeneratedSystemPrompt()
+    {
+        Assert.Equal(0, _exitCode);
+        var configuration = await new YamlRepositoryConfigurationLoader().LoadAsync(
+            RepositoryRoot, TestContext.Current.CancellationToken);
+
+        Assert.Equal(SummaryPrompt.SystemTemplate, configuration.SemanticIndexing.Llm.SystemPrompt);
+        Assert.Equal("fr", configuration.SemanticIndexing.Language);
+        Assert.False(configuration.SemanticIndexing.Llm.Enabled);
     }
 
     [Then("the generated configuration selects these analyzers in order:")]

@@ -89,6 +89,11 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
             llmDocument["forceGeneration"] = true;
         }
 
+        if (llm.SystemPrompt is not null)
+        {
+            llmDocument["systemPrompt"] = llm.SystemPrompt;
+        }
+
         if (llm.BaseUrl is not null)
         {
             llmDocument["baseUrl"] = llm.BaseUrl.ToString();
@@ -130,7 +135,26 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
             .Except(RepositoryIndexingConfiguration.BuiltInExclusions, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
-        return AnnotateToolSelection(Serializer.Serialize(document));
+        var yaml = AnnotateToolSelection(Serializer.Serialize(document));
+        return llm.SystemPrompt is null ? AnnotateSystemPrompt(yaml) : yaml;
+    }
+
+    /// <summary>Includes the built-in template as an editable, inactive YAML block scalar.</summary>
+    private static string AnnotateSystemPrompt(string yaml)
+    {
+        var newLine = yaml.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+        var lines = yaml.Split(newLine).ToList();
+        var llmIndex = lines.IndexOf("  llm:");
+
+        lines.InsertRange(llmIndex + 1,
+        [
+            "    # Optional replacement for the default system prompt. {lang} uses semanticIndexing.language.",
+            "    # Uncomment the whole block to customize it; other braces are kept literally.",
+            "    # systemPrompt: |-",
+            .. SummaryPrompt.SystemTemplate.Split('\n').Select(line => "    #   " + line.TrimEnd('\r'))
+        ]);
+
+        return string.Join(newLine, lines);
     }
 
     /// <summary>

@@ -122,6 +122,29 @@ public sealed class LlmSummaryIndexTests : IDisposable
     }
 
     [Fact]
+    public async Task Changing_or_removing_the_system_prompt_regenerates_summaries()
+    {
+        await CreateCheckoutAsync();
+        var indexer = CreateIndexer();
+        var expectedRequests = 0;
+
+        foreach (var prompt in new[] { null, "Explain in {lang}.", "Describe side effects in {lang}.", null })
+        {
+            WriteYaml(enabled: true, forceGeneration: true, model: "model-one", systemPrompt: prompt);
+            var changed = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+            expectedRequests += 2;
+
+            Assert.Equal(0, changed.ReusedFiles);
+            Assert.Equal(expectedRequests, _generator.Requests.Count);
+            Assert.Equal(prompt, _generator.LastSettings!.SystemPrompt);
+
+            var unchanged = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+            Assert.Equal(1, unchanged.ReusedFiles);
+            Assert.Equal(expectedRequests, _generator.Requests.Count);
+        }
+    }
+
+    [Fact]
     public async Task Failed_generation_preserves_last_published_snapshot()
     {
         await CreateCheckoutAsync();
@@ -186,13 +209,14 @@ public sealed class LlmSummaryIndexTests : IDisposable
 
     private void WriteYaml(
         bool enabled, string model, string? apiKey = null, string? reasoningEffort = null,
-        int? maxCompletionTokens = null, bool forceGeneration = false) => File.WriteAllText(ConfigPath,
+        int? maxCompletionTokens = null, bool forceGeneration = false, string? systemPrompt = null) => File.WriteAllText(ConfigPath,
         "version: 1\nanalyzers: [dotnet-csharp]\nsemanticIndexing:\n  language: fr\n" +
         "  llm:\n    enabled: " + (enabled ? "true" : "false") +
         "\n    forceGeneration: " + (forceGeneration ? "true" : "false") +
         "\n    baseUrl: http://127.0.0.1:1234/v1\n    model: " + model + "\n" +
         (apiKey is null ? "" : "    apiKey: " + apiKey + "\n") +
         (reasoningEffort is null ? "" : "    reasoningEffort: " + reasoningEffort + "\n") +
+        (systemPrompt is null ? "" : "    systemPrompt: " + systemPrompt + "\n") +
         (maxCompletionTokens is null ? "" : "    maxCompletionTokens: " + maxCompletionTokens + "\n"));
 
     private async Task CreateCheckoutAsync()

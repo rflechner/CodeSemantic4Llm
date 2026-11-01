@@ -19,10 +19,18 @@ public sealed class LlmSummaryConfiguration
         string? apiKey = null,
         string? reasoningEffort = null,
         int? maxCompletionTokens = null,
-        bool forceGeneration = false)
+        bool forceGeneration = false,
+        string? systemPrompt = null)
     {
         Enabled = enabled;
         ForceGeneration = forceGeneration;
+
+        if (systemPrompt is not null && string.IsNullOrWhiteSpace(systemPrompt))
+        {
+            throw new ArgumentException("LLM systemPrompt cannot be blank.", nameof(systemPrompt));
+        }
+
+        SystemPrompt = systemPrompt;
 
         if (baseUrl is not null)
         {
@@ -77,6 +85,13 @@ public sealed class LlmSummaryConfiguration
     /// Does not enable LLM calls by itself or bypass reuse of unchanged indexed files.
     /// </summary>
     public bool ForceGeneration { get; }
+
+    /// <summary>
+    /// Optional replacement for the default system prompt. Each exact {lang} token is replaced
+    /// with the semantic indexing language; other text and whitespace are preserved.
+    /// Null selects the built-in prompt; empty or whitespace-only prompts are rejected.
+    /// </summary>
+    public string? SystemPrompt { get; }
 
     /// <summary>OpenAI-compatible API root, for example http://127.0.0.1:1234/v1.</summary>
     public Uri? BaseUrl { get; }

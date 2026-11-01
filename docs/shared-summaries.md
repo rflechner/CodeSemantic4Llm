@@ -21,7 +21,7 @@ semanticIndexing:
     apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
 ```
 
-The model, endpoint, language, reasoning effort, token budget and `forceGeneration` policy continue to come from this one configuration. Sharing does not introduce another model configuration. The default is `sharedSummaries: false`. With LLM indexing disabled, source documentation is indexed normally and shared LLM descriptions are not imported.
+The model, endpoint, language, custom `systemPrompt`, reasoning effort, token budget and `forceGeneration` policy continue to come from this one configuration. Sharing does not introduce another model configuration. The default is `sharedSummaries: false`. With LLM indexing disabled, source documentation is indexed normally and shared LLM descriptions are not imported.
 
 Use the same released tool build and source line-ending policy across the team. The current analyzer version is the compiled adapter's module identifier. Different analyzer builds deliberately reject one another's portable descriptions; pinning the tool package avoids unnecessary misses. Markdown digests normalize CRLF to LF, but **source hashes cover exact bytes**, including BOMs and line endings. This repository already uses `* text=auto eol=lf`; adopt an appropriate policy in each indexed repository.
 
@@ -94,7 +94,7 @@ The YAML list records declaration identity; the Markdown body is the canonical d
 | `sourceHash` | Exact original source bytes | Any source edit, BOM or line-ending change |
 | `analyzer` / `analyzerVersion` | Adapter ID and compiled adapter version | Different declaration/extraction implementation |
 | `modelHash` | Endpoint, model, reasoning effort, max completion tokens, force-generation policy | Changed generation settings |
-| `promptHash` | Generator's stable prompt/output contract | Changed prompt templates or response semantics |
+| `promptHash` | Generator's stable prompt/output contract and optional `systemPrompt` | Changed prompt templates, repository instructions or response semantics |
 | `languageHash` | Validated semantic language tag | Changed natural-language output language |
 | Local `summary_cache_hash` | Whole Markdown after CRLF normalization | Changed, removed, malformed or replaced shared document |
 

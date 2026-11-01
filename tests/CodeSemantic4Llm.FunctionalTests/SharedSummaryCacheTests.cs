@@ -40,6 +40,7 @@ public sealed class SharedSummaryCacheTests
     [InlineData("model")]
     [InlineData("language")]
     [InlineData("prompt")]
+    [InlineData("systemPrompt")]
     [InlineData("deleted")]
     [InlineData("malformed")]
     public async Task Incompatible_or_removed_cache_regenerates_descriptions(string change)
@@ -56,6 +57,7 @@ public sealed class SharedSummaryCacheTests
             case "model": repo.WriteConfiguration(model: "new-model"); break;
             case "language": repo.WriteConfiguration(language: "fr"); break;
             case "prompt": repo.Generator.CacheVersion = "prompt-v2"; break;
+            case "systemPrompt": repo.WriteConfiguration(systemPrompt: "Describe side effects in {lang}."); break;
             case "deleted": File.Delete(repo.SummaryPath); break;
             case "malformed": File.WriteAllText(repo.SummaryPath, "!"); break;
         }
@@ -65,6 +67,26 @@ public sealed class SharedSummaryCacheTests
         Assert.Equal(2, repo.Generator.Calls - calls);
         Assert.Empty(repo.Store.SearchCode(result.Snapshot.Scope, "nebula", null, 10, repo.Token).Symbols);
         Assert.Equal(2, repo.Store.SearchCode(result.Snapshot.Scope, "pulsar", null, 10, repo.Token).Symbols.Count);
+    }
+
+    [Fact]
+    public async Task Custom_prompt_cache_is_portable_without_exporting_the_prompt_text()
+    {
+        using var repo = new SharedSummaryTestRepository();
+        await repo.InitializeAsync();
+        const string prompt = "CUSTOM_PROMPT_MUST_NOT_BE_EXPORTED. Explain in {lang}.";
+        repo.WriteConfiguration(systemPrompt: prompt);
+        await repo.Indexer.ExecuteAsync(repo.Root, cancellationToken: repo.Token);
+        await repo.Exporter.ExecuteAsync(repo.Root, cancellationToken: repo.Token);
+
+        Assert.DoesNotContain(prompt, File.ReadAllText(repo.SummaryPath));
+        repo.UseFreshDatabase();
+        repo.Generator.Fail = true;
+        var calls = repo.Generator.Calls;
+
+        await repo.Indexer.ExecuteAsync(repo.Root, cancellationToken: repo.Token);
+
+        Assert.Equal(calls, repo.Generator.Calls);
     }
 
     [Fact]

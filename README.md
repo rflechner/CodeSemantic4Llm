@@ -144,6 +144,9 @@ summary need generation; `semanticIndexing.llm.forceGeneration: true` overrides 
 when the LLM is enabled. An optional `apiKey` supplies a Bearer token
 directly and takes priority over `apiKeyEnvironmentVariable`; blank keys use the environment
 fallback. Inline keys are omitted from MCP configuration responses.
+Set `semanticIndexing.llm.systemPrompt` to customize the system instructions; `{lang}` uses
+the configured language. `init` includes the default template as a commented YAML block.
+See [customizing the summary prompt](docs/repository-configuration.md#customize-the-summary-system-prompt).
 The model receives entire C# methods
 (including XML doc comments) or entire type declarations. Each generated summary is limited
 to 10 lines and is available to MCP clients and the dashboard. Source is not copied
