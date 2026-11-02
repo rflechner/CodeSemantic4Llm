@@ -12,31 +12,19 @@ This is a tool installation, **not** a `<PackageReference>` added to your applic
 
 - The **.NET 10 SDK** (the tool targets `net10.0` and uses the ASP.NET Core shared runtime).
 - Git and an existing Git checkout on a named branch for indexing.
-- A GitHub account and a **personal access token (classic)** with `read:packages`.
-  GitHub's NuGet registry requires authentication **even for public packages**.
-  A private package additionally requires that your account have access to it.
-- The `rflechner` feed: `https://nuget.pkg.github.com/rflechner/index.json`.
+- A GitHub account with access to the package.
 
-GitHub's NuGet registry currently supports **classic PATs**, not fine-grained PATs
-for client authentication. Do not place your PAT in tracked `nuget.config`,
-`dotnet-tools.json`, MCP JSON, a URL, or source control.
+## 1. Configure the NuGet feed (once per developer)
 
-## 1. Register the NuGet feed (once per developer)
-
-This registers only the feed URL in your user-level NuGet configuration,
-**not** the credential:
+Register the feed in your user-level NuGet configuration (skip this if it already exists):
 
 ```sh
 dotnet nuget add source "https://nuget.pkg.github.com/rflechner/index.json" --name CodeSemanticGitHub
-dotnet nuget list source
 ```
 
-If the source already exists, skip the first command.
-
-### PowerShell 7 (Windows, macOS or Linux)
-
-Replace `YOUR_GITHUB_LOGIN` with the login of the person who owns the PAT
-(it is **not necessarily** `rflechner`):
+Use a personal access token (classic) with `read:packages`, required even for
+public packages. We recommend supplying it through an environment variable
+rather than storing it in a configuration file. For example, in PowerShell 7:
 
 ```powershell
 $packagesPat = Read-Host "GitHub PAT (classic, read:packages)" -MaskInput
@@ -44,24 +32,16 @@ $env:NuGetPackageSourceCredentials_CodeSemanticGitHub = "Username=YOUR_GITHUB_LO
 Remove-Variable packagesPat
 ```
 
-### Bash / zsh
+Replace `YOUR_GITHUB_LOGIN` with the token owner's GitHub login.
+NuGet automatically looks for `NuGetPackageSourceCredentials_{sourceName}`:
+`CodeSemanticGitHub` matches the name given to `add source`, not the feed URL.
+You create the variable; NuGet reads it. Match the source name's casing,
+particularly on Linux. See [NuGet's environment credential convention](https://learn.microsoft.com/en-us/nuget/consume-packages/consuming-packages-authenticated-feeds#credentials-in-environment-variables).
 
-```bash
-read -rsp "GitHub PAT (classic, read:packages): " packages_pat
-printf '\n'
-export NuGetPackageSourceCredentials_CodeSemanticGitHub="Username=YOUR_GITHUB_LOGIN;Password=${packages_pat};ValidAuthenticationTypes=Basic"
-unset packages_pat
-```
-
-NuGet reads `NuGetPackageSourceCredentials_CodeSemanticGitHub` automatically
-because the source is named `CodeSemanticGitHub` (case matters on Linux).
-The credential only needs to be present while installing, updating or restoring
-the tool. It is not used by the running MCP server.
-
-When finished, clear it with `Remove-Item Env:NuGetPackageSourceCredentials_CodeSemanticGitHub`
-in PowerShell or `unset NuGetPackageSourceCredentials_CodeSemanticGitHub` in Bash.
-The terminal-session environment is temporary; set it again for a later
-installation or restore. Avoid pasting PATs into shell commands or files.
+Run the installation, update or restore in the same terminal session; set the
+variable again in future sessions. Keep credentials out of source control.
+For token creation and other authentication options, follow
+[GitHub's NuGet authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry#authenticating-to-github-packages).
 
 ## 2. Install the tool
 
@@ -236,11 +216,8 @@ parameters**; store them privately. Restart the client after changing switches.
 
 ### Troubleshooting
 
-- **401/403 while installing**: the PAT must be *classic* with
-  `read:packages`, the login must match the token's owner, and the
-  `NuGetPackageSourceCredentials_CodeSemanticGitHub` variable must be set
-  in the same shell as `dotnet tool install`. Check the package's visibility
-  and your GitHub account's access.
+- **401/403 while installing**: check your feed credentials and package access
+  using [GitHub's authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry#authenticating-to-github-packages).
 - **The server is not listed**: check your MCP client's distinct JSON schema,
   executable `PATH`, local tool manifest and working directory. Running
   `serve` manually will wait for an MCP client to talk over stdio.
@@ -281,7 +258,6 @@ supported. Users still need a classic PAT to install from GitHub's
 NuGet registry.
 
 References: [GitHub NuGet authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry),
-[NuGet environment credentials](https://learn.microsoft.com/en-us/nuget/consume-packages/consuming-packages-authenticated-feeds),
 [VS Code MCP](https://code.visualstudio.com/docs/agents/reference/mcp-configuration),
 [Copilot CLI MCP](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers).
 
