@@ -21,6 +21,8 @@ Sans options, les valeurs générées sont :
 version: 1
 analyzers:
   - dotnet-csharp
+watch:
+  debounceSeconds: 15
 # Outils MCP annoncés. Commentez une ligne pour masquer l’outil.
 # Supprimer toute la section annonce chaque outil. L’écriture exige aussi
 # serve --allow-write et l’administration exige serve --expose-indexing.
@@ -137,6 +139,29 @@ exclude:
 - Avec le LLM activé, `semanticIndexing.llm.baseUrl` (racine HTTP(S) compatible OpenAI) et `semanticIndexing.llm.model` sont obligatoires. `apiKey` et `apiKeyEnvironmentVariable` sont facultatifs.
 - `exclude` complète les exclusions intégrées. Indiquez explicitement les chemins de sous-modules à ignorer.
 - Propriétés inconnues, clés en double, configuration manquante ou analyseur inconnu/non implémenté : échec explicite.
+
+## Configurer le délai de surveillance
+
+La section facultative `watch` définit le temps d'attente de la commande
+`codesemantic4llm watch .` après le dernier événement du système de fichiers :
+
+```yaml
+watch:
+  debounceSeconds: 15
+```
+
+La valeur par défaut est de **15 secondes**, y compris pour les anciens YAML sans
+section `watch`. Les valeurs entières de **1 à 3600** secondes sont acceptées.
+Une valeur nulle, négative, non numérique ou supérieure à 3600 est refusée.
+La commande `init` écrit cette section avec la valeur par défaut, ce qui permet
+à chaque dépôt de régler son propre délai indépendamment du stockage de l'index.
+
+`codesemantic4llm watch .` utilise la valeur YAML, tandis que
+`codesemantic4llm watch . --debounce-seconds 5` la remplace **pour cette exécution**.
+L'option CLI n'a priorité que lorsqu'elle est explicitement fournie.
+Le délai est chargé au démarrage : redémarrez le surveillant après avoir modifié ce
+paramètre. Changer uniquement ce délai n'invalide pas les déclarations ou les résumés
+déjà indexés.
 
 ## Sélectionner les outils MCP
 

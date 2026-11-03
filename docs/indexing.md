@@ -137,12 +137,14 @@ prove that working-tree content matches that commit or remains unchanged afterwa
 Run the watcher in a separate terminal for the checked-out repository:
 
 ```sh
-codesemantic4llm watch . --debounce-seconds 15
+codesemantic4llm watch .
 ```
 
-The quiet period defaults to **15 seconds after the last filesystem event**, not 15 seconds
-after the first save. Each additional edit restarts that period; the value can be
-changed with `--debounce-seconds` (1–3600). An initial verification runs when the
+The quiet period comes from the repository's optional
+`watch.debounceSeconds` YAML setting (**15 seconds** by default). It starts after the
+**last filesystem event**, not the first save; each new edit resets it.
+Use `--debounce-seconds 5` to override the YAML setting for one invocation.
+Both settings allow 1–3600 whole seconds; restart watch to apply YAML edits. An initial verification runs when the
 watcher starts. A 30-second reconciliation scan also recovers from missed filesystem
 events, watcher overflows, and Git metadata outside the checkout (such as linked worktrees).
 

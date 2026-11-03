@@ -71,12 +71,14 @@ Avant le commit, la commande recalcule les empreintes, vérifie les chemins déc
 Lancez le surveillant dans un terminal séparé depuis la copie de travail du dépôt :
 
 ```sh
-codesemantic4llm watch . --debounce-seconds 15
+codesemantic4llm watch .
 ```
 
-Par défaut, il attend **15 secondes après le dernier événement du système de fichiers**,
-pas après la première sauvegarde. Toute nouvelle modification remet ce délai à zéro.
-L'option `--debounce-seconds` accepte une valeur de 1 à 3600. Une vérification initiale
+Le délai vient du paramètre facultatif `watch.debounceSeconds` du YAML
+(**15 secondes** par défaut). Il s'applique après le **dernier événement du système de
+fichiers**, pas la première sauvegarde. Toute nouvelle modification remet ce délai à zéro.
+`--debounce-seconds 5` surcharge le YAML pour une exécution. Les valeurs entières
+de 1 à 3600 secondes sont acceptées ; redémarrez `watch` après une modification YAML. Une vérification initiale
 se lance au démarrage. Une réconciliation toutes les 30 secondes récupère aussi les
 événements perdus, les débordements de surveillance et les changements Git des worktrees liés.
 
