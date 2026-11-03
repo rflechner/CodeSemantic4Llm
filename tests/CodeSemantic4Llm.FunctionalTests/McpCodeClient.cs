@@ -22,12 +22,13 @@ internal sealed class McpCodeClient : IAsyncDisposable
     }
 
     public static async Task<McpCodeClient> StartAsync(
-        string root, string cacheRoot, bool allowWrite, bool exposeIndexing, CancellationToken cancellationToken)
+        string root, string cacheRoot, bool allowWrite, bool exposeIndexing, CancellationToken cancellationToken,
+        string? clientWorkingDirectory = null)
     {
         var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
         {
             RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
-            UseShellExecute = false, WorkingDirectory = root
+            UseShellExecute = false, WorkingDirectory = clientWorkingDirectory ?? root
         };
         start.ArgumentList.Add(typeof(StartMcpServerCommand).Assembly.Location);
         start.ArgumentList.Add("serve");

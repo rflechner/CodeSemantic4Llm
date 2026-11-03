@@ -469,7 +469,7 @@ public sealed partial class RepositoryIndexingSteps
         {
             ["CODESEMANTIC4LLM_REPOSITORY_ROOT"] = _root
         }).Build();
-        return new RepositoryIndexTools(configuration, _stateProvider, Store,
+        return new RepositoryIndexTools(configuration, _stateProvider, Store, Paths,
             new FindSymbols(Store, _stateProvider), new GetTypeMembers(Store, _stateProvider),
             new FindUsages(Store, _stateProvider), new SearchCode(Store, _stateProvider));
     }

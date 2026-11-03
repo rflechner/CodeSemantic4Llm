@@ -20,3 +20,23 @@ Feature: Keep Git queries independent of the MCP connection
       | mode     |
       | default  |
       | indexing |
+
+  Scenario: A desktop MCP client finds an existing index from another working directory
+    Given a Git checkout configured for persistent indexing
+    And indexing source "Worker.cs" is:
+      """
+      class Worker
+      {
+          public int Run() => 1;
+      }
+      """
+    And the checkout has a completed index
+    When an MCP client started outside the checkout inspects its repository
+    Then the MCP client finds Worker in the published index
+    And MCP reports the selected checkout, YAML and cache paths
+
+  Scenario: A desktop MCP client diagnoses a missing index without creating one
+    Given a Git checkout configured for persistent indexing
+    When an MCP client started outside the checkout inspects its repository
+    Then MCP reports the missing database path
+    And no index database was created
