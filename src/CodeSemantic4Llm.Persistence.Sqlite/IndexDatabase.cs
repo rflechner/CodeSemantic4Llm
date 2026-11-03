@@ -5,7 +5,7 @@ namespace CodeSemantic4Llm.Persistence.Sqlite;
 /// <summary>Versioned, regenerable schema for declaration snapshots. It contains no source text.</summary>
 internal static class IndexDatabase
 {
-    private const int SchemaVersion = 6;
+    private const int SchemaVersion = 7;
 
     public static SqliteConnection Open(string path, string repositoryRoot, bool writable)
     {
@@ -61,7 +61,7 @@ internal static class IndexDatabase
         {
             Initialize(connection, root);
         }
-        else if (version is not 1 and not 2 and not 3 and not 4 and not 5 && version != SchemaVersion)
+        else if (version is not 1 and not 2 and not 3 and not 4 and not 5 and not 6 && version != SchemaVersion)
         {
             throw new InvalidOperationException($"Unsupported index schema version {version}. Use a new index cache directory.");
         }
@@ -106,6 +106,36 @@ internal static class IndexDatabase
         {
             UpgradeFromVersionFive(connection);
         }
+
+        if (writable && version is >= 1 and <= 6)
+        {
+            UpgradeFromVersionSix(connection);
+        }
+    }
+
+    private static void UpgradeFromVersionSix(SqliteConnection connection)
+    {
+        using var transaction = connection.BeginTransaction();
+        using var columns = Command(connection, transaction, "PRAGMA table_info(snapshots);");
+        var hasPartialFlag = false;
+        using (var reader = columns.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                hasPartialFlag |= reader.GetString(1) == "is_partial";
+            }
+        }
+
+        if (!hasPartialFlag)
+        {
+            using var add = Command(connection, transaction,
+                "ALTER TABLE snapshots ADD COLUMN is_partial INTEGER NOT NULL DEFAULT 0;");
+            add.ExecuteNonQuery();
+        }
+
+        using var version = Command(connection, transaction, "PRAGMA user_version = 7;");
+        version.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     private static void UpgradeFromVersionFive(SqliteConnection connection)
@@ -214,6 +244,13 @@ internal static class IndexDatabase
         transaction.Commit();
     }
 
+    /// <summary>Legacy read-only caches have no partial flag; their published indexes are full.</summary>
+    public static string PartialColumn(SqliteConnection connection, SqliteTransaction? transaction, string prefix = "")
+    {
+        using var version = Command(connection, transaction, "PRAGMA user_version;");
+        return Convert.ToInt32(version.ExecuteScalar()) >= 7 ? prefix + "is_partial" : "0";
+    }
+
     /// <summary>Legacy read-only caches have no summary column and are never migrated by readers.</summary>
     public static string SummaryColumn(SqliteConnection connection, SqliteTransaction? transaction, string prefix = "")
     {
@@ -251,7 +288,8 @@ internal static class IndexDatabase
             semantic_language TEXT NOT NULL, completed_utc TEXT,
             file_count INTEGER NOT NULL DEFAULT 0, symbol_count INTEGER NOT NULL DEFAULT 0,
             member_index_version INTEGER NOT NULL DEFAULT 0,
-            reference_index_version INTEGER NOT NULL DEFAULT 0);
+            reference_index_version INTEGER NOT NULL DEFAULT 0,
+            is_partial INTEGER NOT NULL DEFAULT 0);
         CREATE TABLE active_branches(
             branch TEXT PRIMARY KEY, snapshot_id INTEGER NOT NULL REFERENCES snapshots(id));
         CREATE TABLE indexed_files(
@@ -279,7 +317,7 @@ internal static class IndexDatabase
         CREATE INDEX ix_symbols_name ON symbols(snapshot_id, name, path, line, column_number);
         CREATE INDEX ix_symbols_container ON symbols(
             snapshot_id, path, containing_type_line, containing_type_column, line, column_number, ordinal);
-        PRAGMA user_version = 6;
+        PRAGMA user_version = 7;
         """;
 
     // External-content FTS keeps the authoritative name/summary text solely in

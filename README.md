@@ -361,9 +361,12 @@ contains a plain summary. Unlike preview, indexing has no file-count limit.
 
 After an interruption, rerun `index .` to reuse files already analyzed on the same branch.
 Use `index . --force` to reanalyze every selected file.
-To start with one directory, run `index . --folder src/XXX.Domain` from the checkout root.
-The command stops after that subtree. Inspect its declarations in the dashboard, then run
-`index .` when you want the full branch index and cross-folder references.
+To index a large checkout incrementally, run `index . --folder src/Navigation`,
+then `index . --folder src/Search`. Each successful folder run **adds to or updates
+the published branch snapshot** without analyzing other folders. MCP `search_code`
+and `find_symbols` can query all accumulated folders immediately; the dashboard
+marks the snapshot as partial. Run `index .` without `--folder` only when you
+need complete cross-folder Roslyn references or full repository coverage.
 
 Rerunning `index` reuses unchanged declarations and removes stale records after deletions
 or renames. FTS5 search entries follow the same atomic snapshot lifecycle. Each branch keeps its own completed snapshot. Failures and cancellation preserve

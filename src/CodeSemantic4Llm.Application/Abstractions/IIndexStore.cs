@@ -9,10 +9,10 @@ namespace CodeSemantic4Llm.Application.Abstractions;
 /// </summary>
 public interface IIndexStore
 {
-    /// <summary>Starts an isolated generation. Configuration changes prevent reuse from the previous generation.</summary>
+    /// <summary>Starts an isolated generation. With folder, publication retains compatible declarations outside that folder.</summary>
     IIndexUpdate BeginUpdate(
         RepositoryState state, string configurationFingerprint, string semanticLanguage,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default, string? folder = null);
 
     /// <summary>Returns published metadata only; a missing index is never created by a read.</summary>
     RepositoryIndexSnapshot? GetSnapshot(RepositoryScope scope, CancellationToken cancellationToken = default);

@@ -105,21 +105,48 @@ Unsupported schema versions fail without changes; select a fresh cache directory
 
 From the checkout root, run `codesemantic4llm index . --folder src/XXX.Domain` to index just that directory and its descendants. Use the path relative to the checkout, with quotes if it contains spaces. Repository exclusions, analyzer settings and symlink checks apply. An empty or excluded folder reports zero matching files. Add `--force` to reanalyze the selected files.
 
-The command stops with a partial index visible in the dashboard. MCP continues to use the last published checkout snapshot, if one exists. A later `codesemantic4llm index .` reuses matching files, computes references across the checkout and publishes the complete branch snapshot.
+A successful folder run **publishes a cumulative partial snapshot**, immediately usable by
+MCP `find_symbols`, `search_code` (FTS5), and type navigation. For example:
+
+```sh
+codesemantic4llm index . --folder src/Navigation
+codesemantic4llm index . --folder src/SemanticSearch
+codesemantic4llm index . --folder src/Navigation
+```
+
+The first command publishes Navigation; the second **adds** SemanticSearch without analyzing
+Navigation again; the third updates only Navigation (including its deleted or renamed files)
+while retaining SemanticSearch. Files already indexed outside the selected folder are carried
+forward from SQLite without rereading source or calling the LLM. Only folders deliberately
+indexed are included; unrelated code in a large repository is not traversed.
+
+The partial snapshot's `isPartial: true` flag is also visible in MCP index status and
+the dashboard. **Cross-folder Roslyn references remain unavailable** for partial
+snapshots: `find_usages` requires a full branch reference pass. To obtain complete
+cross-folder references, run `codesemantic4llm index .` without `--folder`. This reuses
+matching declarations and summaries, then resolves references across all selected sources.
 
 Rerun the same command after edits. Content hashes, analyzer identity/version and a
 configuration fingerprint decide whether prior declarations can be reused. New and
 changed files are analyzed; deleted files and old rename locations disappear on publication.
 Changes to analyzer selection, extensions, exclusions, semantic language or LLM settings
-invalidate reuse. Unchanged files reuse their stored summaries without LLM calls.
+invalidate reuse. A folder-only run refuses to overwrite a published snapshot whose
+indexing settings differ; run a full index after changing these settings.
+Unchanged files reuse their stored summaries without LLM calls.
 Rerunning `index .` after an interruption also reuses completed files from partial runs on the same branch, including their summaries. The source hash, relative path, analyzer, configuration and shared-summary digest must still match. Use `index . --force` to analyze every file and rebuild references. The configured shared-summary import policy still applies.
 
-All selected files are read and hashed even when their declarations can be reused.
+For a folder run, only selected files are read and hashed; carried-forward folders
+are not checked again. Their stored declarations can become stale if they change
+outside the selected folder. Reindex affected folders after edits or branch updates.
+Files from legacy unfinished generations with matching configuration may also be
+reused; these are cached checkpoints, not independent proof that the working tree
+is unchanged. Full indexing revalidates the selected repository files.
 References are global semantic relationships: when any selected file is added, deleted
 or changed, all C# references are resolved again against the new compilation. Only an
 identical, fully reused set of files may copy all reference rows from the previous
 snapshot. This prevents an unchanged caller from retaining a stale edge after its
-target is edited.
+target is edited. Partial publication marks reference metadata unavailable rather
+than exposing potentially stale edges from a previous complete snapshot.
 
 SQLite commits each completed file and its declarations to a partial generation visible in the dashboard. Publication switches the branch snapshot
 and removes its old generation atomically. Other branches retain their snapshots. A failed

@@ -1,6 +1,6 @@
 namespace CodeSemantic4Llm.Domain.Repositories;
 
-/// <summary>A completely published working-tree index. RecordedRevision is context, not a freshness guarantee.</summary>
+/// <summary>A published branch snapshot. Partial snapshots cover selected folders only; HEAD is not a freshness guarantee.</summary>
 public sealed record RepositoryIndexSnapshot(
     RepositoryScope Scope,
     long SnapshotId,
@@ -8,4 +8,5 @@ public sealed record RepositoryIndexSnapshot(
     string SemanticLanguage,
     DateTimeOffset CompletedAt,
     int FileCount,
-    int SymbolCount);
+    int SymbolCount,
+    bool IsPartial = false);

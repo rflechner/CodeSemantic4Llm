@@ -242,7 +242,13 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
 Le chemin doit désigner la racine d’une copie Git sur une branche nommée. Le terminal interactif affiche la progression Spectre pour la découverte, l’analyse, la vérification et la publication. Une sortie redirigée donne un bilan en texte simple. Le nombre de fichiers indexés est illimité.
 
 Après une interruption, relancez `index .` pour réutiliser les fichiers déjà analysés sur la même branche. Utilisez `index . --force` pour réanalyser tous les fichiers sélectionnés.
-Pour commencer par un seul dossier, lancez `index . --folder src/XXX.Domain` depuis la racine du dépôt. La commande s’arrête après ce dossier et ses sous-dossiers. Consultez ses déclarations dans le tableau de bord, puis lancez `index .` pour publier l’index de la branche et calculer les références entre dossiers.
+Pour indexer progressivement un gros dépôt, lancez `index . --folder src/Navigation`
+puis `index . --folder src/Search`. Chaque exécution réussie **complète ou met
+à jour l'instantané publié de la branche**, sans réanalyser les autres dossiers.
+MCP `search_code` et `find_symbols` interrogent immédiatement l'ensemble
+cumulé ; le tableau de bord l'indique comme partiel. Utilisez `index .` sans
+`--folder` seulement pour couvrir tout le dépôt ou recalculer les références
+Roslyn entre dossiers.
 
 Une nouvelle indexation réutilise les déclarations inchangées et retire les entrées supprimées ou renommées. Chaque branche conserve son instantané publié. Les entrées FTS5 suivent la même publication atomique. Un échec ou une annulation préserve l’instantané précédent. SQLite conserve uniquement les métadonnées dérivées, hors du dépôt. Pour remplacer `LocalApplicationData/CodeSemantic4Llm/indexes`, définissez `CODESEMANTIC4LLM_INDEX_ROOT` sur un chemin absolu et réutilisez-le pour MCP.
 

@@ -27,13 +27,17 @@ public sealed class RepositoryIndexCommand(IndexRepository indexRepository, Inde
         console.WriteLine($"Recorded HEAD: {result.State.Revision ?? "unborn branch"}");
         if (result.PublishedSnapshot is { } snapshot)
         {
-            console.WriteLine($"Indexed files: {snapshot.FileCount}; declarations: {snapshot.SymbolCount}");
-            console.WriteLine($"Published snapshot: {snapshot.SnapshotId}");
-        }
-        else
-        {
-            console.WriteLine($"Indexed folder: {settings.Folder}; matching files: {result.AnalyzedFiles + result.ReusedFiles}");
-            console.WriteLine("Run index without --folder to publish a complete branch snapshot.");
+            if (settings.Folder is not null)
+            {
+                console.WriteLine($"Indexed folder: {settings.Folder}; matching files: {result.AnalyzedFiles + result.ReusedFiles}");
+                console.WriteLine($"Published partial snapshot: {snapshot.SnapshotId}; cumulative files: {snapshot.FileCount}; declarations: {snapshot.SymbolCount}");
+                console.WriteLine("MCP symbol search is available. Full indexing is needed for cross-folder references.");
+            }
+            else
+            {
+                console.WriteLine($"Indexed files: {snapshot.FileCount}; declarations: {snapshot.SymbolCount}");
+                console.WriteLine($"Published snapshot: {snapshot.SnapshotId}");
+            }
         }
 
         console.WriteLine($"Analyzed files: {result.AnalyzedFiles}; reused files: {result.ReusedFiles}");

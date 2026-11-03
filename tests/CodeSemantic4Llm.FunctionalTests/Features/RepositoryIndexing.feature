@@ -1,7 +1,7 @@
 Feature: Persist a repository index before starting MCP
   As a developer preparing a large checkout
   I want to index every selected source file with observable progress
-  So that MCP can query a complete saved snapshot without repeating analysis
+  So that MCP can query an incrementally published snapshot without repeating analysis
 
   Background:
     Given a Git checkout configured for persistent indexing
@@ -66,7 +66,7 @@ Feature: Persist a repository index before starting MCP
     Then the folder command succeeds with 1 matching files
     And the dashboard shows declaration "Order" for branch "main"
     When I read the saved index status
-    Then the status has no snapshot
+    Then the status has a published partial snapshot with 1 files
     When I index the checkout again
     Then the run analyzes 1 files and reuses 1 files
     And declaration "Order" is stored at "src/XXX.Domain/sub/Order.cs"
@@ -80,7 +80,8 @@ Feature: Persist a repository index before starting MCP
     When I replace indexing source "Core/Model.cs" with "public class AfterType {}"
     And I index only folder "Core" from the console
     Then the folder command succeeds with 1 matching files
-    And the previous snapshot still contains "BeforeType"
+    And the saved index does not contain "BeforeType"
+    And declaration "AfterType" is stored at "Core/Model.cs"
     And the dashboard shows declaration "AfterType" for branch "main"
     When I index only folder "vendor/Lib" from the console
     Then the folder command succeeds with 0 matching files
@@ -277,3 +278,105 @@ Feature: Persist a repository index before starting MCP
     When I attempt to index the checkout
     Then indexing fails without publishing a snapshot
     And no index database was created
+
+
+  Scenario: Indexing successive folders accumulates MCP-searchable declarations
+    Given the indexing checkout contains these sources:
+      | path                  | source                                   |
+      | src/Navigation/A.cs   | public class NavigationIndex {}          |
+      | src/Search/B.cs       | public class SemanticSearchEngine {}     |
+      | src/Other/C.cs        | public class NotIndexedYet {}            |
+    When I incrementally index folder "src/Navigation"
+    Then the cumulative partial index contains 1 files
+    And the partial snapshot contains declaration "NavigationIndex"
+    And the partial snapshot does not contain declaration "SemanticSearchEngine"
+    When I incrementally index folder "src/Search"
+    Then the cumulative partial index contains 2 files
+    And the partial snapshot contains declaration "NavigationIndex"
+    And the partial snapshot contains declaration "SemanticSearchEngine"
+    And the partial snapshot does not contain declaration "NotIndexedYet"
+    And the last folder index analyzed only 1 file
+    And FTS5 search of the partial snapshot finds "SemanticSearchEngine"
+
+  Scenario: Reindexing one folder replaces only that folder and retains other folders
+    Given the indexing checkout contains these sources:
+      | path                  | source                                |
+      | src/Navigation/A.cs   | public class OldNavigationType {}     |
+      | src/Search/B.cs       | public class SemanticSearchEngine {}  |
+    When I incrementally index folder "src/Navigation"
+    And I incrementally index folder "src/Search"
+    And I replace indexing source "src/Navigation/A.cs" with "public class NewNavigationType {}"
+    And I incrementally index folder "src/Navigation"
+    Then the cumulative partial index contains 2 files
+    And the partial snapshot contains declaration "NewNavigationType"
+    And the partial snapshot contains declaration "SemanticSearchEngine"
+    And the partial snapshot does not contain declaration "OldNavigationType"
+    And the last folder index analyzed only 1 file
+
+  Scenario: A deleted file disappears only when its folder is reindexed
+    Given the indexing checkout contains these sources:
+      | path                  | source                                |
+      | src/Navigation/A.cs   | public class NavigationIndex {}       |
+      | src/Navigation/B.cs   | public class DeletedNavigation {}     |
+      | src/Search/C.cs       | public class SemanticSearchEngine {}  |
+    When I incrementally index folder "src/Navigation"
+    And I incrementally index folder "src/Search"
+    And I delete indexing source "src/Navigation/B.cs"
+    And I incrementally index folder "src/Navigation"
+    Then the cumulative partial index contains 2 files
+    And the partial snapshot does not contain declaration "DeletedNavigation"
+    And the partial snapshot contains declaration "NavigationIndex"
+    And the partial snapshot contains declaration "SemanticSearchEngine"
+
+  Scenario: An interrupted earlier index can supply cached declarations to a completed folder
+    Given the indexing checkout contains these sources:
+      | path                  | source                                |
+      | src/Navigation/A.cs   | public class NavigationIndex {}       |
+      | src/Search/B.cs       | public class SemanticSearchEngine {}  |
+    When I stop indexing after 1 files
+    And I incrementally index folder "src/Search"
+    Then the cumulative partial index contains 2 files
+    And the partial snapshot contains declaration "NavigationIndex"
+    And the partial snapshot contains declaration "SemanticSearchEngine"
+
+  Scenario: Folder indexes remain isolated by named Git branch
+    Given the indexing checkout contains these sources:
+      | path                  | source                                |
+      | src/Navigation/A.cs   | public class NavigationIndex {}       |
+      | src/Search/B.cs       | public class SemanticSearchEngine {}  |
+    When I incrementally index folder "src/Navigation"
+    And I switch the indexing checkout to a new branch "feature/search"
+    And I incrementally index folder "src/Search"
+    Then the cumulative partial index contains 1 files
+    And the partial snapshot contains declaration "SemanticSearchEngine"
+    And the partial snapshot does not contain declaration "NavigationIndex"
+    And branch "main" retains declaration "NavigationIndex"
+
+  Scenario: Partial indexing refuses to discard an existing incompatible snapshot
+    Given the indexing checkout contains these sources:
+      | path                  | source                                |
+      | src/Navigation/A.cs   | public class NavigationIndex {}       |
+      | src/Search/B.cs       | public class SemanticSearchEngine {}  |
+    When I incrementally index folder "src/Navigation"
+    And the indexing description language changes to "fr"
+    And I attempt to incrementally index folder "src/Search"
+    Then partial indexing is rejected without replacing the published snapshot
+    And the partial snapshot contains declaration "NavigationIndex"
+    And the partial snapshot does not contain declaration "SemanticSearchEngine"
+
+  Scenario: Partial snapshots cannot claim complete cross-folder Roslyn references
+    Given the indexing checkout contains these sources:
+      | path                  | source                                |
+      | src/Navigation/A.cs   | public class NavigationIndex {}       |
+    When I incrementally index folder "src/Navigation"
+    Then partial reference lookup is reported as unavailable
+
+  Scenario: Completing the checkout replaces the partial scope with a full index
+    Given the indexing checkout contains these sources:
+      | path                  | source                                |
+      | src/Navigation/A.cs   | public class NavigationIndex {}       |
+      | src/Search/B.cs       | public class SemanticSearchEngine {}  |
+    When I incrementally index folder "src/Navigation"
+    And I index the checkout again
+    Then the resulting index is complete with 2 files
+    And the run analyzes 1 files and reuses 1 files
