@@ -58,6 +58,8 @@ codesemantic4llm --help
 
 ## Getting started: index a HelloWorld project
 
+![Create and configure HelloWorld, preview Program.cs, then index Program and Main. Explore the local index in the dashboard or through MCP. Optionally enable LLM summaries before indexing to export them as Markdown.](docs/images/helloworld-workflow.svg)
+
 With the global tool installed, create a small C# repository and initialize its configuration:
 
 ```sh
@@ -135,8 +137,9 @@ Review `.codesemantic4llm/summaries/Program.cs.md` before committing it with you
 source and configuration. The export reads the current local index without calling
 the LLM; it does not copy source files or stage Git changes. If the source or
 configuration has changed, run `index` again first. Skip this step when LLM summaries
-are disabled. See [shared summaries](docs/shared-summaries.md) for team workflows and
-overwrite behavior.
+are disabled. Follow [Program.cs.md through Git](#shared-llm-summaries) to see how a
+teammate reuses it, or read the [shared summaries guide](docs/shared-summaries.md)
+for team workflows and overwrite behavior.
 
 ### Explore the index in the dashboard
 
@@ -539,6 +542,8 @@ help, with Spectre.Console for output. Help and results go to stdout; errors go 
 Unknown commands and options fail without starting the MCP server.
 
 ## Shared LLM summaries
+
+![One developer exports Program.cs.md and pushes it with the source. A teammate pulls the commit and runs index to reuse compatible descriptions in a separate local SQLite index.](docs/images/shared-summaries-git-workflow.svg)
 
 Set `sharedSummaries: true` in repository YAML to reuse compatible descriptions from
 versioned `.codesemantic4llm/summaries/**/*.md` files. `index` validates the source,

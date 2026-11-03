@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="416" viewBox="0 0 960 416" role="img" aria-labelledby="title desc">
+  <title id="title">From Program.cs to a searchable index</title>
+  <desc id="desc">Create the HelloWorld console project on branch main and initialize the repository configuration. Preview the files, then index the declarations. The dashboard and MCP client both read the saved index. Markdown export requires LLM indexing and shared summaries.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #142c46 }
+      .heading { font-size: 32px; font-weight: 700 }
+      .step { font-size: 21px; font-weight: 650 }
+      .detail { font-size: 17px }
+      .command { font-family: Consolas, monospace; font-size: 17px; fill: #145f59 }
+      .caption { font-size: 14px; font-weight: 700; letter-spacing: 1.5px; fill: #456077 }
+      .card { fill: white; stroke: #c6d3e0 }
+    </style>
+  </defs>
+  <rect width="960" height="416" rx="18" fill="#f2f6fa"/>
+  <text x="28" y="36" class="caption">HELLOWORLD  /  C#</text>
+  <text x="28" y="79" class="heading">From Program.cs to a searchable index</text>
+  <rect x="28" y="104" width="280" height="147" rx="12" class="card"/>
+  <text x="46" y="139" class="step">1. Set up the project</text>
+  <text x="46" y="170" class="detail">Create a console app and</text>
+  <text x="46" y="194" class="detail">initialize Git on main.</text>
+  <text x="46" y="231" class="command">init .</text>
+  <path d="M312 177h18m-6 -6 6 6 -6 6" fill="none" stroke="#526782" stroke-width="2"/>
+  <rect x="340" y="104" width="280" height="147" rx="12" class="card"/>
+  <text x="358" y="139" class="step">2. Preview files</text>
+  <text x="358" y="170" class="detail">Check that Program.cs</text>
+  <text x="358" y="194" class="detail">appears in the file list.</text>
+  <text x="358" y="231" class="command">preview .</text>
+  <path d="M624 177h18m-6 -6 6 6 -6 6" fill="none" stroke="#526782" stroke-width="2"/>
+  <rect x="652" y="104" width="280" height="147" rx="12" fill="#deeee9" stroke="#a8cdc0"/>
+  <text x="670" y="139" class="step">3. Build the index</text>
+  <text x="670" y="170" class="detail">Save Program and Main</text>
+  <text x="670" y="194" class="detail">locations in local SQLite.</text>
+  <text x="670" y="231" class="command">index .</text>
+  <text x="28" y="290" class="caption">AFTER INDEXING</text>
+  <path d="M28 304h904" stroke="#c6d3e0"/>
+  <text x="28" y="338" class="step">Dashboard</text>
+  <text x="28" y="366" class="detail">Browse HelloWorld on main</text>
+  <text x="28" y="389" class="detail">and inspect its declarations.</text>
+  <text x="340" y="338" class="step">MCP client</text>
+  <text x="340" y="366" class="detail">Connect with serve and ask</text>
+  <text x="340" y="389" class="detail">where Main is defined.</text>
+  <text x="652" y="338" class="step">Markdown export</text>
+  <text x="652" y="366" class="detail">Optional. Enable LLM and shared</text>
+  <text x="652" y="389" class="detail">summaries before indexing.</text>
+</svg>
