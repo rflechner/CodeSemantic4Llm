@@ -259,8 +259,9 @@ repository, the workflow filename `publish-tool.yml` and that environment.
 Set the environment secret `NUGET_USER` to the NuGet.org account name.
 You can configure required reviewers on the environment to gate promotion.
 
-To release, open **Promote .NET tool to NuGet.org** in Actions, select `main`
-and enter the exact staged version. For a stable version, selection defaults
+To release, open **Promote .NET tool to NuGet.org** in Actions. Under **Use workflow from**,
+select `develop` for a beta (`X.Y.Z-beta-<8-character commit SHA>`) or `main` for
+a stable version (`X.Y.Z`). Enter the exact staged version. For a stable version, selection defaults
 to the latest successful CI push on `main`. For a beta, the version identifies
 the commit on `develop`. Supply the CI run ID to select an earlier stable build.
 The workflow checks the run, package ID, version and source commit, then pushes

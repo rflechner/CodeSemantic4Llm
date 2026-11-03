@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-branch=main
+branch=${GITHUB_REF#refs/heads/}
 filter=()
-if [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta-([a-f0-9]{8})$ ]]; then
-  branch=develop
+if [[ "$GITHUB_REF" == refs/heads/develop ]]; then
+  if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta-([a-f0-9]{8})$ ]]; then
+    echo "::error::Promotion from develop requires X.Y.Z-beta-<8-character commit SHA>."
+    exit 1
+  fi
   commit=$(gh api "repos/$GITHUB_REPOSITORY/commits/${BASH_REMATCH[1]}" --jq .sha)
   filter=(--commit "$commit")
-elif [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  echo "::error::Expected a stable version or a beta version produced by CI."
+elif [[ "$GITHUB_REF" != refs/heads/main || ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "::error::Stable promotion requires the main branch and an X.Y.Z version."
   exit 1
 fi
 
