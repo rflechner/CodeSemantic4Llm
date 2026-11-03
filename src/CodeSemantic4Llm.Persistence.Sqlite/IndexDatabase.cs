@@ -244,6 +244,13 @@ internal static class IndexDatabase
         transaction.Commit();
     }
 
+    /// <summary>Legacy read-only caches have no partial flag; their published indexes are full.</summary>
+    public static string PartialColumn(SqliteConnection connection, SqliteTransaction? transaction, string prefix = "")
+    {
+        using var version = Command(connection, transaction, "PRAGMA user_version;");
+        return Convert.ToInt32(version.ExecuteScalar()) >= 7 ? prefix + "is_partial" : "0";
+    }
+
     /// <summary>Legacy read-only caches have no summary column and are never migrated by readers.</summary>
     public static string SummaryColumn(SqliteConnection connection, SqliteTransaction? transaction, string prefix = "")
     {

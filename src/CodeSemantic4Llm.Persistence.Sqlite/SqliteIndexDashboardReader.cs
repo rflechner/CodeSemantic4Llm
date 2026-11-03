@@ -94,7 +94,8 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
             ?? throw new KeyNotFoundException("No index exists for this branch.");
         var scope = new RepositoryScope(ReadRoot(connection, transaction), branch);
         var snapshot = new DashboardSnapshot(scope, selected.SnapshotId, selected.RecordedRevision,
-            selected.SemanticLanguage, selected.CompletedAt, selected.FileCount, selected.SymbolCount);
+            selected.SemanticLanguage, selected.CompletedAt, selected.FileCount, selected.SymbolCount,
+            selected.IsPartial);
         var matches = SqliteIndexStore.ReadSearchMatches(connection, transaction, selected.SnapshotId,
             FullTextSearchQuery.Build(query, maxResults), kind, maxResults, cancellationToken);
         var symbols = matches.Take(maxResults).Select(symbol => new DashboardSymbol(
@@ -292,9 +293,10 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
         SqliteTransaction? transaction = null, string? branch = null)
     {
         var referenceColumn = version >= 3 ? "s.reference_index_version" : "0";
+        var partialColumn = version >= 7 ? "s.is_partial" : "0";
         using var command = IndexDatabase.Command(connection, transaction, $"""
             SELECT s.branch, s.id, s.revision, s.semantic_language, s.completed_utc, s.file_count,
-                   s.symbol_count, s.member_index_version, {referenceColumn}
+                   s.symbol_count, s.member_index_version, {referenceColumn}, {partialColumn}
             FROM ({VisibleBranchesSql}) b JOIN snapshots s ON b.snapshot_id = s.id
             WHERE $branch IS NULL OR s.branch = $branch
             ORDER BY s.branch COLLATE BINARY;
@@ -310,7 +312,8 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
                 reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetString(3),
                 reader.IsDBNull(4) ? null : DateTimeOffset.Parse(reader.GetString(4), CultureInfo.InvariantCulture),
                 reader.GetInt32(5), reader.GetInt32(6), reader.GetInt32(7) == 1,
-                !reader.IsDBNull(4) && version >= 3 && reader.GetInt32(8) == 1));
+                !reader.IsDBNull(4) && version >= 3 && reader.GetInt32(8) == 1,
+                reader.GetInt32(9) != 0));
         }
 
         return branches;

@@ -391,7 +391,7 @@
       picker.disabled = !branch;
       if (branch) picker.value = branch.name;
       byId('indexed-at').textContent = branch
-        ? (branch.completedAt ? 'Published ' + new Date(branch.completedAt).toLocaleString() : 'Partial index · completed files only')
+        ? (branch.completedAt ? (branch.isPartial ? 'Cumulative partial index · searchable · ' : 'Published · ') + new Date(branch.completedAt).toLocaleString() : 'Indexing · completed file checkpoints')
         : 'No published branch snapshots';
       byId('stat-files').textContent = branch ? number(branch.fileCount) : '—';
       byId('stat-symbols').textContent = branch ? number(branch.symbolCount) : '—';
