@@ -377,9 +377,10 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
     internal static RepositoryIndexSnapshot? ReadSnapshot(
         SqliteConnection connection, SqliteTransaction? transaction, RepositoryScope scope)
     {
-        using var command = IndexDatabase.Command(connection, transaction, """
+        var partialColumn = IndexDatabase.PartialColumn(connection, transaction, "s.");
+        using var command = IndexDatabase.Command(connection, transaction, $"""
             SELECT s.id, s.revision, s.semantic_language, s.completed_utc, s.file_count, s.symbol_count,
-                   s.is_partial
+                   {partialColumn}
             FROM active_branches b JOIN snapshots s ON s.id = b.snapshot_id WHERE b.branch = $branch;
             """, ("$branch", scope.BranchName));
         using var reader = command.ExecuteReader();

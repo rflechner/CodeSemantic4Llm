@@ -17,6 +17,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     private readonly long _snapshotId;
     private readonly long? _previousId;
     private readonly string _fingerprint;
+    private readonly string? _folderPrefix;
     private readonly SqliteCommand _insertSymbol;
     private readonly SqliteCommand _insertReference;
     private int _filesFromPublishedSnapshot;
@@ -24,7 +25,8 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     private int _symbols;
     private bool _published;
 
-    public SqliteIndexUpdate(SqliteConnection connection, RepositoryState state, string fingerprint, string language)
+    public SqliteIndexUpdate(SqliteConnection connection, RepositoryState state, string fingerprint, string language,
+        string? folder)
     {
         _connection = connection;
         _state = state;
@@ -32,6 +34,20 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _transaction = connection.BeginTransaction();
         _previousId = SqliteIndexStore.ReadSnapshot(connection, _transaction, state.Scope)?.SnapshotId;
         _fingerprint = fingerprint;
+        _folderPrefix = folder is null ? null : folder.TrimEnd('/') + "/";
+
+        if (_previousId is not null && _folderPrefix is not null)
+        {
+            using var previous = Command("SELECT configuration_hash FROM snapshots WHERE id = $previous;",
+                ("$previous", _previousId));
+            if (!string.Equals(previous.ExecuteScalar() as string, fingerprint, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    "Cannot extend a published index with different indexing settings. " +
+                    "Run a complete index after changing the repository YAML or analyzer configuration.");
+            }
+        }
+
         using var cleanup = Command("""
             DELETE FROM snapshots WHERE branch = $branch AND completed_utc IS NULL
                 AND (configuration_hash <> $hash OR NOT EXISTS
@@ -39,10 +55,13 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
             """, ("$branch", state.Scope.BranchName), ("$hash", fingerprint));
         cleanup.ExecuteNonQuery();
         using var insert = Command("""
-            INSERT INTO snapshots(branch, revision, configuration_hash, semantic_language, member_index_version, reference_index_version)
-            VALUES ($branch, $revision, $configuration, $language, 1, 1) RETURNING id;
+            INSERT INTO snapshots(
+                branch, revision, configuration_hash, semantic_language, member_index_version,
+                reference_index_version, is_partial)
+            VALUES ($branch, $revision, $configuration, $language, 1, $references, $partial) RETURNING id;
             """, ("$branch", state.Scope.BranchName), ("$revision", state.Revision),
-            ("$configuration", fingerprint), ("$language", language));
+            ("$configuration", fingerprint), ("$language", language),
+            ("$references", folder is null ? 1 : 0), ("$partial", folder is null ? 0 : 1));
         _snapshotId = Convert.ToInt64(insert.ExecuteScalar());
         _insertSymbol = CreateSymbolInsert();
         _insertReference = CreateReferenceInsert();
@@ -169,6 +188,11 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     public RepositoryIndexSnapshot Publish(CancellationToken cancellationToken = default)
     {
         EnsureWritable(cancellationToken);
+        if (_folderPrefix is not null)
+        {
+            MergePreviouslyIndexedFiles(cancellationToken);
+        }
+
         var completed = DateTimeOffset.UtcNow;
         using var publish = Command("""
             UPDATE snapshots SET completed_utc = $completed, file_count = $files, symbol_count = $symbols WHERE id = $snapshot;
@@ -183,7 +207,86 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _transaction.Commit();
         _published = true;
 
-        return new RepositoryIndexSnapshot(_state.Scope, _snapshotId, _state.Revision, _language, completed, _files, _symbols);
+        return new RepositoryIndexSnapshot(_state.Scope, _snapshotId, _state.Revision, _language, completed, _files, _symbols,
+            _folderPrefix is not null);
+    }
+
+    /// <summary>
+    /// Combine this verified folder with previously indexed metadata, without parsing
+    /// or calling an LLM for files outside the selected folder. Legacy incomplete
+    /// generations remain reusable; the newest matching file version wins.
+    /// </summary>
+    private void MergePreviouslyIndexedFiles(CancellationToken cancellationToken)
+    {
+        EnsureWritable(cancellationToken);
+        var collation = OperatingSystem.IsWindows() ? "NOCASE" : "BINARY";
+
+        // The file checkpoints may have committed before this final transaction.
+        using (var owner = Command("SELECT MAX(id) FROM snapshots WHERE branch = $branch;",
+                   ("$branch", _state.Scope.BranchName)))
+        {
+            if (owner.ExecuteScalar() is not long latest || latest != _snapshotId)
+            {
+                throw new InvalidOperationException("Another index run superseded this branch update.");
+            }
+        }
+
+        using (var find = Command($"""
+                   CREATE TEMP TABLE retained_files AS
+                   SELECT snapshot_id, path FROM (
+                       SELECT f.snapshot_id, f.path,
+                              ROW_NUMBER() OVER (PARTITION BY f.path ORDER BY f.snapshot_id DESC) AS rank
+                       FROM indexed_files f JOIN snapshots s ON s.id = f.snapshot_id
+                       WHERE s.branch = $branch AND s.id < $snapshot
+                         AND s.configuration_hash = $configuration
+                         AND (s.completed_utc IS NULL OR s.id = $previous)
+                         AND substr(f.path, 1, length($prefix)) <> $prefix COLLATE {collation}
+                         AND NOT EXISTS (
+                             SELECT 1 FROM indexed_files current
+                             WHERE current.snapshot_id = $snapshot AND current.path = f.path)
+                   ) WHERE rank = 1;
+                   """, ("$branch", _state.Scope.BranchName), ("$snapshot", _snapshotId),
+                   ("$configuration", _fingerprint), ("$previous", _previousId),
+                   ("$prefix", _folderPrefix)))
+        {
+            find.ExecuteNonQuery();
+        }
+
+        // The source snapshot id is a temporary join key, never a copy of source.
+        using (var copy = Command("""
+                   INSERT INTO indexed_files(
+                       snapshot_id, path, content_hash, analyzer_id, analyzer_version, symbol_count, summary_cache_hash)
+                   SELECT $snapshot, f.path, f.content_hash, f.analyzer_id, f.analyzer_version,
+                          f.symbol_count, f.summary_cache_hash
+                   FROM retained_files r JOIN indexed_files f
+                     ON f.snapshot_id = r.snapshot_id AND f.path = r.path;
+                   INSERT INTO symbols(
+                       snapshot_id, path, ordinal, language, kind, name, qualified_name, line, column_number,
+                       containing_type_line, containing_type_column, summary)
+                   SELECT $snapshot, s.path, s.ordinal, s.language, s.kind, s.name, s.qualified_name,
+                          s.line, s.column_number, s.containing_type_line, s.containing_type_column, s.summary
+                   FROM retained_files r JOIN symbols s
+                     ON s.snapshot_id = r.snapshot_id AND s.path = r.path;
+                   """, ("$snapshot", _snapshotId)))
+        {
+            copy.ExecuteNonQuery();
+        }
+
+        using (var drop = Command("DROP TABLE retained_files;"))
+        {
+            drop.ExecuteNonQuery();
+        }
+
+        using var counts = Command("""
+            SELECT COUNT(*), COALESCE(SUM(symbol_count), 0)
+            FROM indexed_files WHERE snapshot_id = $snapshot;
+            """, ("$snapshot", _snapshotId));
+        using var reader = counts.ExecuteReader();
+        if (reader.Read())
+        {
+            _files = reader.GetInt32(0);
+            _symbols = reader.GetInt32(1);
+        }
     }
 
     public void Dispose()
