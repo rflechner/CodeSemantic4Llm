@@ -142,7 +142,7 @@ Dans **VS Code / GitHub Copilot Chat**, ouvrez le dossier `HelloWorld` et créez
 
 `${workspaceFolder}` désigne le dépôt ouvert. Démarrez le serveur depuis la configuration MCP et acceptez la demande de confiance. VS Code gère le processus `serve`. Si l’exécutable global est absent du `PATH` de VS Code, renseignez son chemin absolu dans `command`. Pour un outil local, GitHub Copilot CLI ou Claude Desktop, consultez les [autres exemples](docs/dotnet-tool.fr.md#4-configurer-un-client-mcp).
 
-Demandez ensuite à l’agent où est définie `Main` dans HelloWorld. Il devrait utiliser `find_symbols` pour obtenir son emplacement. Le serveur lit l’index enregistré. Après une modification, relancez `index` ou laissez `codesemantic4llm watch .` actif dans un autre terminal.
+Demandez ensuite à l’agent où est définie `Main` dans HelloWorld. Il devrait utiliser `find_symbols` pour obtenir son emplacement. Le serveur lit l’index enregistré. Après une modification, relancez `index` ou laissez `codesemantic4llm watch .` actif dans un autre terminal. La surveillance attend `watch.debounceSeconds` secondes après la dernière édition (15 par défaut) et conserve l'ancien index si Roslyn détecte une erreur de syntaxe ; voir [l'indexation continue](docs/indexing.fr.md#réindexation-continue-et-sécurisée-avec-watch).
 
 ## Architecture
 

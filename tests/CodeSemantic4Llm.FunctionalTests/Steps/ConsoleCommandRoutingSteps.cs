@@ -22,6 +22,22 @@ public sealed class ConsoleCommandRoutingSteps
             [argument], new ServiceCollection(), TestContext.Current.CancellationToken);
     }
 
+    [When("I request watch command help")]
+    public async Task WhenWatchHelp()
+    {
+        _result = await ConsoleCommandRunner.RunAsync(
+            ["watch", "--help"], new ServiceCollection(), TestContext.Current.CancellationToken);
+    }
+
+    [Then("the help describes the configurable debounce period")]
+    public void ThenWatchHelp()
+    {
+        Assert.NotNull(_result);
+        Assert.Equal(0, _result.ExitCode);
+        Assert.Contains("--debounce-seconds", _result.Output);
+        Assert.Contains("15", _result.Output);
+    }
+
     [Then("application help lists init, preview, index, dashboard and the default MCP server")]
     public void ThenApplicationHelpListsCommands()
     {
@@ -32,6 +48,7 @@ public sealed class ConsoleCommandRoutingSteps
         Assert.Contains("preview", _result.Output);
         Assert.Contains("index", _result.Output);
         Assert.Contains("dashboard", _result.Output);
+        Assert.Contains("watch", _result.Output);
         Assert.Contains("stdio MCP server", _result.Output);
     }
 

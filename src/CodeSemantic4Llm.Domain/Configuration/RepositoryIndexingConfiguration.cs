@@ -24,7 +24,8 @@ public sealed class RepositoryIndexingConfiguration
         IReadOnlyDictionary<string, SourceFileExtensions>? fileExtensions = null,
         string? projectName = null,
         McpToolSelection? tools = null,
-        bool sharedSummaries = false)
+        bool sharedSummaries = false,
+        RepositoryWatchConfiguration? watch = null)
     {
         ArgumentNullException.ThrowIfNull(analyzerIds);
 
@@ -51,12 +52,16 @@ public sealed class RepositoryIndexingConfiguration
         ProjectName = NormalizeProjectName(projectName);
         Tools = tools ?? McpToolSelection.All;
         SharedSummaries = sharedSummaries;
+        Watch = watch ?? new RepositoryWatchConfiguration();
     }
 
     public int Version => CurrentVersion;
 
     /// <summary>Imports compatible Git-distributed descriptions; export remains an explicit operator action.</summary>
     public bool SharedSummaries { get; }
+
+    /// <summary>Local quiet-period settings for the long-running watch command; not an index fingerprint input.</summary>
+    public RepositoryWatchConfiguration Watch { get; }
 
     /// <summary>Optional display name. Repository identity and index storage remain based on the checkout path.</summary>
     public string? ProjectName { get; }

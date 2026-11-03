@@ -17,7 +17,7 @@ public sealed class SharedSummaryWatcherTests
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(repo.Token);
         var reports = new ConcurrentQueue<string>();
         var watcher = new RepositoryIndexWatcher(repo.Indexer, new GitSummaryIntegration());
-        var running = watcher.RunAsync(repo.Root, reports.Enqueue, cancellation.Token, TimeSpan.FromSeconds(1));
+        var running = watcher.RunAsync(repo.Root, reports.Enqueue, cancellation.Token, TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(100));
         try
         {
             var scope = (await repo.State.GetStateAsync(repo.Root, repo.Token)).Scope;
@@ -54,7 +54,7 @@ public sealed class SharedSummaryWatcherTests
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(repo.Token);
         var reports = new ConcurrentQueue<string>();
         var running = new RepositoryIndexWatcher(repo.Indexer, new GitSummaryIntegration())
-            .RunAsync(repo.Root, reports.Enqueue, cancellation.Token, TimeSpan.FromMilliseconds(500));
+            .RunAsync(repo.Root, reports.Enqueue, cancellation.Token, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(100));
         try
         {
             await Eventually(() => reports.Any(report => report.Contains("failed", StringComparison.Ordinal)), repo.Token);

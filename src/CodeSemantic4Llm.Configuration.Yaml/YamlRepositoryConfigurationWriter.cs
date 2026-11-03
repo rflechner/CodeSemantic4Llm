@@ -75,6 +75,10 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
                 entry => entry.Key, entry => entry.Value.ToArray());
         }
 
+        document["watch"] = new Dictionary<string, object>
+        {
+            ["debounceSeconds"] = configuration.Watch.DebounceSeconds
+        };
         document["tools"] = configuration.Tools.EnabledToolNames.ToArray();
         document["sharedSummaries"] = configuration.SharedSummaries;
 

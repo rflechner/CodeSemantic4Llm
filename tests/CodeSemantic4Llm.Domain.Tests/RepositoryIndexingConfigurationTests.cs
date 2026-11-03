@@ -7,6 +7,32 @@ namespace CodeSemantic4Llm.Domain.Tests;
 public sealed class RepositoryIndexingConfigurationTests
 {
     [Fact]
+    public void Watch_debounce_defaults_to_15_seconds()
+    {
+        var configuration = new RepositoryIndexingConfiguration(["dotnet-csharp"]);
+        Assert.Equal(15, configuration.Watch.DebounceSeconds);
+    }
+
+    [Fact]
+    public void Repository_watch_debounce_is_configurable()
+    {
+        var configuration = new RepositoryIndexingConfiguration(["dotnet-csharp"],
+            watch: new RepositoryWatchConfiguration(6));
+        Assert.Equal(6, configuration.Watch.DebounceSeconds);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(3601)]
+    public void Invalid_watch_debounce_is_rejected(int seconds)
+    {
+        var error = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new RepositoryWatchConfiguration(seconds));
+        Assert.Contains("watch.debounceSeconds", error.Message);
+    }
+
+    [Fact]
     public void Project_names_are_optional_display_labels()
     {
         var configuration = new RepositoryIndexingConfiguration(["dotnet-csharp"]);

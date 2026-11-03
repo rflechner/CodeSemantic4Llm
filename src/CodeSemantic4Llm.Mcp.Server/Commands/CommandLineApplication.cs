@@ -58,7 +58,9 @@ public static class CommandLineApplication
             configuration.AddCommand<MergeSummaryCommand>("git-merge-summary")
                 .WithDescription("Git merge driver: select one complete summary document using current/other policy.");
             configuration.AddCommand<WatchRepositoryCommand>("watch")
-                .WithDescription("Verify the index at startup and reconcile source/configuration/summary changes until stopped.");
+                .WithDescription("Reindex syntax-valid changes after the repository YAML debounce interval (15s by default).")
+                .WithExample("watch", "./repository")
+                .WithExample("watch", "./repository", "--debounce-seconds", "5");
 
             configuration.AddCommand<IndexDashboardCommand>("dashboard")
                 .WithDescription("Explore all locally indexed repositories and branches in a read-only HTTP UI.")

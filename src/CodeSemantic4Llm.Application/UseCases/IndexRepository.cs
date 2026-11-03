@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -33,29 +34,33 @@ public sealed class IndexRepository(
     IEnumerable<ISourceReferenceAnalyzer>? referenceAnalyzers = null,
     IEnumerable<ISymbolSourceExtractor>? summaryExtractors = null,
     ISymbolSummaryGenerator? summaryGenerator = null,
-    ISharedSummaryCache? sharedSummaryCache = null)
+    ISharedSummaryCache? sharedSummaryCache = null,
+    IEnumerable<ISourceSyntaxDiagnostics>? syntaxAnalyzers = null)
 {
     private readonly IReadOnlyList<ISourceAnalyzer> _analyzers = analyzers.ToArray();
+    private readonly IReadOnlyDictionary<string, ISourceSyntaxDiagnostics> _syntaxAnalyzers =
+        (syntaxAnalyzers ?? []).ToDictionary(item => item.AnalyzerId, StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<ValidatedSourceKey, string> _validatedSourceHashes = new();
     private readonly IReadOnlyList<ISourceReferenceAnalyzer> _referenceAnalyzers = referenceAnalyzers?.ToArray() ?? [];
     private readonly IReadOnlyDictionary<string, ISymbolSourceExtractor> _summaryExtractors =
         summaryExtractors?.ToDictionary(item => item.AnalyzerId, StringComparer.OrdinalIgnoreCase)
         ?? new Dictionary<string, ISymbolSourceExtractor>(StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>Verifies and publishes the checkout. Set force to analyze every selected file even if its cached declarations match.</summary>
+    /// <summary>Verifies and publishes the checkout. Force bypasses reuse; requireValidSyntax rejects parser errors before publishing.</summary>
     public async Task<RepositoryIndexingResult> ExecuteAsync(
         string repositoryRoot,
         IProgress<RepositoryIndexingProgress>? progress = null,
         CancellationToken cancellationToken = default,
-        bool force = false)
+        bool force = false, bool requireValidSyntax = false)
     {
-        var run = await RunAsync(repositoryRoot, null, progress, cancellationToken, force);
+        var run = await RunAsync(repositoryRoot, null, progress, cancellationToken, force, requireValidSyntax);
         return new RepositoryIndexingResult(run.PublishedSnapshot!, run.AnalyzedFiles, run.ReusedFiles);
     }
 
     /// <summary>Indexes a checkout or only the specified repository-relative folder. Only checkout-wide runs publish.</summary>
     public async Task<RepositoryIndexRun> RunAsync(
         string repositoryRoot, string? folder, IProgress<RepositoryIndexingProgress>? progress = null,
-        CancellationToken cancellationToken = default, bool force = false)
+        CancellationToken cancellationToken = default, bool force = false, bool requireValidSyntax = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var state = await stateProvider.GetStateAsync(repositoryRoot, cancellationToken);
@@ -91,6 +96,11 @@ public sealed class IndexRepository(
             var file = new IndexedSourceFile(candidate.RelativePath, source.ContentHash, adapter.AnalyzerId,
                 adapter.IndexVersion, shared.Digest);
             indexedFiles.Add(file);
+
+            if (requireValidSyntax)
+            {
+                ValidateSyntax(state.Scope, file, source.Document, cancellationToken);
+            }
 
             if (!force && update.TryReuse(file, cancellationToken))
             {
@@ -148,6 +158,42 @@ public sealed class IndexRepository(
         progress?.Report(new(RepositoryIndexingPhase.Completed, candidates.Count, candidates.Count));
 
         return new RepositoryIndexRun(state, candidates.Count - reused, reused, snapshot);
+    }
+
+    /// <summary>
+    /// Parses each distinct content hash once per watcher lifetime, including files eligible for cached
+    /// declarations. A previously persisted partial run must never bypass watch-mode syntax checks.
+    /// The indexer's existing end-of-run hash verification detects edits made after parsing.
+    /// </summary>
+    private void ValidateSyntax(
+        RepositoryScope scope, IndexedSourceFile file, SourceDocument document, CancellationToken cancellationToken)
+    {
+        var key = new ValidatedSourceKey(
+            scope.RootPath, scope.BranchName, file.RelativePath, file.AnalyzerId);
+
+        if (_validatedSourceHashes.TryGetValue(key, out var hash) &&
+            string.Equals(hash, file.ContentHash, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        if (!_syntaxAnalyzers.TryGetValue(file.AnalyzerId, out var diagnostics))
+        {
+            throw new NotSupportedException(
+                $"Watch mode requires syntax diagnostics for analyzer '{file.AnalyzerId}'.");
+        }
+
+        var firstError = diagnostics.GetFile(document, cancellationToken)
+            .FirstOrDefault(diagnostic => string.Equals(diagnostic.Severity, "error", StringComparison.OrdinalIgnoreCase));
+
+        if (firstError is not null)
+        {
+            throw new InvalidOperationException(
+                $"Syntax error in '{file.RelativePath}' at {firstError.Location.Line}:{firstError.Location.Column} " +
+                $"({firstError.Id}): {firstError.Message}");
+        }
+
+        _validatedSourceHashes[key] = file.ContentHash;
     }
 
     private async Task<IReadOnlyList<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition>> SummarizeSymbolsAsync(
@@ -340,4 +386,7 @@ public sealed class IndexRepository(
         SummaryProfile.Create(configuration.SemanticIndexing, summaryGenerator?.CacheVersion ?? "unavailable");
 
     private sealed record IndexingSource(string RelativePath, ConfiguredSourceAnalyzer Analyzer);
+
+    private readonly record struct ValidatedSourceKey(
+        string RootPath, string BranchName, string RelativePath, string AnalyzerId);
 }

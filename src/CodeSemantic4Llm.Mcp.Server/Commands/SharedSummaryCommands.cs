@@ -42,17 +42,6 @@ public sealed class SetupSummaryGitCommand(GitSummaryIntegration git, IAnsiConso
     }
 }
 
-/// <summary>Keeps an operator-selected checkout indexed until cancellation.</summary>
-public sealed class WatchRepositoryCommand(RepositoryIndexWatcher watcher, IAnsiConsole console)
-    : AsyncCommand<SharedSummaryRepositorySettings>
-{
-    public override async Task<int> ExecuteAsync(CommandContext context, SharedSummaryRepositorySettings settings, CancellationToken cancellationToken)
-    {
-        await watcher.RunAsync(settings.RepositoryRoot, message => console.WriteLine(message), cancellationToken);
-        return 0;
-    }
-}
-
 /// <summary>Git provides temporary paths. Policy names describe Git sides, never an inferred remote.</summary>
 public sealed class MergeSummarySettings : CommandSettings
 {

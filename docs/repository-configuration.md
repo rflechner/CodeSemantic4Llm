@@ -30,6 +30,8 @@ When all options are omitted, the generated defaults are:
 version: 1
 analyzers:
   - dotnet-csharp
+watch:
+  debounceSeconds: 15
 # MCP tools advertised for this repository. Comment out a line to hide that tool.
 # Removing the whole section advertises every tool. Writing tools also require
 # serve --allow-write, and indexing tools require serve --expose-indexing.
@@ -196,6 +198,29 @@ exclude:
 - `exclude` is optional. Rules add to, rather than replace, the built-in defaults.
 - Git submodules are **not** excluded automatically; list their checkout paths if they should be skipped.
 - Unknown YAML properties, duplicate keys, missing configuration, and unknown/unimplemented analyzers fail explicitly.
+
+## Configure the watch quiet period
+
+The optional `watch` section controls how long the long-running `codesemantic4llm watch .`
+command waits after the most recent filesystem change:
+
+```yaml
+watch:
+  debounceSeconds: 15
+```
+
+The default is **15 seconds**, including for existing YAML files without `watch`.
+Values must be whole seconds from **1 through 3600**; zero, negative values,
+non-numeric values and values above 3600 are rejected by the YAML loader.
+`init` writes this section with the default, so each repository can adjust its own
+quiet period without changing the index storage configuration.
+
+Run `codesemantic4llm watch .` to use the YAML value, or specify
+`codesemantic4llm watch . --debounce-seconds 5` to override it **for that invocation**.
+The CLI option wins only when supplied; an omitted CLI option never masks the YAML.
+The command reads the configured debounce at startup: restart an existing watcher
+to apply a changed interval. Changing only the debounce does not invalidate
+indexed declarations, hashes, or cached summaries.
 
 ## Select the advertised MCP tools
 

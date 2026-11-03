@@ -109,6 +109,10 @@ public sealed class RepositoryInitializationSteps
         Assert.Equal(RepositoryIndexingConfiguration.CurrentVersion, configuration.Version);
         Assert.Equal(["dotnet-csharp"], configuration.AnalyzerIds);
         Assert.Equal(language, configuration.SemanticIndexing.Language);
+        Assert.Equal(15, configuration.Watch.DebounceSeconds);
+        var yaml = await File.ReadAllTextAsync(ConfigurationPath, TestContext.Current.CancellationToken);
+        Assert.Contains("watch:", yaml);
+        Assert.Contains("debounceSeconds: 15", yaml);
         Assert.Equal(RepositoryIndexingConfiguration.BuiltInExclusions, configuration.Exclusions);
         Assert.Empty(configuration.FileExtensions);
     }
