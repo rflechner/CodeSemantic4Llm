@@ -3,6 +3,44 @@ Feature: Per-repository YAML indexing configuration
   I want the checkout to declare its analyzers and excluded paths
   So that the semantic index only considers the source I have selected
 
+  Scenario: An absent watch section uses the default quiet period
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers: [dotnet-csharp]
+      """
+    When I preview source indexing
+    Then the configured watch debounce is 15 seconds
+
+  Scenario: A repository selects its own watch quiet period
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers: [dotnet-csharp]
+      watch:
+        debounceSeconds: 6
+      """
+    When I preview source indexing
+    Then the configured watch debounce is 6 seconds
+
+  Scenario Outline: Invalid watch quiet periods are rejected
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers: [dotnet-csharp]
+      watch:
+        debounceSeconds: <value>
+      """
+    When I preview source indexing
+    Then the preview fails with an error containing "<message>"
+
+    Examples:
+      | value | message               |
+      | 0     | watch.debounceSeconds |
+      | -1    | watch.debounceSeconds |
+      | 3601  | watch.debounceSeconds |
+      | nope  | Invalid YAML          |
+
   Scenario: A project display name is normalized and exposed by preview
     Given the repository configuration is:
       """

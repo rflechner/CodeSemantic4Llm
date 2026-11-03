@@ -190,6 +190,15 @@ public sealed partial class RepositoryConfigurationSteps
         Assert.Equal(expected, _preview.SemanticIndexingLanguage);
     }
 
+    [Then(@"the configured watch debounce is (\d+) seconds")]
+    public async Task ThenConfiguredWatchDebounce(int seconds)
+    {
+        Assert.Null(_error);
+        var configuration = await new YamlRepositoryConfigurationLoader().LoadAsync(
+            _repositoryRoot, TestContext.Current.CancellationToken);
+        Assert.Equal(seconds, configuration.Watch.DebounceSeconds);
+    }
+
     [Then("the project name is \"(.*)\"")]
     public void ThenProjectName(string expected)
     {
