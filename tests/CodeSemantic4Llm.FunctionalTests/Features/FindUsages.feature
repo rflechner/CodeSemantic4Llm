@@ -92,6 +92,20 @@ Feature: Locate exact usages of indexed C# methods and types
     And I find its usages with page size 50
     Then the usage listing contains 0 references without another page
 
+  Scenario: Resuming with changed caller declarations rebuilds references
+    Given the indexing checkout contains these sources:
+      | path      | source                                              |
+      | Worker.cs | class Worker { public void Run() {} }               |
+      | Caller.cs | class Caller { void Use() { new Worker().Run(); } } |
+    When I index the checkout
+    And I replace indexing source "Caller.cs" with "class Caller { void Use() {} }"
+    And I stop indexing after 1 file
+    And I index the checkout again
+    Then the run analyzes 0 files and reuses 2 files
+    When I select indexed "Run" declaration number 1
+    And I find its usages with page size 50
+    Then the usage listing contains 0 references without another page
+
   Scenario: Deleted callers do not survive a new snapshot
     Given the indexing checkout contains these sources:
       | path      | source                                                       |

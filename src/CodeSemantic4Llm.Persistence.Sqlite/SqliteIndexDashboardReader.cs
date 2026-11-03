@@ -316,7 +316,7 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
         return branches;
     }
 
-    // A branch has at most one committed preview and one published generation.
+    // Older partial generations can retain reusable files. Only the newest generation is visible.
     private const string VisibleBranchesSql = """
         SELECT branch, MAX(id) AS snapshot_id FROM snapshots
         WHERE completed_utc IS NULL OR id IN (SELECT snapshot_id FROM active_branches)

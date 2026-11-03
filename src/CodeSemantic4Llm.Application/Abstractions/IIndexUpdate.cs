@@ -7,7 +7,7 @@ namespace CodeSemantic4Llm.Application.Abstractions;
 /// <summary>A recoverable index generation. Disposal without Publish leaves the previous snapshot visible.</summary>
 public interface IIndexUpdate : IDisposable
 {
-    /// <summary>Reuses a matching file from the previous snapshot; false means it needs analysis.</summary>
+    /// <summary>Reuses a matching file from an earlier partial or published generation of the same branch; false means it needs analysis.</summary>
     bool TryReuse(IndexedSourceFile file, CancellationToken cancellationToken = default);
 
     void AddFile(IndexedSourceFile file, IReadOnlyList<SymbolDefinition> symbols, CancellationToken cancellationToken = default);

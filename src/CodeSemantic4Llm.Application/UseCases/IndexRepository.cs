@@ -37,10 +37,12 @@ public sealed class IndexRepository(
         summaryExtractors?.ToDictionary(item => item.AnalyzerId, StringComparer.OrdinalIgnoreCase)
         ?? new Dictionary<string, ISymbolSourceExtractor>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Verifies and publishes the checkout. Set force to analyze every selected file even if its cached declarations match.</summary>
     public async Task<RepositoryIndexingResult> ExecuteAsync(
         string repositoryRoot,
         IProgress<RepositoryIndexingProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool force = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var state = await stateProvider.GetStateAsync(repositoryRoot, cancellationToken);
@@ -77,7 +79,7 @@ public sealed class IndexRepository(
                 adapter.IndexVersion, shared.Digest);
             indexedFiles.Add(file);
 
-            if (update.TryReuse(file, cancellationToken))
+            if (!force && update.TryReuse(file, cancellationToken))
             {
                 reused++;
             }
@@ -95,7 +97,7 @@ public sealed class IndexRepository(
 
         // Reference binding depends on other files and cannot be reused per file like declarations.
         // An unchanged snapshot can copy all resolved edges; otherwise rebuild them together.
-        if (!update.TryReuseReferences(cancellationToken))
+        if (force || !update.TryReuseReferences(cancellationToken))
         {
             await IndexReferencesAsync(root, candidates, indexedFiles, update, cancellationToken);
         }

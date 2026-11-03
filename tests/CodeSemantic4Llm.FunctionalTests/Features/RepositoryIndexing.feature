@@ -38,6 +38,24 @@ Feature: Persist a repository index before starting MCP
     Then the run analyzes 0 files and reuses 3 files
     And only one snapshot remains for the indexed branch
 
+  Scenario: Resume after repeated interruptions and reanalyze changed files
+    Given the indexing checkout contains 4 C# files
+    When I stop indexing after 3 files
+    And I stop indexing after 1 file
+    And I replace indexing source "src/File0001.cs" with "public class EditedType {}"
+    And I index the checkout again
+    Then the run analyzes 2 files and reuses 2 files
+    And declaration "EditedType" is stored at "src/File0001.cs"
+    And only one snapshot remains for the indexed branch
+
+  Scenario: Force analysis even when published and partial file hashes match
+    Given the indexing checkout contains 3 C# files
+    And the checkout has a completed index
+    When I stop indexing after 2 files
+    And I force indexing from the console
+    Then the index command succeeds with 3 indexed files
+    And the console reports 3 analyzed files and 0 reused files
+
   Scenario: Reindex modifications, deletions and renames without stale declarations
     Given the indexing checkout contains these sources:
       | path        | source                     |

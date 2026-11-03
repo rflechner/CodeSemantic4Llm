@@ -95,13 +95,36 @@ public sealed partial class RepositoryIndexingSteps
     }
 
     [When("I index the checkout from the console")]
-    public async Task WhenIndexFromConsole()
+    public Task WhenIndexFromConsole() => RunIndexCommand(false);
+
+    [When("I force indexing from the console")]
+    public Task WhenForceIndexFromConsole() => RunIndexCommand(true);
+
+    [Then(@"the console reports (\d+) analyzed files and (\d+) reused files")]
+    public void ThenConsoleReportsReuse(int analyzed, int reused) =>
+        Assert.Contains($"Analyzed files: {analyzed}; reused files: {reused}", _console!.Output);
+
+    [When(@"I stop indexing after (\d+) files?")]
+    public async Task WhenStopIndexing(int count)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        var progress = new InlineProgress(item =>
+        {
+            if (item.Phase == RepositoryIndexingPhase.Indexing && item.CompletedFiles == count)
+            {
+                stop.Cancel();
+            }
+        });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateIndexer().ExecuteAsync(_root, progress, stop.Token));
+    }
+
+    private async Task RunIndexCommand(bool force)
     {
         var services = new ServiceCollection();
         services.AddSingleton(CreateIndexer());
         services.AddSingleton(Paths);
         var relativeRoot = Path.GetRelativePath(Directory.GetCurrentDirectory(), _root);
-        _console = await ConsoleCommandRunner.RunAsync(["index", relativeRoot], services, Token);
+        _console = await ConsoleCommandRunner.RunAsync(force ? ["index", relativeRoot, "--force"] : ["index", relativeRoot], services, Token);
     }
 
     [When("I attempt to index the checkout")]

@@ -357,6 +357,9 @@ The path must identify a Git checkout root on a named branch. Interactive termin
 Spectre progress for discovery, indexing, verification and publication. Redirected output
 contains a plain summary. Unlike preview, indexing has no file-count limit.
 
+After an interruption, rerun `index .` to reuse files already analyzed on the same branch.
+Use `index . --force` to reanalyze every selected file.
+
 Rerunning `index` reuses unchanged declarations and removes stale records after deletions
 or renames. FTS5 search entries follow the same atomic snapshot lifecycle. Each branch keeps its own completed snapshot. Failures and cancellation preserve
 the previous snapshot. SQLite stores derived metadata only, outside the source checkout.

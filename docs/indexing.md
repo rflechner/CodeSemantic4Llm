@@ -108,6 +108,8 @@ configuration fingerprint decide whether prior declarations can be reused. New a
 changed files are analyzed; deleted files and old rename locations disappear on publication.
 Changes to analyzer selection, extensions, exclusions, semantic language or LLM settings
 invalidate reuse. Unchanged files reuse their stored summaries without LLM calls.
+Rerunning `index .` after an interruption also reuses completed files from partial runs on the same branch, including their summaries. The source hash, relative path, analyzer, configuration and shared-summary digest must still match. Use `index . --force` to analyze every file and rebuild references. The configured shared-summary import policy still applies.
+
 All selected files are read and hashed even when their declarations can be reused.
 References are global semantic relationships: when any selected file is added, deleted
 or changed, all C# references are resolved again against the new compilation. Only an

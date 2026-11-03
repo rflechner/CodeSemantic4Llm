@@ -18,8 +18,8 @@ public sealed class RepositoryIndexCommand(IndexRepository indexRepository, Inde
                 .Columns(new SpinnerColumn(), new TaskDescriptionColumn(), new ProgressBarColumn(),
                     new PercentageColumn(), new ElapsedTimeColumn())
                 .StartAsync(progress => indexRepository.ExecuteAsync(
-                    settings.RepositoryRoot, new RepositoryIndexProgressDisplay(progress), cancellationToken))
-            : await indexRepository.ExecuteAsync(settings.RepositoryRoot, cancellationToken: cancellationToken);
+                    settings.RepositoryRoot, new RepositoryIndexProgressDisplay(progress), cancellationToken, settings.Force))
+            : await indexRepository.ExecuteAsync(settings.RepositoryRoot, cancellationToken: cancellationToken, force: settings.Force);
 
         console.WriteLine($"Repository: {result.Snapshot.Scope.RootPath}");
         console.WriteLine($"Index database: {storagePaths.GetDatabasePath(result.Snapshot.Scope.RootPath)}");

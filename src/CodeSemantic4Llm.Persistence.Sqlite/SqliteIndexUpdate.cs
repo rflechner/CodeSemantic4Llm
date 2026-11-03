@@ -16,10 +16,10 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     private readonly string _language;
     private readonly long _snapshotId;
     private readonly long? _previousId;
-    private readonly long? _reusableId;
+    private readonly string _fingerprint;
     private readonly SqliteCommand _insertSymbol;
     private readonly SqliteCommand _insertReference;
-    private int _reusedFiles;
+    private int _filesFromPublishedSnapshot;
     private int _files;
     private int _symbols;
     private bool _published;
@@ -31,10 +31,12 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _language = language;
         _transaction = connection.BeginTransaction();
         _previousId = SqliteIndexStore.ReadSnapshot(connection, _transaction, state.Scope)?.SnapshotId;
-        _reusableId = GetReusableSnapshot(fingerprint);
-        // Keep the previous preview until this run commits its first complete file (or publishes).
-        using var cleanup = Command("DELETE FROM snapshots WHERE branch = $branch AND completed_utc IS NULL;",
-            ("$branch", state.Scope.BranchName));
+        _fingerprint = fingerprint;
+        using var cleanup = Command("""
+            DELETE FROM snapshots WHERE branch = $branch AND completed_utc IS NULL
+                AND (configuration_hash <> $hash OR NOT EXISTS
+                    (SELECT 1 FROM indexed_files WHERE snapshot_id = snapshots.id));
+            """, ("$branch", state.Scope.BranchName), ("$hash", fingerprint));
         cleanup.ExecuteNonQuery();
         using var insert = Command("""
             INSERT INTO snapshots(branch, revision, configuration_hash, semantic_language, member_index_version, reference_index_version)
@@ -50,22 +52,29 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     {
         EnsureWritable(cancellationToken);
 
-        if (_reusableId is null)
-        {
-            return false;
-        }
-
         using var find = Command("""
-            SELECT symbol_count FROM indexed_files WHERE snapshot_id = $previous AND path = $path
-            AND content_hash = $hash AND analyzer_id = $analyzer AND analyzer_version = $version
-            AND summary_cache_hash = $summaryHash;
-            """, ("$previous", _reusableId), ("$path", file.RelativePath), ("$hash", file.ContentHash),
+            SELECT f.snapshot_id, f.symbol_count
+            FROM indexed_files f JOIN snapshots s ON s.id = f.snapshot_id
+            WHERE s.branch = $branch AND s.id < $snapshot AND (s.completed_utc IS NULL OR s.id = $previous)
+              AND s.configuration_hash = $configuration AND s.member_index_version = 1
+              AND f.path = $path AND f.content_hash = $hash AND f.analyzer_id = $analyzer
+              AND f.analyzer_version = $version AND f.summary_cache_hash = $summaryHash
+            ORDER BY s.id DESC LIMIT 1;
+            """, ("$branch", _state.Scope.BranchName), ("$snapshot", _snapshotId), ("$previous", _previousId),
+            ("$configuration", _fingerprint), ("$path", file.RelativePath), ("$hash", file.ContentHash),
             ("$analyzer", file.AnalyzerId), ("$version", file.AnalyzerVersion), ("$summaryHash", file.SummaryCacheHash));
-        var symbolCount = find.ExecuteScalar();
 
-        if (symbolCount is null)
+        long sourceId;
+        int symbolCount;
+        using (var match = find.ExecuteReader())
         {
-            return false;
+            if (!match.Read())
+            {
+                return false;
+            }
+
+            sourceId = match.GetInt64(0);
+            symbolCount = match.GetInt32(1);
         }
 
         using var copy = Command("""
@@ -74,12 +83,17 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
             INSERT INTO symbols SELECT $snapshot, path, ordinal, language, kind, name, qualified_name, line, column_number,
                 containing_type_line, containing_type_column, summary
             FROM symbols WHERE snapshot_id = $previous AND path = $path;
-            """, ("$snapshot", _snapshotId), ("$previous", _reusableId), ("$path", file.RelativePath));
+            """, ("$snapshot", _snapshotId), ("$previous", sourceId), ("$path", file.RelativePath));
         copy.ExecuteNonQuery();
         _files++;
-        _reusedFiles++;
-        _symbols += Convert.ToInt32(symbolCount);
-        CheckpointFile();
+        _symbols += symbolCount;
+
+        if (sourceId == _previousId)
+        {
+            _filesFromPublishedSnapshot++;
+        }
+
+        CheckpointFile(file.RelativePath);
         return true;
     }
 
@@ -87,14 +101,15 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
     {
         EnsureWritable(cancellationToken);
 
-        if (_reusableId is null || _reusedFiles != _files)
+        if (_previousId is null || _filesFromPublishedSnapshot != _files)
         {
             return false;
         }
 
         using var find = Command("""
-            SELECT file_count FROM snapshots WHERE id = $previous AND reference_index_version = 1;
-            """, ("$previous", _reusableId));
+            SELECT file_count FROM snapshots WHERE id = $previous AND reference_index_version = 1
+                AND member_index_version = 1 AND configuration_hash = $configuration;
+            """, ("$previous", _previousId), ("$configuration", _fingerprint));
 
         if (find.ExecuteScalar() is not long previousFileCount || previousFileCount != _files)
         {
@@ -106,7 +121,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
                 snapshot_id, target_path, target_line, target_column, usage_path, usage_line, usage_column)
             SELECT $snapshot, target_path, target_line, target_column, usage_path, usage_line, usage_column
             FROM symbol_references WHERE snapshot_id = $previous;
-            """, ("$snapshot", _snapshotId), ("$previous", _reusableId));
+            """, ("$snapshot", _snapshotId), ("$previous", _previousId));
         copy.ExecuteNonQuery();
         return true;
     }
@@ -148,7 +163,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
 
         _files++;
         _symbols += symbols.Count;
-        CheckpointFile();
+        CheckpointFile(file.RelativePath);
     }
 
     public RepositoryIndexSnapshot Publish(CancellationToken cancellationToken = default)
@@ -159,7 +174,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
             UPDATE snapshots SET completed_utc = $completed, file_count = $files, symbol_count = $symbols WHERE id = $snapshot;
             INSERT INTO active_branches(branch, snapshot_id) VALUES ($branch, $snapshot)
             ON CONFLICT(branch) DO UPDATE SET snapshot_id = excluded.snapshot_id;
-            DELETE FROM snapshots WHERE id = $previous;
+            DELETE FROM snapshots WHERE id = $previous OR (branch = $branch AND completed_utc IS NULL);
             """, ("$completed", completed.ToString("O", CultureInfo.InvariantCulture)),
             ("$files", _files), ("$symbols", _symbols), ("$snapshot", _snapshotId),
             ("$branch", _state.Scope.BranchName), ("$previous", _previousId));
@@ -179,8 +194,15 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _connection.Dispose();
     }
 
-    private void CheckpointFile()
+    private void CheckpointFile(string path)
     {
+        // Keep one cached copy per unfinished path, including files a shorter retry has yet to visit.
+        using var prune = Command("""
+            DELETE FROM indexed_files WHERE path = $path AND snapshot_id IN (
+                SELECT id FROM snapshots WHERE branch = $branch AND id < $snapshot AND completed_utc IS NULL);
+            """, ("$path", path), ("$branch", _state.Scope.BranchName), ("$snapshot", _snapshotId));
+        prune.ExecuteNonQuery();
+
         using var counts = Command("UPDATE snapshots SET file_count = $files, symbol_count = $symbols WHERE id = $snapshot;",
             ("$files", _files), ("$symbols", _symbols), ("$snapshot", _snapshotId));
         counts.ExecuteNonQuery();
@@ -191,18 +213,11 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _insertReference.Transaction = _transaction;
 
         // A concurrent writer may have replaced this branch's preview between transactions.
-        using var owner = Command("SELECT id FROM snapshots WHERE id = $snapshot;", ("$snapshot", _snapshotId));
-        if (owner.ExecuteScalar() is null)
+        using var owner = Command("SELECT MAX(id) FROM snapshots WHERE branch = $branch;", ("$branch", _state.Scope.BranchName));
+        if (owner.ExecuteScalar() is not long latest || latest != _snapshotId)
         {
             throw new InvalidOperationException("Another index run superseded this branch update.");
         }
-    }
-
-    private long? GetReusableSnapshot(string fingerprint)
-    {
-        using var command = Command("SELECT id FROM snapshots WHERE id = $id AND configuration_hash = $hash AND member_index_version = 1;",
-            ("$id", _previousId), ("$hash", fingerprint));
-        return command.ExecuteScalar() is long id ? id : null;
     }
 
     private SqliteCommand CreateSymbolInsert()
