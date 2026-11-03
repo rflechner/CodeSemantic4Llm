@@ -4,6 +4,7 @@ using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Domain.Repositories;
 using CodeSemantic4Llm.Domain.Symbols;
 using Microsoft.Extensions.Configuration;
+using CodeSemantic4Llm.Persistence.Sqlite;
 using ModelContextProtocol.Server;
 
 namespace CodeSemantic4Llm.Mcp.Server.Tools;
@@ -12,14 +13,19 @@ namespace CodeSemantic4Llm.Mcp.Server.Tools;
 [McpServerToolType]
 public sealed class RepositoryIndexTools(
     IConfiguration configuration, IRepositoryStateProvider stateProvider, IIndexStore indexStore,
-    FindSymbols findSymbols, GetTypeMembers getTypeMembers, FindUsages findUsages,
-    SearchCode searchCode)
+    IndexStoragePaths storagePaths, FindSymbols findSymbols, GetTypeMembers getTypeMembers,
+    FindUsages findUsages, SearchCode searchCode)
 {
-    [McpServerTool, Description("Returns the saved index snapshot and observed Git state. This does not verify working-tree freshness.")]
+    [McpServerTool, Description("Reports the selected repository, Git branch, YAML and SQLite cache paths, and whether a published snapshot exists. Does not reindex or verify working-tree freshness.")]
     public async Task<RepositoryIndexStatus> GetRepositoryIndexStatusAsync(CancellationToken cancellationToken = default)
     {
         var state = await stateProvider.GetStateAsync(GetRepositoryRoot(), cancellationToken);
-        return new RepositoryIndexStatus(state, indexStore.GetSnapshot(state.Scope, cancellationToken));
+        var databasePath = storagePaths.GetDatabasePath(state.Scope.RootPath);
+        var snapshot = indexStore.GetSnapshot(state.Scope, cancellationToken);
+        return new RepositoryIndexStatus(
+            state, snapshot, snapshot is not null,
+            Path.Combine(state.Scope.RootPath, "codesemantic4llm.yaml"),
+            storagePaths.Root, databasePath, File.Exists(databasePath), Environment.CurrentDirectory);
     }
 
     /// <summary>Queries the published snapshot directly; MCP search uses the source-addressed presentation.</summary>
@@ -66,4 +72,7 @@ public sealed class RepositoryIndexTools(
 }
 
 /// <summary>Snapshot metadata alongside observed Git state; neither implies that source files remain unchanged.</summary>
-public sealed record RepositoryIndexStatus(RepositoryState Checkout, RepositoryIndexSnapshot? Snapshot);
+public sealed record RepositoryIndexStatus(
+    RepositoryState Checkout, RepositoryIndexSnapshot? Snapshot,
+    bool IndexSnapshotExists, string ConfigurationPath, string IndexRoot, string IndexDatabasePath,
+    bool IndexDatabaseExists, string WorkingDirectory);

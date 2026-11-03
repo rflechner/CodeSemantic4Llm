@@ -29,8 +29,10 @@ Restart the MCP server after changing its arguments. File logging is disabled wh
 and is not exposed as a tool or a model-facing parameter. Console logs continue to
 go to stderr; stdout contains only MCP protocol messages.
 
-Relative log paths resolve from the server process's working directory, not the
-selected repository root. Missing parent directories are created. An absolute path
+Relative log paths resolve from the MCP process's **original launch directory**.
+When `serve <repository-path>` changes the process working directory to the selected
+checkout, the log destination remains anchored to the original directory.
+Missing parent directories are created. An absolute path
 outside the source checkout is convenient when clients use different working directories.
 If the file cannot be opened, startup fails with an error on stderr rather than
 silently losing logs. Use a separate log path for each concurrently running server.

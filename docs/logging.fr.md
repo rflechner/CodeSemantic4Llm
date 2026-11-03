@@ -26,7 +26,9 @@ Pour un client MCP, ajoutez l’option aux arguments de lancement de la DLL comp
 
 Redémarrez le serveur après modification des arguments. Sans `--log-file`, aucun journal fichier n’est produit. Cette option est indépendante de `--expose-indexing` et `--allow-write` et n’est exposée ni comme outil ni comme paramètre du modèle. Les journaux console vont sur stderr. Stdout est réservé au protocole MCP.
 
-Les chemins relatifs partent du répertoire courant du processus serveur. Les dossiers parents absents sont créés. Un chemin absolu hors du dépôt convient lorsque les clients utilisent différents répertoires de travail. Si le fichier ne peut pas être ouvert, le démarrage échoue avec un message sur stderr. Utilisez un fichier différent pour chaque serveur démarré simultanément.
+Les chemins relatifs des journaux sont résolus depuis le **répertoire de lancement initial**.
+Même lorsque `serve <repository-path>` change le répertoire courant du processus,
+la destination des journaux reste ancrée à ce répertoire initial. Les dossiers parents absents sont créés. Un chemin absolu hors du dépôt convient lorsque les clients utilisent différents répertoires de travail. Si le fichier ne peut pas être ouvert, le démarrage échoue avec un message sur stderr. Utilisez un fichier différent pour chaque serveur démarré simultanément.
 
 ## Analyser un échec
 
