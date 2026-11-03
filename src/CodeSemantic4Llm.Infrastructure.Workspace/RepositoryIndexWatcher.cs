@@ -1,49 +1,82 @@
+using System.Diagnostics;
 using System.Threading.Channels;
 using CodeSemantic4Llm.Application.UseCases;
 
 namespace CodeSemantic4Llm.Infrastructure.Workspace;
 
-/// <summary>Serial, debounced reconciliation with startup verification and periodic recovery from missed events.</summary>
+/// <summary>Serial, syntax-safe index reconciliation after a configurable filesystem quiet period.</summary>
 public sealed class RepositoryIndexWatcher(IndexRepository indexer, GitSummaryIntegration git)
 {
+    /// <summary>
+    /// Verifies the checkout at startup, debounces subsequent edits, and periodically recovers from missed
+    /// events. A failed syntax check leaves the previous published snapshot in place.
+    /// </summary>
     public async Task RunAsync(
         string root, Action<string>? report = null, CancellationToken cancellationToken = default,
-        TimeSpan? reconciliationInterval = null)
+        TimeSpan? reconciliationInterval = null, TimeSpan? debounceInterval = null)
     {
         root = Path.GetFullPath(root);
+        var reconciliation = reconciliationInterval ?? TimeSpan.FromSeconds(30);
+        var quietPeriod = debounceInterval ?? TimeSpan.FromSeconds(15);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(reconciliation, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(quietPeriod, TimeSpan.Zero);
+
         var signals = Channel.CreateBounded<bool>(new BoundedChannelOptions(1)
         {
-            FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true
+            FullMode = BoundedChannelFullMode.DropOldest,
+            SingleReader = true
         });
+
+        // Stopwatch timestamps are monotonic; a wall-clock correction must not shorten a quiet period.
+        long lastFileEvent = 0;
         using var watcher = new FileSystemWatcher(root)
         {
             IncludeSubdirectories = true,
             NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite | NotifyFilters.Size
         };
-        void Signal(object? sender, FileSystemEventArgs args)
+
+        void SignalPath(string path)
         {
-            var relative = Path.GetRelativePath(root, args.FullPath).Replace('\\', '/');
-            if (!relative.Split('/').Any(part => part is "bin" or "obj") && !relative.EndsWith(".tmp", StringComparison.Ordinal))
+            var relative = Path.GetRelativePath(root, path).Replace('\\', '/');
+            var excluded = relative.Split('/').Any(part =>
+                part.Equals(".git", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("obj", StringComparison.OrdinalIgnoreCase));
+
+            if (excluded || relative.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
             {
-                signals.Writer.TryWrite(true);
+                return;
             }
+
+            Interlocked.Exchange(ref lastFileEvent, Stopwatch.GetTimestamp());
+            signals.Writer.TryWrite(true);
         }
 
-        watcher.Changed += Signal;
-        watcher.Created += Signal;
-        watcher.Deleted += Signal;
-        watcher.Renamed += (sender, args) => Signal(sender, args);
+        watcher.Changed += (_, args) => SignalPath(args.FullPath);
+        watcher.Created += (_, args) => SignalPath(args.FullPath);
+        watcher.Deleted += (_, args) => SignalPath(args.FullPath);
+        watcher.Renamed += (_, args) =>
+        {
+            // Moving a tracked source into an excluded directory still invalidates its old path.
+            SignalPath(args.OldFullPath);
+            SignalPath(args.FullPath);
+        };
         watcher.Error += (_, _) => signals.Writer.TryWrite(true);
         watcher.EnableRaisingEvents = true;
-        using var timer = new Timer(_ => signals.Writer.TryWrite(true), null,
-            reconciliationInterval ?? TimeSpan.FromSeconds(30), reconciliationInterval ?? TimeSpan.FromSeconds(30));
-        signals.Writer.TryWrite(true); // Start watching before the first scan so no startup change is lost.
+
+        using var timer = new Timer(_ => signals.Writer.TryWrite(true), null, reconciliation, reconciliation);
+        signals.Writer.TryWrite(true); // Subscribe before the first scan so startup changes are not lost.
 
         while (await signals.Reader.WaitToReadAsync(cancellationToken))
         {
-            signals.Reader.TryRead(out _);
-            await Task.Delay(TimeSpan.FromMilliseconds(300), cancellationToken);
-            while (signals.Reader.TryRead(out _)) { }
+            // Coalesce bursts, but do not let timer ticks reset the source-edit quiet period.
+            bool newSignal;
+            do
+            {
+                while (signals.Reader.TryRead(out _)) { }
+                await WaitForQuietAsync(() => Interlocked.Read(ref lastFileEvent), quietPeriod, cancellationToken);
+                newSignal = signals.Reader.TryRead(out _);
+            } while (newSignal);
 
             try
             {
@@ -53,15 +86,31 @@ public sealed class RepositoryIndexWatcher(IndexRepository indexer, GitSummaryIn
                     continue;
                 }
 
-                var result = await indexer.ExecuteAsync(root, cancellationToken: cancellationToken);
+                var result = await indexer.ExecuteAsync(
+                    root, cancellationToken: cancellationToken, requireValidSyntax: true);
                 report?.Invoke($"Index verified: {result.AnalyzedFiles} analyzed, {result.ReusedFiles} reused.");
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
-                // An HTTP timeout can also be an OperationCanceledException; only operator cancellation stops watching.
-                // The index transaction has rolled back. The next event or timer tick retries the checkout.
+                // Provider timeouts can also be OperationCanceledException; only operator cancellation stops watching.
+                // A failed generation never replaces the published branch snapshot.
                 report?.Invoke("Index reconciliation failed; the previous snapshot remains available: " + exception.Message);
             }
+        }
+    }
+
+    private static async Task WaitForQuietAsync(
+        Func<long> lastFileEvent, TimeSpan quietPeriod, CancellationToken cancellationToken)
+    {
+        while (lastFileEvent() is var timestamp && timestamp != 0)
+        {
+            var remaining = quietPeriod - Stopwatch.GetElapsedTime(timestamp);
+            if (remaining <= TimeSpan.Zero)
+            {
+                return;
+            }
+
+            await Task.Delay(remaining, cancellationToken);
         }
     }
 }
