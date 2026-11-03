@@ -142,6 +142,50 @@ Lancez `copilot` **à la racine du dépôt** pour que `.` cible la copie de trav
 
 Remplacez le chemin absolu du dépôt. Si l’application ne trouve pas l’outil global, indiquez le chemin complet dans `command` (par exemple `C:\Users\YOUR_USER\.dotnet\tools\codesemantic4llm.exe` sous Windows, en échappant les barres obliques inverses en JSON). L’emplacement du fichier de configuration dépend du client.
 
+### LM Studio (outil .NET global)
+
+Dans LM Studio, ouvrez **Program > Install > Edit mcp.json** et ajoutez
+le serveur sous `mcpServers` :
+
+```json
+{
+  "mcpServers": {
+    "codeSemantic4Llm": {
+      "command": "codesemantic4llm",
+      "args": ["serve", "D:/Projects/MyRepository", "--expose-indexing"]
+    }
+  }
+}
+```
+
+Remplacez le chemin par le **chemin absolu du dépôt Git contenant
+`codesemantic4llm.yaml`**. Évitez `serve .` : LM Studio peut démarrer
+depuis un autre répertoire. Avec `serve <repository-path>`, le processus
+MCP utilise désormais le dépôt sélectionné comme répertoire courant.
+Les chemins relatifs de `--log-file` restent résolus depuis le
+répertoire de lancement initial.
+
+Exécutez d'abord `codesemantic4llm index D:/Projects/MyRepository`
+dans un terminal : `serve` ne génère **pas** d'index. Le YAML configure
+l'analyse, **pas le stockage SQLite**. Si l'indexation utilisait une variable
+`CODESEMANTIC4LLM_INDEX_ROOT` personnalisée, transmettez le même
+répertoire absolu à LM Studio dans `env` :
+
+```json
+"env": {
+  "CODESEMANTIC4LLM_INDEX_ROOT": "D:/CodeSemanticIndexes"
+}
+```
+
+Avec `--expose-indexing`, appelez `get_repository_index_status` :
+`checkout.scope.rootPath`, `checkout.scope.branchName`,
+`configurationPath`, `workingDirectory`, `indexRoot`,
+`indexDatabasePath`, `indexDatabaseExists` et `snapshot`
+permettent de vérifier les chemins et la branche. `indexDatabaseExists: false`
+indique que le fichier SQLite est absent ; `snapshot: null` indique
+qu'aucun index n'est publié pour la branche actuelle, même si la base existe.
+`get_server_info` affiche aussi le dépôt et le répertoire courant.
+
 ### Options facultatives du serveur
 
 Le serveur est en lecture seule par défaut. Ajoutez `--allow-write` à `args` pour enregistrer les outils d’édition. `--expose-indexing` expose les outils d’administration et de consultation de l’état de l’index. `--log-file /absolute/path/to/log.jsonl` enregistre les requêtes et réponses : conservez ce fichier en privé, car il peut contenir **du code source et des paramètres sensibles**. Redémarrez le client après modification.

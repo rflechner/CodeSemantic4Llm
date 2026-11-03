@@ -195,6 +195,48 @@ cannot find the global executable, specify its full path in `command`
 (e.g. `C:\\Users\\YOUR_USER\\.dotnet\\tools\\codesemantic4llm.exe` on Windows).
 The exact config file location varies by MCP client.
 
+### LM Studio (global .NET tool)
+
+In LM Studio, select **Program > Install > Edit mcp.json**. Add a stdio
+server under `mcpServers`:
+
+```json
+{
+  "mcpServers": {
+    "codeSemantic4Llm": {
+      "command": "codesemantic4llm",
+      "args": ["serve", "D:/Projects/MyRepository", "--expose-indexing"]
+    }
+  }
+}
+```
+
+Replace the example path with the **absolute path to the Git checkout containing
+`codesemantic4llm.yaml`**. Do not rely on LM Studio's launch directory: `serve .`
+can select the wrong folder. An explicit `serve <repository-path>` now sets the
+dedicated MCP process's working directory to the selected checkout.
+Relative `--log-file` paths still resolve against the original launch directory.
+
+Run `codesemantic4llm index D:/Projects/MyRepository` from a terminal first:
+`serve` does **not** create an index. The YAML configures source analysis, not
+SQLite storage. If indexing used a custom `CODESEMANTIC4LLM_INDEX_ROOT`,
+set the same **absolute cache root** in LM Studio's server configuration:
+
+```json
+"env": {
+  "CODESEMANTIC4LLM_INDEX_ROOT": "D:/CodeSemanticIndexes"
+}
+```
+
+With `--expose-indexing`, call `get_repository_index_status` to inspect
+`checkout.scope.rootPath`, `checkout.scope.branchName`,
+`configurationPath`, `workingDirectory`, `indexRoot`,
+`indexDatabasePath`, `indexDatabaseExists` and `snapshot`.
+`indexDatabaseExists: false` means SQLite is missing at the expected path;
+`snapshot: null` means the current branch has no published index, even when
+the database exists. `get_server_info` also shows the effective repository
+and process working directory.
+
 ### Optional MCP server switches
 
 The server is **read-only by default**. To explicitly expose source editing,
