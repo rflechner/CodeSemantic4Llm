@@ -86,7 +86,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
 
             return new RepositoryIndexingConfiguration(
                 document.Analyzers, document.Exclude, semanticIndexing, fileExtensions, document.ProjectName, tools,
-                document.SharedSummaries);
+                document.SharedSummaries,
+                document.Watch is null ? null : new RepositoryWatchConfiguration(document.Watch.DebounceSeconds));
         }
         catch (YamlException exception)
         {
@@ -161,6 +162,13 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         public Dictionary<string, List<string>?>? FileExtensions { get; set; } = new();
 
         public SemanticIndexingYamlDocument? SemanticIndexing { get; set; }
+
+        public WatchYamlDocument? Watch { get; set; }
+    }
+
+    private sealed class WatchYamlDocument
+    {
+        public int DebounceSeconds { get; set; } = RepositoryWatchConfiguration.DefaultDebounceSeconds;
     }
 
     private sealed class SemanticIndexingYamlDocument

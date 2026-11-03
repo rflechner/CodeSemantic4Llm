@@ -1,4 +1,6 @@
 using System.ComponentModel;
+using CodeSemantic4Llm.Application.Abstractions;
+using CodeSemantic4Llm.Domain.Configuration;
 using CodeSemantic4Llm.Infrastructure.Workspace;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -10,8 +12,12 @@ public sealed class WatchRepositorySettings : RepositoryCommandSettings
 {
     /// <summary>Quiet period after the most recent source/configuration/summary change.</summary>
     [CommandOption("--debounce-seconds <SECONDS>")]
-    [Description("Wait this many seconds after the last filesystem event (default: 15).")]
-    public int DebounceSeconds { get; init; } = 15;
+    [Description("Override watch.debounceSeconds from repository YAML (default: 15).")]
+    public int? DebounceSeconds { get; init; }
+
+    /// <summary>An explicit CLI value overrides the repository's validated YAML value.</summary>
+    public TimeSpan ResolveDebounceInterval(RepositoryWatchConfiguration configuration) =>
+        TimeSpan.FromSeconds(DebounceSeconds ?? configuration.DebounceSeconds);
 
     /// <inheritdoc />
     public override ValidationResult Validate()
@@ -22,22 +28,25 @@ public sealed class WatchRepositorySettings : RepositoryCommandSettings
             return repositoryValidation;
         }
 
-        return DebounceSeconds is < 1 or > 3600
+        return DebounceSeconds is < RepositoryWatchConfiguration.MinDebounceSeconds or > RepositoryWatchConfiguration.MaxDebounceSeconds
             ? ValidationResult.Error("--debounce-seconds must be between 1 and 3600.")
             : ValidationResult.Success();
     }
 }
 
 /// <summary>Waits for source edits to settle before publishing only syntactically valid index generations.</summary>
-public sealed class WatchRepositoryCommand(RepositoryIndexWatcher watcher, IAnsiConsole console)
+public sealed class WatchRepositoryCommand(
+    RepositoryIndexWatcher watcher, IRepositoryConfigurationLoader configurationLoader, IAnsiConsole console)
     : AsyncCommand<WatchRepositorySettings>
 {
     /// <inheritdoc />
     public override async Task<int> ExecuteAsync(
         CommandContext context, WatchRepositorySettings settings, CancellationToken cancellationToken)
     {
+        var configuration = await configurationLoader.LoadAsync(settings.RepositoryRoot, cancellationToken);
+
         await watcher.RunAsync(settings.RepositoryRoot, message => console.WriteLine(message), cancellationToken,
-            debounceInterval: TimeSpan.FromSeconds(settings.DebounceSeconds));
+            debounceInterval: settings.ResolveDebounceInterval(configuration.Watch));
         return 0;
     }
 }
