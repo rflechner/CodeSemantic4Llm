@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="402" viewBox="0 0 960 402" role="img" aria-labelledby="title desc">
+  <title id="title">Stockage prévu des index</title>
+  <desc id="desc">Chaque copie de travail possède son YAML et ses sources. L’analyse lit les fichiers sur place. Une base SQLite par copie contient des instantanés distincts pour main et feature/search. Le stockage prévu réutilise les descriptions et représentations vectorielles compatibles entre branches d’une même copie.</desc>
+  <style>
+    text { font-family: "Segoe UI", Arial, sans-serif; fill: #142c46 }
+    .heading { font-size: 29px; font-weight: 700 }
+    .label { font-size: 19px; font-weight: 650 }
+    .body { font-size: 16px }
+    .code { font-family: Consolas, monospace; font-size: 16px; fill: #145f59 }
+  </style>
+  <rect width="960" height="402" rx="18" fill="#f2f6fa"/>
+  <text x="28" y="48" class="heading">Stockage prévu des index</text>
+  <text x="28" y="78" class="body">Les sources restent dans Git. Le stockage central reçoit uniquement les données dérivées.</text>
+  <rect x="28" y="105" width="300" height="216" rx="12" fill="white" stroke="#c6d3e0"/>
+  <text x="45" y="141" class="label">Copie de travail Git</text>
+  <text x="45" y="176" class="code">repository-a/</text>
+  <text x="67" y="203" class="code">codesemantic4llm.yaml</text>
+  <text x="67" y="229" class="code">src/</text>
+  <text x="67" y="255" class="code">.git/</text>
+  <text x="45" y="295" class="body">Un YAML à la racine de chaque copie.</text>
+  <text x="351" y="198" class="label">Analyse</text>
+  <path d="M346 218h79m-9 -7 9 7 -9 7" fill="none" stroke="#526782" stroke-width="2"/>
+  <rect x="448" y="105" width="484" height="216" rx="12" fill="#deeee9" stroke="#a8cdc0"/>
+  <text x="467" y="141" class="label">Une base SQLite par copie</text>
+  <text x="467" y="176" class="body">Symboles, chemins, plages, empreintes et relations</text>
+  <text x="467" y="208" class="code">main           → instantané 42</text>
+  <text x="467" y="234" class="code">feature/search → instantané 57</text>
+  <text x="467" y="270" class="body">Cache prévu entre branches de cette copie :</text>
+  <text x="467" y="295" class="body">descriptions et représentations vectorielles réutilisables.</text>
+  <text x="28" y="358" class="body">Les instantanés sont des enregistrements en base. Une autre copie possède sa propre base.</text>
+  <text x="28" y="385" class="body">Pour lire une ancienne version du code, l’architecture prévue utilise les objets Git locaux.</text>
+</svg>

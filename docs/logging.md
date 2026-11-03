@@ -1,5 +1,7 @@
 # MCP file logging and troubleshooting
 
+**English** · [Français](logging.fr.md)
+
 Enable file logging when starting the server:
 
 ```sh

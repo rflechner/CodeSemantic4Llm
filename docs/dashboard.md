@@ -1,5 +1,7 @@
 # Local index dashboard
 
+**English** · [Français](dashboard.fr.md)
+
 The `dashboard` console command launches a **read-only browser explorer** of all
 published indexes in the configured local SQLite cache. Unlike `serve`, it does
 not require a repository argument, start MCP, or perform any indexing.

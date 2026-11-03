@@ -1,5 +1,7 @@
 # Install CodeSemantic4Llm as a .NET tool
 
+**English** · [Français](dotnet-tool.fr.md)
+
 CodeSemantic4Llm is a **command-line application and local stdio MCP server**. It is
 distributed as a .NET Tool NuGet package, **`CodeSemantic4Llm.Mcp.Server`**, in the
 `rflechner` GitHub Packages NuGet feed. The installed executable is named

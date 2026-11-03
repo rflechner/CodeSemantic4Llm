@@ -1,5 +1,9 @@
 # CodeSemantic4Llm
 
+**English** · [Français](README.fr.md)
+
+<img src="docs/images/experimental-proof-of-concept.png" width="300" alt="Experimental proof of concept. MarmotteDB’s blue marmot wears safety goggles and a red Swiss scarf as a flask bubbles over.">
+
 > **Experimental proof of concept — nothing here is production software.**
 > This repository exists to test a hypothesis, not to ship a product. Expect
 > incomplete features, changing storage layouts and breaking changes.
@@ -13,6 +17,24 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 > full MSBuild project resolution; optional OpenAI-compatible LLM summaries are implemented
 > for C# methods and types, with local FTS5/BM25 keyword search over stored
 > names and summaries. Embeddings and TypeScript analysis remain planned.
+
+## Table of contents
+
+| README section | Related guide |
+| --- | --- |
+| [What this POC tries to find out](#what-this-poc-tries-to-find-out) | |
+| [Install as a .NET tool](#install-as-a-net-tool) | [.NET tool installation and MCP client setup](docs/dotnet-tool.md) |
+| [Getting started: index a HelloWorld project](#getting-started-index-a-helloworld-project) | |
+| [Architecture](#architecture) | [Architecture and storage design](docs/architecture.md) |
+| [Configure each repository](#configure-each-repository) | [Repository-local YAML configuration](docs/repository-configuration.md) |
+| [Build and test](#build-and-test) | |
+| [Browse every cached index in a dashboard](#browse-every-cached-index-in-a-dashboard) | [Local index dashboard](docs/dashboard.md) |
+| [Index before starting MCP](#index-before-starting-mcp) | [Indexing a checkout](docs/indexing.md) · [MCP file logging and troubleshooting](docs/logging.md) |
+| [Preview a local repository from Rider or a terminal](#preview-a-local-repository-from-rider-or-a-terminal) | |
+| [Shared LLM summaries](#shared-llm-summaries) | [Shared LLM summaries in Git](docs/shared-summaries.md) |
+| [Dependencies](#dependencies) | |
+| [Indexing principles](#indexing-principles) | |
+| [Planned milestones](#planned-milestones) | |
 
 ## What this POC tries to find out
 

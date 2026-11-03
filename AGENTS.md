@@ -1,5 +1,7 @@
 # CodeSemantic4Llm — Agent guidelines
 
+**English** · [Français](AGENTS.fr.md)
+
 These guidelines apply to all code, tests, documentation, and configuration written or modified in this repository.
 
 ## Project purpose
@@ -17,10 +19,11 @@ Current architectural directions (not a mandate to prematurely implement everyth
 
 Treat project specifications and accepted design decisions as authoritative when they become available. Do not mistake planned capabilities for already implemented features.
 
-## Use English
+## Language and documentation
 
 - Write code in English, including names of files, classes, methods, functions, variables, and constants.
-- Write code comments, tests, documentation, and commit messages in English.
+- Write code comments, tests, and commit messages in English.
+- Maintain documentation in English (`name.md`) and French (`name.fr.md`) side by side. Create or update both versions in the same change, with reciprocal language links. Link to guides in the reader's language and keep commands, configuration keys, and API identifiers intact.
 - Choose descriptive names that make intent clear; avoid obscure abbreviations.
 
 ## Document the code
@@ -28,6 +31,7 @@ Treat project specifications and accepted design decisions as authoritative when
 - Document public APIs, important contracts, and non-obvious behavior using the language's documentation conventions.
 - Explain the intent, constraints, and reasons behind complex decisions rather than restating what the code does.
 - Keep documentation and comments up to date when changing the code.
+- Keep both README tables of contents in sync in the same change whenever a top-level README section or a Markdown article under `docs/` is added, renamed, moved, reordered, or removed. Verify that every section anchor and article link in each table resolves.
 - Record significant architectural choices and their trade-offs in the project documentation.
 
 ## Prioritize readability

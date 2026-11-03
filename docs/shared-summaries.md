@@ -1,5 +1,7 @@
 # Shared LLM summaries in Git
 
+**English** · [Français](shared-summaries.fr.md)
+
 CodeSemantic4Llm can distribute generated descriptions through ordinary Git commits while keeping SQLite and FTS5 local to each developer. A colleague can pull the Markdown files, run `index`, and search the descriptions without repeating compatible LLM calls. Roslyn still derives declarations and references from the checked-out source.
 
 ![Shared summary architecture: Git distributes Markdown, each developer validates it before importing into local SQLite and FTS5.](images/shared-summary-architecture.svg)

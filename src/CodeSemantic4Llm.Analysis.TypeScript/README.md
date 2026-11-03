@@ -1,5 +1,7 @@
 # TypeScript / Angular analyzer
 
+**English** · [Français](README.fr.md)
+
 This assembly is reserved for the TypeScript and Angular indexing adapter.
 
 Planned implementation:
