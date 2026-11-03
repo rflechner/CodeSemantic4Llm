@@ -434,3 +434,6 @@ FodyWeavers.xsd
 src/CodeSemantic4Llm.Mcp.Server/Properties/launchSettings.json
 
 .idea/.idea.CodeSemantic4Llm/.idea/dataSources.xml
+
+/.nuke/temp/
+/.nuke/build.schema.json

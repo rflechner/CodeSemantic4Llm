@@ -56,6 +56,141 @@ dotnet tool install --global CodeSemantic4Llm.Mcp.Server
 codesemantic4llm --help
 ```
 
+## Getting started: index a HelloWorld project
+
+With the global tool installed, create a small C# repository and initialize its configuration:
+
+```sh
+dotnet new console --name HelloWorld --use-program-main --no-restore
+cd HelloWorld
+git init -b main
+codesemantic4llm init . --name "HelloWorld" --analyzer dotnet-csharp
+```
+
+`--use-program-main` creates an explicit `Program` class and `Main` method for the
+analyzer to discover. `init` creates `codesemantic4llm.yaml` at the repository root
+without overwriting an existing file. No initial Git commit is required.
+
+### Configure optional LLM summaries
+
+The generated configuration disables LLM calls by default. You can leave it that
+way to index code structure and existing XML documentation locally. To also generate
+and export natural-language descriptions, edit the existing `sharedSummaries` and
+`semanticIndexing` sections in `codesemantic4llm.yaml`:
+
+```yaml
+sharedSummaries: true
+semanticIndexing:
+  language: en
+  llm:
+    enabled: true
+    baseUrl: http://127.0.0.1:1234/v1
+    model: your-local-model
+    # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
+```
+
+Keep the other generated settings, including `version`, `analyzers` and `tools`.
+Replace the endpoint and model with those of your running OpenAI-compatible server.
+If it requires authentication, uncomment `apiKeyEnvironmentVariable` and set that
+variable in your terminal before indexing. `language` selects the language of the
+generated descriptions; use `fr` for French, for example.
+
+Indexing sends method and type declarations to the configured LLM when summaries
+are needed. Choose an endpoint suitable for your source code. See
+[LLM configuration](docs/repository-configuration.md#optional-per-repository-llm-summaries)
+for prompt customization and other options.
+
+### Preview the selected files
+
+```sh
+codesemantic4llm preview . --max-files 50
+```
+
+The preview should list `Program.cs`. It checks configuration and discovery without
+reading source contents, calling the LLM or writing an index. Built-in exclusions
+skip directories such as `bin` and `obj`; add repository-specific patterns under
+`exclude` in the YAML if needed.
+
+### Build the local index
+
+```sh
+codesemantic4llm index .
+```
+
+This indexes `Program` and `Main`, records their locations in the local branch-aware
+SQLite cache, and generates summaries if you enabled the LLM. Source files stay in
+the checkout. Re-run `index` after changing source files or configuration, or switching
+branches.
+
+### Export the summaries
+
+If you enabled both `sharedSummaries` and LLM indexing before running `index`, export
+the generated descriptions as Markdown:
+
+```sh
+codesemantic4llm cache-export .
+```
+
+Review `.codesemantic4llm/summaries/Program.cs.md` before committing it with your
+source and configuration. The export reads the current local index without calling
+the LLM; it does not copy source files or stage Git changes. If the source or
+configuration has changed, run `index` again first. Skip this step when LLM summaries
+are disabled. See [shared summaries](docs/shared-summaries.md) for team workflows and
+overwrite behavior.
+
+### Explore the index in the dashboard
+
+```sh
+codesemantic4llm dashboard --port 5080
+```
+
+Open [http://127.0.0.1:5080/](http://127.0.0.1:5080/) in your browser, select
+HelloWorld and its `main` branch, and inspect the indexed `Program` and `Main`
+declarations and any generated summaries. The dashboard displays locally cached
+indexes in read-only mode. Stop it with Ctrl+C before continuing in the same terminal,
+or leave it running in a separate terminal. See the [dashboard guide](docs/dashboard.md)
+for more details.
+
+### Connect an MCP client
+
+From the HelloWorld repository root, the server command is:
+
+```sh
+codesemantic4llm serve .
+```
+
+`serve` starts a read-only MCP server over stdio and waits for an MCP client.
+Stop a manual run with Ctrl+C before configuring the client to launch it.
+
+For **VS Code / GitHub Copilot Chat**, open the `HelloWorld` folder as your workspace
+and create `HelloWorld/.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "helloWorld": {
+      "type": "stdio",
+      "command": "codesemantic4llm",
+      "args": ["serve", "${workspaceFolder}"]
+    }
+  }
+}
+```
+
+This uses the global tool installed above. `${workspaceFolder}` resolves to the
+HelloWorld checkout. In VS Code, start the server from the MCP configuration and
+accept the trust prompt. VS Code launches `serve` and manages its lifetime; no
+separate terminal server is needed. If the executable is not on VS Code's `PATH`,
+use its absolute path in `command`.
+
+See the [other MCP client configuration examples](docs/dotnet-tool.md#4-configure-an-mcp-client)
+for local tool installations, GitHub Copilot CLI and Claude Desktop.
+
+Once connected, ask the agent to find the `Main` method in HelloWorld. It should use
+`find_symbols` to retrieve the indexed location. The server reads the saved index;
+re-run `index` after source changes, or use `codesemantic4llm watch .` in a separate
+terminal to keep it updated.
+
 ## Architecture
 
 | Project | Responsibility |

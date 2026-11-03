@@ -227,25 +227,43 @@ parameters**; store them privately. Restart the client after changing switches.
   feeds. Use package-source mapping in your own NuGet configuration or remove
   the source when not needed with `dotnet nuget remove source CodeSemanticGitHub`.
 
-## Maintainer: create and publish a release
+## Maintainer guide to staging and promotion
 
-On the repository source checkout:
+Run the same NUKE build as CI from the repository root:
 
 ```sh
-dotnet pack src/CodeSemantic4Llm.Mcp.Server/CodeSemantic4Llm.Mcp.Server.csproj \
-  --configuration Release --output artifacts
-bash eng/verify-tool-package.sh artifacts 0.1.0
+dotnet run --project build/Build.csproj -- Pack
 ```
 
-The [CI workflow](../.github/workflows/ci.yml) packs and installs the tool
-on every PR. After merging a tested PR into `main`, run the
-[Publish .NET tool to GitHub Packages workflow](../.github/workflows/publish-tool.yml)
-from GitHub Actions with the requested version (e.g. `0.1.0`), **or**
-push a tag `v0.1.0`. The workflow builds, tests, packs, smoke-tests and
-publishes only `CodeSemantic4Llm.Mcp.Server.<version>.nupkg`.
-It uses GitHub Actions' built-in `GITHUB_TOKEN` with `packages: write`,
-not a maintainer's PAT. Published versions are immutable; choose a new
-version for each release.
+NUKE restores the solution, builds in Release, runs the complete test suite and
+packs the server into `artifacts/`. The base version comes from `<Version>` in
+`src/CodeSemantic4Llm.Mcp.Server/CodeSemantic4Llm.Mcp.Server.csproj`.
+The [CI workflow](../.github/workflows/ci.yml) installs the package and checks
+`--help`, `init` and `preview` before uploading it as a 30-day artifact.
+
+| CI event | Package version | Destination |
+| --- | --- | --- |
+| Pull request | `<base>-alpha-<commit>` | Actions artifact |
+| Push to `develop` | `<base>-beta-<commit>` | Actions artifact and GitHub Packages |
+| Push to `main` | `<base>` | Actions artifact and GitHub Packages |
+
+The suffix uses the first eight characters of the commit SHA. Choose a new
+base version before merging to `main` if the previous stable version is already
+staged. GitHub Packages versions are immutable.
+
+To enable public releases, create the GitHub environment `nuget-org` and
+configure a GitHub Actions trusted publishing policy on NuGet.org for this
+repository, the workflow filename `publish-tool.yml` and that environment.
+Set the environment secret `NUGET_USER` to the NuGet.org account name.
+You can configure required reviewers on the environment to gate promotion.
+
+To release, open **Promote .NET tool to NuGet.org** in Actions, select `main`
+and enter the exact staged version. For a stable version, selection defaults
+to the latest successful CI push on `main`. For a beta, the version identifies
+the commit on `develop`. Supply the CI run ID to select an earlier stable build.
+The workflow checks the run, package ID, version and source commit, then pushes
+the existing package to NuGet.org using a short-lived credential. If the
+artifact expired, it retrieves the staged version from GitHub Packages.
 
 **First publication:** GitHub initially creates a **private package**.
 If this tool should be installable by everyone, visit your GitHub
