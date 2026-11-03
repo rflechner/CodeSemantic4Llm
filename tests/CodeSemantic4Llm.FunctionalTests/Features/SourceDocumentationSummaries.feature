@@ -27,8 +27,26 @@ Feature: Prefer existing source documentation when indexing summaries
     Then the run analyzes 0 files and reuses 1 files
     And declaration "Resolve" has stored summary "Resolves JSON routes."
 
+  Scenario: A fully documented class requires no LLM calls by default
+    Given summary generation is enabled with the default documentation policy
+    And indexing source "Worker.cs" is:
+      """
+      /// <summary>
+      /// Maintains the navigation catalog.
+      /// </summary>
+      public class Worker
+      {
+          /// <summary>Resolves JSON routes.</summary>
+          public void Resolve() {}
+      }
+      """
+    When I index the checkout
+    Then declaration "Worker" has stored summary "Maintains the navigation catalog."
+    And declaration "Resolve" has stored summary "Resolves JSON routes."
+    And the LLM has summarized 0 declarations
+
   Scenario: The LLM only describes declarations without documentation
-    Given summary generation is enabled with forceGeneration "false"
+    Given summary generation is enabled with the default documentation policy
     When I index the checkout
     Then declaration "Worker" has stored summary "Maintains the navigation catalog."
     And declaration "Resolve" has stored summary "Resolves JSON routes."

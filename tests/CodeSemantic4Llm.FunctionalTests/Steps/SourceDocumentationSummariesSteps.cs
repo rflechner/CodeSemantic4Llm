@@ -12,13 +12,17 @@ public sealed partial class RepositoryIndexingSteps
 {
     private readonly RecordingSummaryGenerator _summaryGenerator = new();
 
+    [Given("summary generation is enabled with the default documentation policy")]
+    public void EnableSummaryGeneration() => ConfigureSummaryGeneration("enabled", null);
+
     [Given("summary generation is (enabled|disabled) with forceGeneration \"(.*)\"")]
     [When("summary generation is (enabled|disabled) with forceGeneration \"(.*)\"")]
-    public void ConfigureSummaryGeneration(string state, string forceGeneration)
+    public void ConfigureSummaryGeneration(string state, string? forceGeneration)
     {
         File.WriteAllText(Path.Combine(_root, "codesemantic4llm.yaml"), DefaultYaml +
             "semanticIndexing:\n  language: fr\n  llm:\n" +
-            $"    enabled: {(state == "enabled" ? "true" : "false")}\n    forceGeneration: {forceGeneration}\n" +
+            $"    enabled: {(state == "enabled" ? "true" : "false")}\n" +
+            (forceGeneration is null ? "" : $"    forceGeneration: {forceGeneration}\n") +
             "    baseUrl: http://localhost:1234/v1\n    model: test-model\n");
     }
 
