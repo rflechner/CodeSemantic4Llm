@@ -180,10 +180,11 @@ répertoire absolu à LM Studio dans `env` :
 Avec `--expose-indexing`, appelez `get_repository_index_status` :
 `checkout.scope.rootPath`, `checkout.scope.branchName`,
 `configurationPath`, `workingDirectory`, `indexRoot`,
-`indexDatabasePath`, `indexDatabaseExists` et `snapshot`
+`indexDatabasePath`, `indexDatabaseExists` et `indexSnapshotExists`
 permettent de vérifier les chemins et la branche. `indexDatabaseExists: false`
-indique que le fichier SQLite est absent ; `snapshot: null` indique
-qu'aucun index n'est publié pour la branche actuelle, même si la base existe.
+indique que le fichier SQLite est absent ; `indexSnapshotExists: false`
+indique qu'aucun index n'est publié pour la branche courante, même si la
+base existe (le champ `snapshot` nul peut être omis).
 `get_server_info` affiche aussi le dépôt et le répertoire courant.
 
 ### Options facultatives du serveur

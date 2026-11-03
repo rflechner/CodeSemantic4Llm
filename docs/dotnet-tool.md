@@ -231,10 +231,10 @@ set the same **absolute cache root** in LM Studio's server configuration:
 With `--expose-indexing`, call `get_repository_index_status` to inspect
 `checkout.scope.rootPath`, `checkout.scope.branchName`,
 `configurationPath`, `workingDirectory`, `indexRoot`,
-`indexDatabasePath`, `indexDatabaseExists` and `snapshot`.
+`indexDatabasePath`, `indexDatabaseExists` and `indexSnapshotExists`.
 `indexDatabaseExists: false` means SQLite is missing at the expected path;
-`snapshot: null` means the current branch has no published index, even when
-the database exists. `get_server_info` also shows the effective repository
+`indexSnapshotExists: false` means the current branch has no published
+snapshot, even when the database exists (null `snapshot` may be omitted). `get_server_info` also shows the effective repository
 and process working directory.
 
 ### Optional MCP server switches

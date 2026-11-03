@@ -54,6 +54,7 @@ public sealed partial class RepositoryIndexingSteps
             .GetProperty("name").GetString());
         Assert.NotEqual(JsonValueKind.Null, _externalIndexStatus.GetProperty("snapshot").ValueKind);
         Assert.True(_externalIndexStatus.GetProperty("indexDatabaseExists").GetBoolean());
+        Assert.True(_externalIndexStatus.GetProperty("indexSnapshotExists").GetBoolean());
     }
 
     [Then("MCP reports the selected checkout, YAML and cache paths")]
@@ -78,7 +79,8 @@ public sealed partial class RepositoryIndexingSteps
     public async Task ThenDesktopClientReportsMissingIndex()
     {
         var state = await _stateProvider.GetStateAsync(_root, Token);
-        Assert.Equal(JsonValueKind.Null, _externalIndexStatus.GetProperty("snapshot").ValueKind);
+        // The MCP serializer may omit null properties entirely.
+        Assert.False(_externalIndexStatus.GetProperty("indexSnapshotExists").GetBoolean());
         Assert.False(_externalIndexStatus.GetProperty("indexDatabaseExists").GetBoolean());
         Assert.Equal(Paths.GetDatabasePath(state.Scope.RootPath),
             _externalIndexStatus.GetProperty("indexDatabasePath").GetString());

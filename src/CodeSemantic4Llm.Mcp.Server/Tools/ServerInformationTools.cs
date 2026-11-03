@@ -10,7 +10,7 @@ namespace CodeSemantic4Llm.Mcp.Server.Tools;
 public sealed class ServerInformationTools(
     McpToolExposure exposure, RepositoryWriteAccess writeAccess, IConfiguration configuration)
 {
-    [McpServerTool, Description("Returns the server name and the current implementation status.")]
+    [McpServerTool, Description("Returns server capabilities and the effective repository and working directory when configured.")]
     public string GetServerInfo()
     {
         var capabilities = "CodeSemantic4Llm: C# symbol search, navigation and syntax diagnostics. " +

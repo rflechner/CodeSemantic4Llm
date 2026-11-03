@@ -16,13 +16,14 @@ public sealed class RepositoryIndexTools(
     IndexStoragePaths storagePaths, FindSymbols findSymbols, GetTypeMembers getTypeMembers,
     FindUsages findUsages, SearchCode searchCode)
 {
-    [McpServerTool, Description("Returns the saved index snapshot and observed Git state. This does not verify working-tree freshness.")]
+    [McpServerTool, Description("Reports the selected repository, Git branch, YAML and SQLite cache paths, and whether a published snapshot exists. Does not reindex or verify working-tree freshness.")]
     public async Task<RepositoryIndexStatus> GetRepositoryIndexStatusAsync(CancellationToken cancellationToken = default)
     {
         var state = await stateProvider.GetStateAsync(GetRepositoryRoot(), cancellationToken);
         var databasePath = storagePaths.GetDatabasePath(state.Scope.RootPath);
+        var snapshot = indexStore.GetSnapshot(state.Scope, cancellationToken);
         return new RepositoryIndexStatus(
-            state, indexStore.GetSnapshot(state.Scope, cancellationToken),
+            state, snapshot, snapshot is not null,
             Path.Combine(state.Scope.RootPath, "codesemantic4llm.yaml"),
             storagePaths.Root, databasePath, File.Exists(databasePath), Environment.CurrentDirectory);
     }
@@ -73,5 +74,5 @@ public sealed class RepositoryIndexTools(
 /// <summary>Snapshot metadata alongside observed Git state; neither implies that source files remain unchanged.</summary>
 public sealed record RepositoryIndexStatus(
     RepositoryState Checkout, RepositoryIndexSnapshot? Snapshot,
-    string ConfigurationPath, string IndexRoot, string IndexDatabasePath,
+    bool IndexSnapshotExists, string ConfigurationPath, string IndexRoot, string IndexDatabasePath,
     bool IndexDatabaseExists, string WorkingDirectory);
