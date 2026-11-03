@@ -66,6 +66,40 @@ SQLite enregistre chaque fichier terminé avec ses déclarations dans un index p
 
 Avant le commit, la commande recalcule les empreintes, vérifie les chemins découverts et relit l’état Git et le YAML. Un changement détecté empêche la publication. Cette vérification reste imparfaite : évitez les éditions et changements de branche pendant l’indexation. Le HEAD enregistré identifie l’historique observé, sans prouver que la copie correspond au commit ni qu’elle est restée inchangée.
 
+## Réindexation continue et sécurisée avec `watch`
+
+Lancez le surveillant dans un terminal séparé depuis la copie de travail du dépôt :
+
+```sh
+codesemantic4llm watch . --debounce-seconds 15
+```
+
+Par défaut, il attend **15 secondes après le dernier événement du système de fichiers**,
+pas après la première sauvegarde. Toute nouvelle modification remet ce délai à zéro.
+L'option `--debounce-seconds` accepte une valeur de 1 à 3600. Une vérification initiale
+se lance au démarrage. Une réconciliation toutes les 30 secondes récupère aussi les
+événements perdus, les débordements de surveillance et les changements Git des worktrees liés.
+
+Avant de préparer une génération, `watch` vérifie la syntaxe des sources configurées avec
+leur analyseur. Pour le C#, Roslyn détecte les erreurs **de syntaxe** ; il ne compile
+pas le projet et ne bloque pas sur les erreurs de typage ou les symboles introuvables.
+Les avertissements sont autorisés. Dès qu'un fichier contient une erreur syntaxique,
+`watch` signale le fichier et son premier diagnostic et **ne publie pas
+d'instantané incomplet**. Il réessaie après une sauvegarde ou lors du contrôle périodique.
+L'ancien index publié reste consultable via MCP, même s'il ne reflète plus la copie actuelle.
+
+Après la première vérification, seuls les contenus dont l'empreinte change sont
+réanalysés syntaxiquement. Les déclarations et résumés inchangés sont réutilisés depuis
+SQLite : modifier un fichier ne relance pas le LLM sur tous les autres. La publication
+reste atomique et concerne toute la branche : les références entre fichiers sont
+recalculées en cas de changement. Créations, suppressions, renommages, changements YAML
+et Markdown de résumés partagés passent par le même pipeline, avec les exclusions YAML.
+La commande `index` garde son fonctionnement explicite et peut toujours indexer
+des sources dont la syntaxe est incomplète.
+
+`watch` attend la fin des opérations Git, s'arrête avec Ctrl+C et ne prépare
+ni commit ni fichier de résumé partagé. Consultez le [guide des résumés partagés](shared-summaries.fr.md).
+
 ## Rechercher avec FTS5
 
 `search_code` interroge les noms simples, qualifiés et les résumés facultatifs stockés pour la branche active. Exemple :

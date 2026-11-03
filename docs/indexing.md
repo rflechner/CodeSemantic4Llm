@@ -132,6 +132,40 @@ best-effort check rather than an atomic filesystem snapshot: avoid editing or sw
 branches during indexing. The recorded HEAD identifies observed Git history; it does not
 prove that working-tree content matches that commit or remains unchanged afterward.
 
+## Continuous, syntax-safe reindexing with `watch`
+
+Run the watcher in a separate terminal for the checked-out repository:
+
+```sh
+codesemantic4llm watch . --debounce-seconds 15
+```
+
+The quiet period defaults to **15 seconds after the last filesystem event**, not 15 seconds
+after the first save. Each additional edit restarts that period; the value can be
+changed with `--debounce-seconds` (1–3600). An initial verification runs when the
+watcher starts. A 30-second reconciliation scan also recovers from missed filesystem
+events, watcher overflows, and Git metadata outside the checkout (such as linked worktrees).
+
+Before staging a generation, watch mode parses configured source files using their
+language-specific syntax diagnostics. For C#, Roslyn checks parser errors; it does **not**
+build the project or reject unresolved symbols or type-checking errors. Warnings are
+permitted. If any configured source file contains a syntax error, watch mode reports
+the file and first diagnostic and **does not publish an incomplete snapshot**. Subsequent
+file saves or periodic checks retry when the code is repaired. The last successfully
+published index remains available to MCP clients; it may be older than the working tree.
+
+Only changed content hashes are re-parsed after the initial check. Unchanged declarations
+and summaries are reused from SQLite, so editing one file does not re-run the LLM
+for every file. Publication remains branch-wide and atomic: when sources change,
+cross-file references must still be recomputed. File creation, deletion, renaming,
+YAML changes and imported shared-summary Markdown are reconciled through the same
+indexing pipeline; normal YAML exclusions still apply. `index` retains its explicit
+non-watch behavior, including the option to index syntactically incomplete source files.
+
+Watch mode pauses for in-progress Git operations, stops on Ctrl+C, and never stages or
+commits source or shared-summary Markdown. See the [shared summary guide](shared-summaries.md)
+for synchronization details.
+
 ## Searching saved summaries with FTS5
 
 The `search_code` MCP tool searches the active branch's stored symbol names,

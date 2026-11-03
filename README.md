@@ -214,7 +214,8 @@ for local tool installations, GitHub Copilot CLI and Claude Desktop.
 Once connected, ask the agent to find the `Main` method in HelloWorld. It should use
 `find_symbols` to retrieve the indexed location. The server reads the saved index;
 re-run `index` after source changes, or use `codesemantic4llm watch .` in a separate
-terminal to keep it updated.
+terminal to update it after 15 seconds without edits. Watch mode skips publication when
+Roslyn detects a C# syntax error; see [continuous indexing](docs/indexing.md#continuous-syntax-safe-reindexing-with-watch).
 
 ## Architecture
 

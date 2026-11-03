@@ -25,3 +25,7 @@ Feature: Route console commands without interfering with MCP
   Scenario: Starting without arguments preserves the MCP protocol on stdout
     When I start the application without arguments and initialize an MCP session
     Then the first stdout line is a successful MCP initialization response
+
+  Scenario: Watch command documents the quiet period
+    When I request watch command help
+    Then the help describes the configurable debounce period

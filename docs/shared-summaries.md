@@ -139,7 +139,7 @@ Sources, file discovery, Markdown digests, Git state and configuration are check
 codesemantic4llm watch .
 ```
 
-`watch` verifies the entire checkout on startup, then listens for source, configuration and Markdown changes, including edits introduced by pull and branch switches. Events are coalesced with a 300 ms delay and indexing runs serially. A 30-second reconciliation timer covers missed events, watcher overflow and linked-worktree Git metadata outside the watched directory. File creation, removal and renames all trigger reconciliation. Build output directories and temporary export files do not trigger it.
+`watch` verifies the entire checkout on startup, then listens for source, configuration and Markdown changes, including edits introduced by pull and branch switches. Events are coalesced until 15 seconds after the last edit (adjustable with `--debounce-seconds`) and indexing runs serially. Watch mode checks source syntax before indexing; parser errors keep the last published snapshot visible and are retried on later changes or timer ticks. A 30-second reconciliation timer covers missed events, watcher overflow and linked-worktree Git metadata outside the watched directory. File creation, removal and renames all trigger reconciliation. Build output directories and temporary export files do not trigger it.
 
 The watcher pauses while Git reports a merge, rebase, cherry-pick, revert, index lock or unresolved paths. After the operation completes, the next event or timer scan validates the actual checkout. Failures are reported and retried; cancellation rolls back an unfinished index run. A normal `index` command also verifies sources and shared files on every invocation, but does not remain running.
 

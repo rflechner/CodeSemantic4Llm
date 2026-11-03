@@ -24,7 +24,8 @@ internal sealed class SharedSummaryTestRepository : IDisposable
     public SqliteIndexStore Store => new(Paths);
     public IndexRepository Indexer => new(State, new YamlRepositoryConfigurationLoader(),
         new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [new CSharpSourceAnalyzer()],
-        summaryExtractors: [new CSharpSymbolSourceExtractor()], summaryGenerator: Generator, sharedSummaryCache: Cache);
+        summaryExtractors: [new CSharpSymbolSourceExtractor()], summaryGenerator: Generator, sharedSummaryCache: Cache,
+        syntaxAnalyzers: [new CSharpSourceSyntaxDiagnostics()]);
     public ExportSharedSummaries Exporter => new(State, new YamlRepositoryConfigurationLoader(), new RepositorySourceReader(),
         new SqliteSummaryExportReader(Paths), Cache, Indexer);
     public CancellationToken Token => TestContext.Current.CancellationToken;
