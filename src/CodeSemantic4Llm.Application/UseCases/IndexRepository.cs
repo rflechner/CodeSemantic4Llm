@@ -19,7 +19,7 @@ public sealed record RepositoryIndexingProgress(RepositoryIndexingPhase Phase, i
 /// <summary>Summary of a fully published repository index, including how much analysis was reused.</summary>
 public sealed record RepositoryIndexingResult(RepositoryIndexSnapshot Snapshot, int AnalyzedFiles, int ReusedFiles);
 
-/// <summary>Counts for a verified run. A folder run retains checkpoints and has no published snapshot.</summary>
+/// <summary>Counts for a verified run; both full and folder runs publish an MCP-queryable snapshot.</summary>
 public sealed record RepositoryIndexRun(
     RepositoryState State, int AnalyzedFiles, int ReusedFiles, RepositoryIndexSnapshot? PublishedSnapshot);
 
@@ -57,7 +57,7 @@ public sealed class IndexRepository(
         return new RepositoryIndexingResult(run.PublishedSnapshot!, run.AnalyzedFiles, run.ReusedFiles);
     }
 
-    /// <summary>Indexes a checkout or only the specified repository-relative folder. Only checkout-wide runs publish.</summary>
+    /// <summary>Indexes a checkout, or incrementally publishes one repository-relative folder.</summary>
     public async Task<RepositoryIndexRun> RunAsync(
         string repositoryRoot, string? folder, IProgress<RepositoryIndexingProgress>? progress = null,
         CancellationToken cancellationToken = default, bool force = false, bool requireValidSyntax = false)
@@ -79,7 +79,8 @@ public sealed class IndexRepository(
         var summaryProfile = GetSummaryProfile(configuration);
 
         using var update = indexStore.BeginUpdate(
-            state, fingerprint, configuration.SemanticIndexing.Language, cancellationToken);
+            state, fingerprint, configuration.SemanticIndexing.Language, cancellationToken,
+            folder is null ? null : Path.GetRelativePath(root, Path.GetFullPath(folder, root)).Replace('\\', '/'));
         var reused = 0;
         var indexedFiles = new List<IndexedSourceFile>(candidates.Count);
         progress?.Report(new(RepositoryIndexingPhase.Indexing, 0, candidates.Count));
@@ -147,15 +148,10 @@ public sealed class IndexRepository(
         }
 
         await VerifyCheckoutAsync(state, fingerprint, cancellationToken);
-        if (folder is not null)
-        {
-            progress?.Report(new(RepositoryIndexingPhase.FolderCompleted, candidates.Count, candidates.Count));
-            return new RepositoryIndexRun(state, candidates.Count - reused, reused, null);
-        }
-
         progress?.Report(new(RepositoryIndexingPhase.Publishing, candidates.Count, candidates.Count));
         var snapshot = update.Publish(cancellationToken);
-        progress?.Report(new(RepositoryIndexingPhase.Completed, candidates.Count, candidates.Count));
+        progress?.Report(new(folder is null ? RepositoryIndexingPhase.Completed : RepositoryIndexingPhase.FolderCompleted,
+            candidates.Count, candidates.Count));
 
         return new RepositoryIndexRun(state, candidates.Count - reused, reused, snapshot);
     }

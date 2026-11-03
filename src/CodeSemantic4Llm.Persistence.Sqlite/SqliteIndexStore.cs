@@ -11,14 +11,14 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
 {
     public IIndexUpdate BeginUpdate(
         RepositoryState state, string configurationFingerprint, string semanticLanguage,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? folder = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var connection = IndexDatabase.Open(paths.GetDatabasePath(state.Scope.RootPath), state.Scope.RootPath, writable: true);
 
         try
         {
-            return new SqliteIndexUpdate(connection, state, configurationFingerprint, semanticLanguage);
+            return new SqliteIndexUpdate(connection, state, configurationFingerprint, semanticLanguage, folder);
         }
         catch
         {
@@ -378,7 +378,8 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         SqliteConnection connection, SqliteTransaction? transaction, RepositoryScope scope)
     {
         using var command = IndexDatabase.Command(connection, transaction, """
-            SELECT s.id, s.revision, s.semantic_language, s.completed_utc, s.file_count, s.symbol_count
+            SELECT s.id, s.revision, s.semantic_language, s.completed_utc, s.file_count, s.symbol_count,
+                   s.is_partial
             FROM active_branches b JOIN snapshots s ON s.id = b.snapshot_id WHERE b.branch = $branch;
             """, ("$branch", scope.BranchName));
         using var reader = command.ExecuteReader();
@@ -386,7 +387,7 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         return reader.Read()
             ? new RepositoryIndexSnapshot(scope, reader.GetInt64(0), reader.IsDBNull(1) ? null : reader.GetString(1),
                 reader.GetString(2), DateTimeOffset.Parse(reader.GetString(3), CultureInfo.InvariantCulture),
-                reader.GetInt32(4), reader.GetInt32(5))
+                reader.GetInt32(4), reader.GetInt32(5), reader.GetInt32(6) != 0)
             : null;
     }
 
