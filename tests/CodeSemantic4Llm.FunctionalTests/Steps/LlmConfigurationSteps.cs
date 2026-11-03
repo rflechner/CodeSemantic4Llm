@@ -11,11 +11,26 @@ public sealed partial class RepositoryConfigurationSteps
     private RepositoryIndexingConfiguration? _loadedConfiguration;
     private JsonElement _llmConfigurationResponse;
 
+    [Then("the configured LLM system prompt is:")]
+    public void ThenSystemPrompt(string expected) =>
+        Assert.Equal(expected.ReplaceLineEndings("\n"), _loadedConfiguration!.SemanticIndexing.Llm.SystemPrompt);
+
+    [Then("the default LLM system prompt remains selected")]
+    public void ThenDefaultSystemPrompt() => Assert.Null(_loadedConfiguration!.SemanticIndexing.Llm.SystemPrompt);
+
+    [Then("the MCP configuration reports system prompt \"(.*)\"")]
+    public void ThenMcpSystemPrompt(string expected)
+    {
+        var llm = McpCodeClient.ReadContent(_llmConfigurationResponse).GetProperty("semanticIndexing").GetProperty("llm");
+        Assert.Equal(expected, llm.GetProperty("systemPrompt").GetString());
+    }
+
     [Then("the configured LLM documentation override is \"(.*)\"")]
     public void ThenDocumentationOverride(string expected) =>
         Assert.Equal(bool.Parse(expected), _loadedConfiguration!.SemanticIndexing.Llm.ForceGeneration);
 
     [Then("the documentation override has not enabled LLM calls")]
+    [Then("LLM calls remain disabled")]
     public void ThenLlmRemainsDisabled() => Assert.False(_loadedConfiguration!.SemanticIndexing.Llm.Enabled);
 
     [Then("the MCP configuration reports the documentation override as \"(.*)\"")]

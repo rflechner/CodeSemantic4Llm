@@ -3,7 +3,7 @@ namespace CodeSemantic4Llm.Infrastructure.Workspace;
 /// <summary>Resolves existing repository files without traversing links or leaving the checkout.</summary>
 internal static class RepositorySourcePath
 {
-    public static string Validate(string repositoryRoot, string relativePath)
+    public static string Validate(string repositoryRoot, string relativePath, bool allowMissing = false)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repositoryRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(relativePath);
@@ -24,7 +24,10 @@ internal static class RepositorySourcePath
         foreach (var segment in segments)
         {
             path = Path.Combine(path, segment);
-            RejectLink(path);
+            if (!allowMissing || Path.Exists(path) || new FileInfo(path).LinkTarget is not null)
+            {
+                RejectLink(path);
+            }
         }
 
         return path;

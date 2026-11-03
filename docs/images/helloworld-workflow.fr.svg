@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="416" viewBox="0 0 960 416" role="img" aria-labelledby="title desc">
+  <title id="title">De Program.cs à un index consultable</title>
+  <desc id="desc">Créez HelloWorld sur la branche main, initialisez sa configuration, vérifiez les fichiers puis indexez les déclarations. Le tableau de bord et MCP lisent cet index. L’export Markdown nécessite le LLM et les résumés partagés.</desc>
+  <defs>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #142c46 }
+      .heading { font-size: 32px; font-weight: 700 }
+      .step { font-size: 21px; font-weight: 650 }
+      .detail { font-size: 17px }
+      .command { font-family: Consolas, monospace; font-size: 17px; fill: #145f59 }
+      .caption { font-size: 14px; font-weight: 700; letter-spacing: 1.5px; fill: #456077 }
+      .card { fill: white; stroke: #c6d3e0 }
+    </style>
+  </defs>
+  <rect width="960" height="416" rx="18" fill="#f2f6fa"/>
+  <text x="28" y="36" class="caption">HELLOWORLD  /  C#</text>
+  <text x="28" y="79" class="heading">De Program.cs à un index consultable</text>
+  <rect x="28" y="104" width="280" height="147" rx="12" class="card"/>
+  <text x="46" y="139" class="step">1. Préparer le projet</text>
+  <text x="46" y="170" class="detail">Créer une application console</text>
+  <text x="46" y="194" class="detail">et initialiser Git sur main.</text>
+  <text x="46" y="231" class="command">init .</text>
+  <path d="M312 177h18m-6 -6 6 6 -6 6" fill="none" stroke="#526782" stroke-width="2"/>
+  <rect x="340" y="104" width="280" height="147" rx="12" class="card"/>
+  <text x="358" y="139" class="step">2. Vérifier les fichiers</text>
+  <text x="358" y="170" class="detail">Repérer Program.cs dans</text>
+  <text x="358" y="194" class="detail">la liste des fichiers retenus.</text>
+  <text x="358" y="231" class="command">preview .</text>
+  <path d="M624 177h18m-6 -6 6 6 -6 6" fill="none" stroke="#526782" stroke-width="2"/>
+  <rect x="652" y="104" width="280" height="147" rx="12" fill="#deeee9" stroke="#a8cdc0"/>
+  <text x="670" y="139" class="step">3. Construire l’index</text>
+  <text x="670" y="170" class="detail">Enregistrer les positions de</text>
+  <text x="670" y="194" class="detail">Program et Main dans SQLite.</text>
+  <text x="670" y="231" class="command">index .</text>
+  <text x="28" y="290" class="caption">APRÈS L’INDEXATION</text>
+  <path d="M28 304h904" stroke="#c6d3e0"/>
+  <text x="28" y="338" class="step">Tableau de bord</text>
+  <text x="28" y="366" class="detail">Choisir HelloWorld sur main</text>
+  <text x="28" y="389" class="detail">et explorer ses déclarations.</text>
+  <text x="340" y="338" class="step">Client MCP</text>
+  <text x="340" y="366" class="detail">Lancer serve et demander</text>
+  <text x="340" y="389" class="detail">où Main est définie.</text>
+  <text x="652" y="338" class="step">Export Markdown</text>
+  <text x="652" y="366" class="detail">Facultatif. Activer le LLM et le</text>
+  <text x="652" y="389" class="detail">partage avant l’indexation.</text>
+</svg>

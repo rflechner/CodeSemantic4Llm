@@ -1,0 +1,13 @@
+<Project>
+  <Import Project="../Directory.Packages.props" />
+  <PropertyGroup>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Keep NUKE's transitive dependencies patched independently of the shipped tool. -->
+    <PackageVersion Include="NuGet.Packaging" Version="6.12.5" />
+    <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
+    <PackageVersion Include="System.Security.Cryptography.Xml" Version="10.0.14" />
+    <PackageVersion Include="Nuke.Common" Version="10.1.0" />
+  </ItemGroup>
+</Project>

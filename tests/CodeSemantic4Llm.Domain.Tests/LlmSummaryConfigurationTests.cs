@@ -13,6 +13,7 @@ public sealed class LlmSummaryConfigurationTests
         Assert.False(settings.Llm.ForceGeneration);
         Assert.Null(settings.Llm.BaseUrl);
         Assert.Null(settings.Llm.Model);
+        Assert.Null(settings.Llm.SystemPrompt);
         Assert.Null(settings.Llm.ApiKey);
         Assert.Null(settings.Llm.ReasoningEffort);
         Assert.Null(settings.Llm.MaxCompletionTokens);
@@ -24,6 +25,24 @@ public sealed class LlmSummaryConfigurationTests
         var settings = new LlmSummaryConfiguration(true, "http://localhost:1234/v1/", "local-model", "MODEL_API_KEY");
         Assert.Equal("http://localhost:1234/v1/chat/completions", settings.ChatCompletionsEndpoint.ToString());
         Assert.Equal("MODEL_API_KEY", settings.ApiKeyEnvironmentVariable);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" \r\n\t ")]
+    public void Blank_system_prompts_are_rejected_even_when_generation_is_disabled(string prompt)
+    {
+        Assert.Throws<ArgumentException>(() => new LlmSummaryConfiguration(systemPrompt: prompt));
+    }
+
+    [Fact]
+    public void Custom_system_prompt_preserves_whitespace_and_does_not_enable_generation()
+    {
+        const string prompt = "  Summarize in {lang}.\n    Keep indentation.\n";
+        var settings = new LlmSummaryConfiguration(systemPrompt: prompt);
+
+        Assert.Equal(prompt, settings.SystemPrompt);
+        Assert.False(settings.Enabled);
     }
 
     [Theory]

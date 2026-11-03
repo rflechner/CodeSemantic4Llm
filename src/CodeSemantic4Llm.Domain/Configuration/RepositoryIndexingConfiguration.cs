@@ -15,7 +15,7 @@ public sealed class RepositoryIndexingConfiguration
 
     /// <summary>Always excluded, at any depth, even when the YAML has no exclude section.</summary>
     public static IReadOnlyList<string> BuiltInExclusions { get; } =
-        Array.AsReadOnly(["**/.git/**", "**/bin/**", "**/obj/**"]);
+        Array.AsReadOnly(["**/.git/**", "**/bin/**", "**/obj/**", "**/.codesemantic4llm/**"]);
 
     public RepositoryIndexingConfiguration(
         IEnumerable<string> analyzerIds,
@@ -23,7 +23,8 @@ public sealed class RepositoryIndexingConfiguration
         SemanticIndexingConfiguration? semanticIndexing = null,
         IReadOnlyDictionary<string, SourceFileExtensions>? fileExtensions = null,
         string? projectName = null,
-        McpToolSelection? tools = null)
+        McpToolSelection? tools = null,
+        bool sharedSummaries = false)
     {
         ArgumentNullException.ThrowIfNull(analyzerIds);
 
@@ -49,9 +50,13 @@ public sealed class RepositoryIndexingConfiguration
         FileExtensions = NormalizeFileExtensions(fileExtensions);
         ProjectName = NormalizeProjectName(projectName);
         Tools = tools ?? McpToolSelection.All;
+        SharedSummaries = sharedSummaries;
     }
 
     public int Version => CurrentVersion;
+
+    /// <summary>Imports compatible Git-distributed descriptions; export remains an explicit operator action.</summary>
+    public bool SharedSummaries { get; }
 
     /// <summary>Optional display name. Repository identity and index storage remain based on the checkout path.</summary>
     public string? ProjectName { get; }

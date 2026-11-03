@@ -5,7 +5,7 @@ namespace CodeSemantic4Llm.Persistence.Sqlite;
 /// <summary>Versioned, regenerable schema for declaration snapshots. It contains no source text.</summary>
 internal static class IndexDatabase
 {
-    private const int SchemaVersion = 5;
+    private const int SchemaVersion = 6;
 
     public static SqliteConnection Open(string path, string repositoryRoot, bool writable)
     {
@@ -61,7 +61,7 @@ internal static class IndexDatabase
         {
             Initialize(connection, root);
         }
-        else if (version is not 1 and not 2 and not 3 and not 4 && version != SchemaVersion)
+        else if (version is not 1 and not 2 and not 3 and not 4 and not 5 && version != SchemaVersion)
         {
             throw new InvalidOperationException($"Unsupported index schema version {version}. Use a new index cache directory.");
         }
@@ -101,6 +101,36 @@ internal static class IndexDatabase
         {
             UpgradeFromVersionFour(connection);
         }
+
+        if (writable && version is >= 1 and <= 5)
+        {
+            UpgradeFromVersionFive(connection);
+        }
+    }
+
+    private static void UpgradeFromVersionFive(SqliteConnection connection)
+    {
+        using var transaction = connection.BeginTransaction();
+        using var columns = Command(connection, transaction, "PRAGMA table_info(indexed_files);");
+        var hasDigest = false;
+        using (var reader = columns.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                hasDigest |= reader.GetString(1) == "summary_cache_hash";
+            }
+        }
+
+        if (!hasDigest)
+        {
+            using var alter = Command(connection, transaction,
+                "ALTER TABLE indexed_files ADD COLUMN summary_cache_hash TEXT NOT NULL DEFAULT '';");
+            alter.ExecuteNonQuery();
+        }
+
+        using var version = Command(connection, transaction, "PRAGMA user_version = 6;");
+        version.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     private static void UpgradeFromVersionOne(SqliteConnection connection)
@@ -228,6 +258,7 @@ internal static class IndexDatabase
             snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
             path TEXT NOT NULL, content_hash TEXT NOT NULL, analyzer_id TEXT NOT NULL,
             analyzer_version TEXT NOT NULL, symbol_count INTEGER NOT NULL,
+            summary_cache_hash TEXT NOT NULL DEFAULT '',
             PRIMARY KEY(snapshot_id, path));
         CREATE TABLE symbols(
             snapshot_id INTEGER NOT NULL, path TEXT NOT NULL, ordinal INTEGER NOT NULL,
@@ -248,7 +279,7 @@ internal static class IndexDatabase
         CREATE INDEX ix_symbols_name ON symbols(snapshot_id, name, path, line, column_number);
         CREATE INDEX ix_symbols_container ON symbols(
             snapshot_id, path, containing_type_line, containing_type_column, line, column_number, ordinal);
-        PRAGMA user_version = 5;
+        PRAGMA user_version = 6;
         """;
 
     // External-content FTS keeps the authoritative name/summary text solely in

@@ -1,5 +1,9 @@
 # CodeSemantic4Llm
 
+**English** · [Français](README.fr.md)
+
+<img src="docs/images/experimental-proof-of-concept.png" width="300" alt="Experimental proof of concept. MarmotteDB’s blue marmot wears safety goggles and a red Swiss scarf as a flask bubbles over.">
+
 > **Experimental proof of concept — nothing here is production software.**
 > This repository exists to test a hypothesis, not to ship a product. Expect
 > incomplete features, changing storage layouts and breaking changes.
@@ -13,6 +17,24 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 > full MSBuild project resolution; optional OpenAI-compatible LLM summaries are implemented
 > for C# methods and types, with local FTS5/BM25 keyword search over stored
 > names and summaries. Embeddings and TypeScript analysis remain planned.
+
+## Table of contents
+
+| README section | Related guide |
+| --- | --- |
+| [What this POC tries to find out](#what-this-poc-tries-to-find-out) | |
+| [Install as a .NET tool](#install-as-a-net-tool) | [.NET tool installation and MCP client setup](docs/dotnet-tool.md) |
+| [Getting started: index a HelloWorld project](#getting-started-index-a-helloworld-project) | |
+| [Architecture](#architecture) | [Architecture and storage design](docs/architecture.md) |
+| [Configure each repository](#configure-each-repository) | [Repository-local YAML configuration](docs/repository-configuration.md) |
+| [Build and test](#build-and-test) | |
+| [Browse every cached index in a dashboard](#browse-every-cached-index-in-a-dashboard) | [Local index dashboard](docs/dashboard.md) |
+| [Index before starting MCP](#index-before-starting-mcp) | [Indexing a checkout](docs/indexing.md) · [MCP file logging and troubleshooting](docs/logging.md) |
+| [Preview a local repository from Rider or a terminal](#preview-a-local-repository-from-rider-or-a-terminal) | |
+| [Shared LLM summaries](#shared-llm-summaries) | [Shared LLM summaries in Git](docs/shared-summaries.md) |
+| [Dependencies](#dependencies) | |
+| [Indexing principles](#indexing-principles) | |
+| [Planned milestones](#planned-milestones) | |
 
 ## What this POC tries to find out
 
@@ -55,6 +77,144 @@ if everyone should have access.
 dotnet tool install --global CodeSemantic4Llm.Mcp.Server
 codesemantic4llm --help
 ```
+
+## Getting started: index a HelloWorld project
+
+![Create and configure HelloWorld, preview Program.cs, then index Program and Main. Explore the local index in the dashboard or through MCP. Optionally enable LLM summaries before indexing to export them as Markdown.](docs/images/helloworld-workflow.svg)
+
+With the global tool installed, create a small C# repository and initialize its configuration:
+
+```sh
+dotnet new console --name HelloWorld --use-program-main --no-restore
+cd HelloWorld
+git init -b main
+codesemantic4llm init . --name "HelloWorld" --analyzer dotnet-csharp
+```
+
+`--use-program-main` creates an explicit `Program` class and `Main` method for the
+analyzer to discover. `init` creates `codesemantic4llm.yaml` at the repository root
+without overwriting an existing file. No initial Git commit is required.
+
+### Configure optional LLM summaries
+
+The generated configuration disables LLM calls by default. You can leave it that
+way to index code structure and existing XML documentation locally. To also generate
+and export natural-language descriptions, edit the existing `sharedSummaries` and
+`semanticIndexing` sections in `codesemantic4llm.yaml`:
+
+```yaml
+sharedSummaries: true
+semanticIndexing:
+  language: en
+  llm:
+    enabled: true
+    baseUrl: http://127.0.0.1:1234/v1
+    model: your-local-model
+    # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
+```
+
+Keep the other generated settings, including `version`, `analyzers` and `tools`.
+Replace the endpoint and model with those of your running OpenAI-compatible server.
+If it requires authentication, uncomment `apiKeyEnvironmentVariable` and set that
+variable in your terminal before indexing. `language` selects the language of the
+generated descriptions; use `fr` for French, for example.
+
+Indexing sends method and type declarations to the configured LLM when summaries
+are needed. Choose an endpoint suitable for your source code. See
+[LLM configuration](docs/repository-configuration.md#optional-per-repository-llm-summaries)
+for prompt customization and other options.
+
+### Preview the selected files
+
+```sh
+codesemantic4llm preview . --max-files 50
+```
+
+The preview should list `Program.cs`. It checks configuration and discovery without
+reading source contents, calling the LLM or writing an index. Built-in exclusions
+skip directories such as `bin` and `obj`; add repository-specific patterns under
+`exclude` in the YAML if needed.
+
+### Build the local index
+
+```sh
+codesemantic4llm index .
+```
+
+This indexes `Program` and `Main`, records their locations in the local branch-aware
+SQLite cache, and generates summaries if you enabled the LLM. Source files stay in
+the checkout. Re-run `index` after changing source files or configuration, or switching
+branches.
+
+### Export the summaries
+
+If you enabled both `sharedSummaries` and LLM indexing before running `index`, export
+the generated descriptions as Markdown:
+
+```sh
+codesemantic4llm cache-export .
+```
+
+Review `.codesemantic4llm/summaries/Program.cs.md` before committing it with your
+source and configuration. The export reads the current local index without calling
+the LLM; it does not copy source files or stage Git changes. If the source or
+configuration has changed, run `index` again first. Skip this step when LLM summaries
+are disabled. Follow [Program.cs.md through Git](#shared-llm-summaries) to see how a
+teammate reuses it, or read the [shared summaries guide](docs/shared-summaries.md)
+for team workflows and overwrite behavior.
+
+### Explore the index in the dashboard
+
+```sh
+codesemantic4llm dashboard --port 5080
+```
+
+Open [http://127.0.0.1:5080/](http://127.0.0.1:5080/) in your browser, select
+HelloWorld and its `main` branch, and inspect the indexed `Program` and `Main`
+declarations and any generated summaries. The dashboard displays locally cached
+indexes in read-only mode. Stop it with Ctrl+C before continuing in the same terminal,
+or leave it running in a separate terminal. See the [dashboard guide](docs/dashboard.md)
+for more details.
+
+### Connect an MCP client
+
+From the HelloWorld repository root, the server command is:
+
+```sh
+codesemantic4llm serve .
+```
+
+`serve` starts a read-only MCP server over stdio and waits for an MCP client.
+Stop a manual run with Ctrl+C before configuring the client to launch it.
+
+For **VS Code / GitHub Copilot Chat**, open the `HelloWorld` folder as your workspace
+and create `HelloWorld/.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "helloWorld": {
+      "type": "stdio",
+      "command": "codesemantic4llm",
+      "args": ["serve", "${workspaceFolder}"]
+    }
+  }
+}
+```
+
+This uses the global tool installed above. `${workspaceFolder}` resolves to the
+HelloWorld checkout. In VS Code, start the server from the MCP configuration and
+accept the trust prompt. VS Code launches `serve` and manages its lifetime; no
+separate terminal server is needed. If the executable is not on VS Code's `PATH`,
+use its absolute path in `command`.
+
+See the [other MCP client configuration examples](docs/dotnet-tool.md#4-configure-an-mcp-client)
+for local tool installations, GitHub Copilot CLI and Claude Desktop.
+
+Once connected, ask the agent to find the `Main` method in HelloWorld. It should use
+`find_symbols` to retrieve the indexed location. The server reads the saved index;
+re-run `index` after source changes, or use `codesemantic4llm watch .` in a separate
+terminal to keep it updated.
 
 ## Architecture
 
@@ -144,6 +304,9 @@ summary need generation; `semanticIndexing.llm.forceGeneration: true` overrides 
 when the LLM is enabled. An optional `apiKey` supplies a Bearer token
 directly and takes priority over `apiKeyEnvironmentVariable`; blank keys use the environment
 fallback. Inline keys are omitted from MCP configuration responses.
+Set `semanticIndexing.llm.systemPrompt` to customize the system instructions; `{lang}` uses
+the configured language. `init` includes the default template as a commented YAML block.
+See [customizing the summary prompt](docs/repository-configuration.md#customize-the-summary-system-prompt).
 The model receives entire C# methods
 (including XML doc comments) or entire type declarations. Each generated summary is limited
 to 10 lines and is available to MCP clients and the dashboard. Source is not copied
@@ -392,12 +555,26 @@ The preview uses the same discovery rules as MCP and exits after displaying its 
 The default limit is 50 and the maximum is 200; the output indicates when more files exist.
 It does not read source contents, execute the target repository, or persist an index.
 Running without a command starts the MCP server and waits for client requests.
-`--help` lists the `init`, `preview`, `index`, `dashboard`, and `serve` commands. `serve` explicitly starts
+`--help` lists the `init`, `preview`, `index`, `watch`, `cache-export`, `setup-git`,
+`git-merge-summary`, `dashboard`, and `serve` commands. `serve` explicitly starts
 the same MCP server as an invocation without arguments, with optional repository selection.
 
 Console commands use Spectre.Console.Cli settings for argument parsing and generated
 help, with Spectre.Console for output. Help and results go to stdout; errors go to stderr.
 Unknown commands and options fail without starting the MCP server.
+
+## Shared LLM summaries
+
+![One developer exports Program.cs.md and pushes it with the source. A teammate pulls the commit and runs index to reuse compatible descriptions in a separate local SQLite index.](docs/images/shared-summaries-git-workflow.svg)
+
+Set `sharedSummaries: true` in repository YAML to reuse compatible descriptions from
+versioned `.codesemantic4llm/summaries/**/*.md` files. `index` validates the source,
+model, prompt, language and analyzer identity before importing into local SQLite/FTS5.
+`cache-export` explicitly publishes local descriptions for review, and `watch` verifies
+the checkout on startup and after changes. Git staging and commits remain manual.
+
+See the [shared summaries guide](docs/shared-summaries.md) for the format, team workflow,
+diagrams, export protections, and merge/rebase/uncommitted-file conflict handling.
 
 ## Dependencies
 

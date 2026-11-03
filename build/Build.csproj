@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <NukeTelemetryVersion>1</NukeTelemetryVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Nuke.Common" />
+  </ItemGroup>
+</Project>

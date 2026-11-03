@@ -1,5 +1,7 @@
 # Install CodeSemantic4Llm as a .NET tool
 
+**English** · [Français](dotnet-tool.fr.md)
+
 CodeSemantic4Llm is a **command-line application and local stdio MCP server**. It is
 distributed as a .NET Tool NuGet package, **`CodeSemantic4Llm.Mcp.Server`**, in the
 `rflechner` GitHub Packages NuGet feed. The installed executable is named
@@ -13,30 +15,18 @@ This is a tool installation, **not** a `<PackageReference>` added to your applic
 - The **.NET 10 SDK** (the tool targets `net10.0` and uses the ASP.NET Core shared runtime).
 - Git and an existing Git checkout on a named branch for indexing.
 - A GitHub account and a **personal access token (classic)** with `read:packages`.
-  GitHub's NuGet registry requires authentication **even for public packages**.
-  A private package additionally requires that your account have access to it.
-- The `rflechner` feed: `https://nuget.pkg.github.com/rflechner/index.json`.
 
-GitHub's NuGet registry currently supports **classic PATs**, not fine-grained PATs
-for client authentication. Do not place your PAT in tracked `nuget.config`,
-`dotnet-tools.json`, MCP JSON, a URL, or source control.
+## 1. Configure the NuGet feed (once per developer)
 
-## 1. Register the NuGet feed (once per developer)
-
-This registers only the feed URL in your user-level NuGet configuration,
-**not** the credential:
+Register the feed in your user-level NuGet configuration (skip this if it already exists):
 
 ```sh
 dotnet nuget add source "https://nuget.pkg.github.com/rflechner/index.json" --name CodeSemanticGitHub
-dotnet nuget list source
 ```
 
-If the source already exists, skip the first command.
-
-### PowerShell 7 (Windows, macOS or Linux)
-
-Replace `YOUR_GITHUB_LOGIN` with the login of the person who owns the PAT
-(it is **not necessarily** `rflechner`):
+Use a personal access token (classic) with `read:packages`, required even for
+public packages. We recommend supplying it through an environment variable
+rather than storing it in a configuration file. For example, in PowerShell 7:
 
 ```powershell
 $packagesPat = Read-Host "GitHub PAT (classic, read:packages)" -MaskInput
@@ -44,24 +34,16 @@ $env:NuGetPackageSourceCredentials_CodeSemanticGitHub = "Username=YOUR_GITHUB_LO
 Remove-Variable packagesPat
 ```
 
-### Bash / zsh
+Replace `YOUR_GITHUB_LOGIN` with the token owner's GitHub login.
+NuGet automatically looks for `NuGetPackageSourceCredentials_{sourceName}`:
+`CodeSemanticGitHub` matches the name given to `add source`, not the feed URL.
+You create the variable; NuGet reads it. Match the source name's casing,
+particularly on Linux. See [NuGet's environment credential convention](https://learn.microsoft.com/en-us/nuget/consume-packages/consuming-packages-authenticated-feeds#credentials-in-environment-variables).
 
-```bash
-read -rsp "GitHub PAT (classic, read:packages): " packages_pat
-printf '\n'
-export NuGetPackageSourceCredentials_CodeSemanticGitHub="Username=YOUR_GITHUB_LOGIN;Password=${packages_pat};ValidAuthenticationTypes=Basic"
-unset packages_pat
-```
-
-NuGet reads `NuGetPackageSourceCredentials_CodeSemanticGitHub` automatically
-because the source is named `CodeSemanticGitHub` (case matters on Linux).
-The credential only needs to be present while installing, updating or restoring
-the tool. It is not used by the running MCP server.
-
-When finished, clear it with `Remove-Item Env:NuGetPackageSourceCredentials_CodeSemanticGitHub`
-in PowerShell or `unset NuGetPackageSourceCredentials_CodeSemanticGitHub` in Bash.
-The terminal-session environment is temporary; set it again for a later
-installation or restore. Avoid pasting PATs into shell commands or files.
+Run the installation, update or restore in the same terminal session; set the
+variable again in future sessions. Keep credentials out of source control.
+For token creation and other authentication options, follow
+[GitHub's NuGet authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry#authenticating-to-github-packages).
 
 ## 2. Install the tool
 
@@ -236,11 +218,8 @@ parameters**; store them privately. Restart the client after changing switches.
 
 ### Troubleshooting
 
-- **401/403 while installing**: the PAT must be *classic* with
-  `read:packages`, the login must match the token's owner, and the
-  `NuGetPackageSourceCredentials_CodeSemanticGitHub` variable must be set
-  in the same shell as `dotnet tool install`. Check the package's visibility
-  and your GitHub account's access.
+- **401/403 while installing**: check your feed credentials and package access
+  using [GitHub's authentication guide](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry#authenticating-to-github-packages).
 - **The server is not listed**: check your MCP client's distinct JSON schema,
   executable `PATH`, local tool manifest and working directory. Running
   `serve` manually will wait for an MCP client to talk over stdio.
@@ -250,25 +229,43 @@ parameters**; store them privately. Restart the client after changing switches.
   feeds. Use package-source mapping in your own NuGet configuration or remove
   the source when not needed with `dotnet nuget remove source CodeSemanticGitHub`.
 
-## Maintainer: create and publish a release
+## Maintainer guide to staging and promotion
 
-On the repository source checkout:
+Run the same NUKE build as CI from the repository root:
 
 ```sh
-dotnet pack src/CodeSemantic4Llm.Mcp.Server/CodeSemantic4Llm.Mcp.Server.csproj \
-  --configuration Release --output artifacts
-bash eng/verify-tool-package.sh artifacts 0.1.0
+dotnet run --project build/Build.csproj -- Pack
 ```
 
-The [CI workflow](../.github/workflows/ci.yml) packs and installs the tool
-on every PR. After merging a tested PR into `main`, run the
-[Publish .NET tool to GitHub Packages workflow](../.github/workflows/publish-tool.yml)
-from GitHub Actions with the requested version (e.g. `0.1.0`), **or**
-push a tag `v0.1.0`. The workflow builds, tests, packs, smoke-tests and
-publishes only `CodeSemantic4Llm.Mcp.Server.<version>.nupkg`.
-It uses GitHub Actions' built-in `GITHUB_TOKEN` with `packages: write`,
-not a maintainer's PAT. Published versions are immutable; choose a new
-version for each release.
+NUKE restores the solution, builds in Release, runs the complete test suite and
+packs the server into `artifacts/`. The base version comes from `<Version>` in
+`src/CodeSemantic4Llm.Mcp.Server/CodeSemantic4Llm.Mcp.Server.csproj`.
+The [CI workflow](../.github/workflows/ci.yml) installs the package and checks
+`--help`, `init` and `preview` before uploading it as a 30-day artifact.
+
+| CI event | Package version | Destination |
+| --- | --- | --- |
+| Pull request | `<base>-alpha-<commit>` | Actions artifact |
+| Push to `develop` | `<base>-beta-<commit>` | Actions artifact and GitHub Packages |
+| Push to `main` | `<base>` | Actions artifact and GitHub Packages |
+
+The suffix uses the first eight characters of the commit SHA. Choose a new
+base version before merging to `main` if the previous stable version is already
+staged. GitHub Packages versions are immutable.
+
+To enable public releases, create the GitHub environment `nuget-org` and
+configure a GitHub Actions trusted publishing policy on NuGet.org for this
+repository, the workflow filename `publish-tool.yml` and that environment.
+Set the environment secret `NUGET_USER` to the NuGet.org account name.
+You can configure required reviewers on the environment to gate promotion.
+
+To release, open **Promote .NET tool to NuGet.org** in Actions, select `main`
+and enter the exact staged version. For a stable version, selection defaults
+to the latest successful CI push on `main`. For a beta, the version identifies
+the commit on `develop`. Supply the CI run ID to select an earlier stable build.
+The workflow checks the run, package ID, version and source commit, then pushes
+the existing package to NuGet.org using a short-lived credential. If the
+artifact expired, it retrieves the staged version from GitHub Packages.
 
 **First publication:** GitHub initially creates a **private package**.
 If this tool should be installable by everyone, visit your GitHub
@@ -281,6 +278,13 @@ supported. Users still need a classic PAT to install from GitHub's
 NuGet registry.
 
 References: [GitHub NuGet authentication](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-nuget-registry),
-[NuGet environment credentials](https://learn.microsoft.com/en-us/nuget/consume-packages/consuming-packages-authenticated-feeds),
 [VS Code MCP](https://code.visualstudio.com/docs/agents/reference/mcp-configuration),
 [Copilot CLI MCP](https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers).
+
+## Shared summary commands
+
+The installed tool also provides `cache-export <repository-path> [--overwrite]`,
+`watch <repository-path>` and `setup-git <repository-path>`. The latter installs a
+local driver invoking `git-merge-summary <current|other> <ancestor> <current> <other>`.
+See the [shared summary guide](shared-summaries.md) before selecting a Git conflict
+policy, especially for rebases and uncommitted Markdown.

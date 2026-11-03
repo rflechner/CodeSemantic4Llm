@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="420" viewBox="0 0 960 420" role="img" aria-labelledby="title desc">
+  <title id="title">Partager Program.cs.md avec un collègue</title>
+  <desc id="desc">Avec le LLM et le partage activés, une personne indexe Program.cs, exporte ses descriptions, relit le Markdown et le pousse avec le code. Son collègue récupère le commit et lance index. Les descriptions compatibles entrent dans son index SQLite local sans nouvel appel au LLM.</desc>
+  <style>
+    text { font-family: "Segoe UI", Arial, sans-serif; fill: #142c46 }
+    .title { font-size: 32px; font-weight: 700 }
+    .label { font-size: 20px; font-weight: 650 }
+    .body { font-size: 17px }
+    .code { font-family: Consolas, monospace; font-size: 16px; fill: #145f59 }
+    .tag { font-size: 14px; font-weight: 700; letter-spacing: 1.5px; fill: #456077 }
+  </style>
+  <rect width="960" height="420" rx="18" fill="#f2f6fa"/>
+  <text x="28" y="35" class="tag">HELLOWORLD  /  RÉSUMÉS PARTAGÉS</text>
+  <text x="28" y="77" class="title">Partager Program.cs.md avec un collègue</text>
+  <text x="28" y="108" class="body">Le LLM et le partage des résumés sont activés dans les deux copies de travail.</text>
+  <rect x="28" y="135" width="264" height="166" rx="12" fill="#fff" stroke="#c6d3e0"/>
+  <text x="45" y="168" class="label">Votre copie</text>
+  <text x="45" y="200" class="code">index .</text>
+  <text x="45" y="225" class="body">Décrire Program et Main.</text>
+  <text x="45" y="260" class="code">cache-export .</text>
+  <text x="45" y="285" class="body">Écrire un fichier Markdown.</text>
+  <path d="M298 211h29m-7 -7 7 7 -7 7" fill="none" stroke="#526782" stroke-width="2"/>
+  <rect x="336" y="135" width="280" height="166" rx="12" fill="#deeee9" stroke="#a8cdc0"/>
+  <text x="353" y="168" class="label">Branche Git partagée</text>
+  <text x="353" y="200" class="body">Relire, commiter et pousser</text>
+  <text x="353" y="225" class="body">le code et son résumé.</text>
+  <text x="353" y="260" class="code">.codesemantic4llm/summaries/</text>
+  <text x="353" y="285" class="code">  Program.cs.md</text>
+  <path d="M622 211h29m-7 -7 7 7 -7 7" fill="none" stroke="#526782" stroke-width="2"/>
+  <rect x="660" y="135" width="272" height="166" rx="12" fill="#fff" stroke="#c6d3e0"/>
+  <text x="677" y="168" class="label">Copie du collègue</text>
+  <text x="677" y="200" class="code">git pull</text>
+  <text x="677" y="225" class="body">Récupérer les deux fichiers.</text>
+  <text x="677" y="260" class="code">index .</text>
+  <text x="677" y="285" class="body">Valider et importer le résumé.</text>
+  <text x="28" y="340" class="tag">QUE RÉUTILISE-T-ON ?</text>
+  <text x="28" y="371" class="body">Chaque copie construit son index SQLite. Une description compatible évite un nouvel appel au LLM.</text>
+  <text x="28" y="398" class="body">Si le code ou la configuration ont changé, l’indexation peut régénérer les descriptions manquantes.</text>
+</svg>

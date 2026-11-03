@@ -1,8 +1,8 @@
-name: .NET build and tests
+name: Build and stage .NET tool
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
 
 permissions:
@@ -11,24 +11,49 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pack.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Restore
-        run: dotnet restore CodeSemantic4Llm.slnx
-      - name: Build
-        run: dotnet build CodeSemantic4Llm.slnx --no-restore --configuration Release
-      - name: Test
-        run: dotnet test CodeSemantic4Llm.slnx --no-build --configuration Release
-      - name: Pack .NET tool
-        run: dotnet pack src/CodeSemantic4Llm.Mcp.Server/CodeSemantic4Llm.Mcp.Server.csproj --no-build --configuration Release --output artifacts
+      - name: Build, test and pack with NUKE
+        id: pack
+        run: dotnet run --project build/Build.csproj -- Pack
       - name: Smoke-test installed tool
-        run: bash eng/verify-tool-package.sh artifacts 0.1.0
-      - name: Upload .NET tool package
-        uses: actions/upload-artifact@v4
+        env:
+          VERSION: ${{ steps.pack.outputs.version }}
+        run: bash eng/verify-tool-package.sh artifacts "$VERSION"
+      - uses: actions/upload-artifact@v4
         with:
           name: codesemantic4llm-dotnet-tool
-          path: artifacts/*.nupkg
+          path: artifacts/CodeSemantic4Llm.Mcp.Server.${{ steps.pack.outputs.version }}.nupkg
+          retention-days: 30
           if-no-files-found: error
+
+  stage:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: codesemantic4llm-dotnet-tool
+          path: artifacts
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish tested tool to GitHub Packages
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+          NuGetPackageSourceCredentials_GitHubPackages: Username=${{ github.actor }};Password=${{ github.token }};ValidAuthenticationTypes=Basic
+        run: |
+          dotnet nuget add source "https://nuget.pkg.github.com/$GITHUB_REPOSITORY_OWNER/index.json" --name GitHubPackages
+          dotnet nuget push "artifacts/CodeSemantic4Llm.Mcp.Server.$VERSION.nupkg" \
+            --source GitHubPackages --api-key "$GH_TOKEN"

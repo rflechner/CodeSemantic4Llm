@@ -161,7 +161,7 @@ Feature: Locate exact usages of indexed C# methods and types
     Then the usage request fails with "Run the index command again"
     And the cache schema version is 2
     When I index the checkout again
-    Then the cache schema version is 5
+    Then the cache schema version is 6
     When I select indexed "Run" declaration number 1
     And I find its usages with page size 50
     Then the usage listing contains 0 references without another page

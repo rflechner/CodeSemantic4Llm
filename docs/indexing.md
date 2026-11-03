@@ -1,5 +1,10 @@
 # Indexing a checkout before MCP startup
 
+**English** · [Français](indexing.fr.md)
+
+For Git-distributed LLM descriptions, explicit Markdown export and continuous
+verification, see [Shared LLM summaries in Git](shared-summaries.md).
+
 From the CodeSemantic4Llm checkout:
 
 ```sh

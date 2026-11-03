@@ -78,13 +78,15 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
                         document.SemanticIndexing.Llm.ApiKey,
                         document.SemanticIndexing.Llm.ReasoningEffort,
                         document.SemanticIndexing.Llm.MaxCompletionTokens,
-                        document.SemanticIndexing.Llm.ForceGeneration));
+                        document.SemanticIndexing.Llm.ForceGeneration,
+                        document.SemanticIndexing.Llm.SystemPrompt));
 
             var fileExtensions = MapFileExtensions(document.FileExtensions);
             var tools = MapTools(document.Tools);
 
             return new RepositoryIndexingConfiguration(
-                document.Analyzers, document.Exclude, semanticIndexing, fileExtensions, document.ProjectName, tools);
+                document.Analyzers, document.Exclude, semanticIndexing, fileExtensions, document.ProjectName, tools,
+                document.SharedSummaries);
         }
         catch (YamlException exception)
         {
@@ -146,6 +148,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
 
         public int Version { get; set; }
 
+        public bool SharedSummaries { get; set; }
+
         public string? ProjectName { get; set; }
 
         public List<string>? Analyzers { get; set; }
@@ -171,6 +175,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         public bool Enabled { get; set; }
 
         public bool ForceGeneration { get; set; }
+
+        public string? SystemPrompt { get; set; }
 
         public string? BaseUrl { get; set; }
 
