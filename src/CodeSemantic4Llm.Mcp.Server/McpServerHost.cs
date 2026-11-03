@@ -20,16 +20,23 @@ internal static class McpServerHost
     public static async Task<int> RunAsync(
         string? repositoryRoot, bool allowWrite, bool exposeIndexing, string? logFile, CancellationToken cancellationToken)
     {
-        using var fileLogger = logFile is null ? null : new FileLoggerProvider(logFile);
+        // LM Studio and other MCP clients may launch us from an unrelated directory.
+        // Capture relative paths before changing the working directory of this process.
+        var launchDirectory = Environment.CurrentDirectory;
+        var selectedRoot = repositoryRoot is null ? null : Path.GetFullPath(repositoryRoot, launchDirectory);
+        var selectedLogFile = logFile is null ? null : Path.GetFullPath(logFile, launchDirectory);
+        using var fileLogger = selectedLogFile is null ? null : new FileLoggerProvider(selectedLogFile);
         var builder = Host.CreateApplicationBuilder();
 
-        if (repositoryRoot is not null)
+        if (selectedRoot is not null)
         {
-            // Add last so CLI selection overrides environment settings without changing process state.
+            // Explicit CLI selection overrides the environment and anchors any remaining
+            // relative operations to this checkout (one repository per MCP process).
             builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["CODESEMANTIC4LLM_REPOSITORY_ROOT"] = Path.GetFullPath(repositoryRoot)
+                ["CODESEMANTIC4LLM_REPOSITORY_ROOT"] = selectedRoot
             });
+            Environment.CurrentDirectory = selectedRoot;
         }
 
         // Stdio is reserved for MCP protocol messages. Human-readable logs go to stderr.

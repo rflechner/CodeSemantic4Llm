@@ -1,12 +1,14 @@
 using System.ComponentModel;
 using CodeSemantic4Llm.Application.UseCases;
+using Microsoft.Extensions.Configuration;
 using ModelContextProtocol.Server;
 
 namespace CodeSemantic4Llm.Mcp.Server.Tools;
 
 /// <summary>Provides a truthful description of the currently implemented bootstrap.</summary>
 [McpServerToolType]
-public sealed class ServerInformationTools(McpToolExposure exposure, RepositoryWriteAccess writeAccess)
+public sealed class ServerInformationTools(
+    McpToolExposure exposure, RepositoryWriteAccess writeAccess, IConfiguration configuration)
 {
     [McpServerTool, Description("Returns the server name and the current implementation status.")]
     public string GetServerInfo()
@@ -14,10 +16,15 @@ public sealed class ServerInformationTools(McpToolExposure exposure, RepositoryW
         var capabilities = "CodeSemantic4Llm: C# symbol search, navigation and syntax diagnostics. " +
             (writeAccess.Enabled ? "Method body editing is enabled." : "Source access is read-only.");
 
-        return exposure.ExposeIndexing
+        var info = exposure.ExposeIndexing
             ? capabilities + " Indexing tools and snapshot metadata are exposed. " +
               "Run the index command after source changes. Queries use saved branch-scoped declarations and references."
             : capabilities;
+
+        var root = configuration["CODESEMANTIC4LLM_REPOSITORY_ROOT"];
+        return string.IsNullOrWhiteSpace(root)
+            ? info
+            : info + $" Repository root: {Path.GetFullPath(root)}. Working directory: {Environment.CurrentDirectory}.";
     }
 }
 
