@@ -54,11 +54,40 @@ Un schéma non pris en charge provoque un échec sans modification. Sélectionne
 
 Depuis la racine du dépôt, lancez `codesemantic4llm index . --folder src/XXX.Domain` pour indexer uniquement ce dossier et ses sous-dossiers. Indiquez son chemin relatif à la racine, entre guillemets s’il contient des espaces. Les exclusions, la configuration des analyseurs et les contrôles des liens symboliques s’appliquent. Un dossier vide ou exclu indique zéro fichier correspondant. Ajoutez `--force` pour réanalyser les fichiers sélectionnés.
 
-La commande s’arrête avec un index partiel consultable dans le tableau de bord. MCP continue d’utiliser le dernier instantané publié, s’il existe. En lançant ensuite `codesemantic4llm index .`, vous réutilisez les fichiers inchangés, calculez les références entre dossiers et publiez l’instantané complet de la branche.
+Une indexation de dossier réussie **publie un instantané partiel cumulatif**,
+immédiatement consultable avec les outils MCP `find_symbols`, `search_code` (FTS5)
+et la navigation dans les types. Exemple :
 
-Relancez la même commande après modification. Empreintes de contenu, identité/version de l’analyseur et empreinte de configuration déterminent la réutilisation des déclarations. Fichiers nouveaux ou modifiés sont analysés. Les chemins supprimés ou renommés disparaissent à la publication. Un changement d’analyseurs, d’extensions, d’exclusions, de langue ou de réglages LLM invalide la réutilisation. Les fichiers inchangés réutilisent leurs résumés sans appel au LLM. Tous les fichiers sélectionnés sont néanmoins lus et hachés.
+```sh
+codesemantic4llm index . --folder src/Navigation
+codesemantic4llm index . --folder src/SemanticSearch
+codesemantic4llm index . --folder src/Navigation
+```
+
+La deuxième commande **ajoute** SemanticSearch sans réanalyser Navigation ;
+la troisième ne met à jour que Navigation (suppressions et renommages compris),
+en conservant SemanticSearch. Les autres dossiers déjà indexés sont repris depuis
+SQLite, sans lecture des sources ni appel au LLM. Les dossiers jamais indexés
+n'entrent pas dans le périmètre de recherche.
+
+L'instantané partiel apparaît avec `isPartial: true` dans le statut MCP et
+le tableau de bord. Les références Roslyn entre dossiers ne sont **pas disponibles**
+sur un instantané partiel : `find_usages` nécessite une analyse globale.
+Pour retrouver les références complètes, lancez `codesemantic4llm index .`
+sans `--folder` : il réutilise les déclarations et résumés compatibles,
+puis résout les références sur l'ensemble sélectionné.
+
+Relancez la même commande après modification. Empreintes de contenu, identité/version de l’analyseur et empreinte de configuration déterminent la réutilisation des déclarations. Fichiers nouveaux ou modifiés sont analysés. Les chemins supprimés ou renommés disparaissent à la publication. Un changement d’analyseurs, d’extensions, d’exclusions, de langue ou de réglages LLM invalide la réutilisation. Une indexation par dossier refuse de remplacer un instantané existant si ces réglages ont changé : une indexation complète est nécessaire.
+Les fichiers inchangés réutilisent leurs résumés sans appel au LLM.
+Seuls les fichiers du dossier demandé sont relus et hachés ; les autres
+dossiers publiés ne sont pas revérifiés et peuvent donc devenir obsolètes après
+des modifications. Réindexez les dossiers concernés. Les anciens checkpoints
+inachevés ayant une configuration compatible peuvent également être repris,
+sans garantir qu'ils correspondent encore aux sources actuelles.
 
 Les références sont globales. Si un fichier sélectionné apparaît, change ou disparaît, toutes les références C# sont résolues sur la nouvelle compilation. Seul un ensemble identique entièrement réutilisé peut reprendre toutes les lignes de référence précédentes. Un appelant inchangé ne conserve donc pas un lien périmé vers une cible modifiée.
+Les index partiels signalent les références comme indisponibles plutôt que de
+renvoyer des liens obsolètes.
 
 Relancez `index .` après une interruption pour réutiliser les fichiers terminés des tentatives précédentes sur la même branche, résumés compris. Le chemin, l’empreinte du contenu, l’analyseur, la configuration et l’empreinte du résumé partagé doivent toujours correspondre. Utilisez `index . --force` pour réanalyser chaque fichier et recalculer les références. La politique configurée pour importer les résumés partagés continue de s’appliquer.
 

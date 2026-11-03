@@ -18,6 +18,6 @@ public interface IIndexUpdate : IDisposable
     /// <summary>Adds resolved references; none of the referenced source code is persisted.</summary>
     void AddReferences(IReadOnlyList<SymbolReference> references, CancellationToken cancellationToken = default);
 
-    /// <summary>Atomically replaces the branch's active snapshot and removes its superseded derived data.</summary>
+    /// <summary>Atomically publishes the branch's active snapshot, retaining other folders for cumulative updates.</summary>
     RepositoryIndexSnapshot Publish(CancellationToken cancellationToken = default);
 }

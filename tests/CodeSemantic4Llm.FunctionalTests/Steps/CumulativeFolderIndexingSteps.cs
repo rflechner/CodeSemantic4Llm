@@ -1,5 +1,4 @@
-using CodeSemantic4Llm.Domain.Repositories;
-using CodeSemantic4Llm.Domain.Symbols;
+using CodeSemantic4Llm.Application.UseCases;
 using Reqnroll;
 using Xunit;
 
