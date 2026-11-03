@@ -10,13 +10,17 @@ using CodeSemantic4Llm.Domain.Source;
 namespace CodeSemantic4Llm.Application.UseCases;
 
 /// <summary>Stages in an index run; Completed is emitted only after the transaction commits.</summary>
-public enum RepositoryIndexingPhase { Discovering, Indexing, Verifying, Publishing, Completed }
+public enum RepositoryIndexingPhase { Discovering, Indexing, Verifying, Publishing, Completed, FolderCompleted }
 
 /// <summary>Progress counts refer to matching source files, with completion reported only after publication.</summary>
 public sealed record RepositoryIndexingProgress(RepositoryIndexingPhase Phase, int CompletedFiles, int TotalFiles);
 
 /// <summary>Summary of a fully published repository index, including how much analysis was reused.</summary>
 public sealed record RepositoryIndexingResult(RepositoryIndexSnapshot Snapshot, int AnalyzedFiles, int ReusedFiles);
+
+/// <summary>Counts for a verified run. A folder run retains checkpoints and has no published snapshot.</summary>
+public sealed record RepositoryIndexRun(
+    RepositoryState State, int AnalyzedFiles, int ReusedFiles, RepositoryIndexSnapshot? PublishedSnapshot);
 
 /// <summary>Indexes all selected files, one at a time, into an atomic branch-specific generation.</summary>
 public sealed class IndexRepository(
@@ -37,10 +41,21 @@ public sealed class IndexRepository(
         summaryExtractors?.ToDictionary(item => item.AnalyzerId, StringComparer.OrdinalIgnoreCase)
         ?? new Dictionary<string, ISymbolSourceExtractor>(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Verifies and publishes the checkout. Set force to analyze every selected file even if its cached declarations match.</summary>
     public async Task<RepositoryIndexingResult> ExecuteAsync(
         string repositoryRoot,
         IProgress<RepositoryIndexingProgress>? progress = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        bool force = false)
+    {
+        var run = await RunAsync(repositoryRoot, null, progress, cancellationToken, force);
+        return new RepositoryIndexingResult(run.PublishedSnapshot!, run.AnalyzedFiles, run.ReusedFiles);
+    }
+
+    /// <summary>Indexes a checkout or only the specified repository-relative folder. Only checkout-wide runs publish.</summary>
+    public async Task<RepositoryIndexRun> RunAsync(
+        string repositoryRoot, string? folder, IProgress<RepositoryIndexingProgress>? progress = null,
+        CancellationToken cancellationToken = default, bool force = false)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var state = await stateProvider.GetStateAsync(repositoryRoot, cancellationToken);
@@ -54,7 +69,7 @@ public sealed class IndexRepository(
         }
 
         var fingerprint = Fingerprint(configuration, selectedAnalyzers);
-        var candidates = Discover(root, configuration, selectedAnalyzers, progress, cancellationToken);
+        var candidates = Discover(root, configuration, selectedAnalyzers, folder, progress, cancellationToken);
         var useSharedSummaries = configuration.SharedSummaries && configuration.SemanticIndexing.Llm.Enabled;
         var summaryProfile = GetSummaryProfile(configuration);
 
@@ -77,7 +92,7 @@ public sealed class IndexRepository(
                 adapter.IndexVersion, shared.Digest);
             indexedFiles.Add(file);
 
-            if (update.TryReuse(file, cancellationToken))
+            if (!force && update.TryReuse(file, cancellationToken))
             {
                 reused++;
             }
@@ -95,7 +110,7 @@ public sealed class IndexRepository(
 
         // Reference binding depends on other files and cannot be reused per file like declarations.
         // An unchanged snapshot can copy all resolved edges; otherwise rebuild them together.
-        if (!update.TryReuseReferences(cancellationToken))
+        if (folder is null && (force || !update.TryReuseReferences(cancellationToken)))
         {
             await IndexReferencesAsync(root, candidates, indexedFiles, update, cancellationToken);
         }
@@ -114,19 +129,25 @@ public sealed class IndexRepository(
             }
         }
 
-        var finalCandidates = Discover(root, configuration, selectedAnalyzers, null, cancellationToken);
+        var finalCandidates = Discover(root, configuration, selectedAnalyzers, folder, null, cancellationToken);
 
         if (!candidates.Select(file => file.RelativePath).SequenceEqual(finalCandidates.Select(file => file.RelativePath)))
         {
             throw new IOException("Source files were added, deleted or renamed during indexing. Run index again.");
         }
 
-        progress?.Report(new(RepositoryIndexingPhase.Publishing, candidates.Count, candidates.Count));
         await VerifyCheckoutAsync(state, fingerprint, cancellationToken);
+        if (folder is not null)
+        {
+            progress?.Report(new(RepositoryIndexingPhase.FolderCompleted, candidates.Count, candidates.Count));
+            return new RepositoryIndexRun(state, candidates.Count - reused, reused, null);
+        }
+
+        progress?.Report(new(RepositoryIndexingPhase.Publishing, candidates.Count, candidates.Count));
         var snapshot = update.Publish(cancellationToken);
         progress?.Report(new(RepositoryIndexingPhase.Completed, candidates.Count, candidates.Count));
 
-        return new RepositoryIndexingResult(snapshot, candidates.Count - reused, reused);
+        return new RepositoryIndexRun(state, candidates.Count - reused, reused, snapshot);
     }
 
     private async Task<IReadOnlyList<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition>> SummarizeSymbolsAsync(
@@ -189,12 +210,12 @@ public sealed class IndexRepository(
 
     private List<IndexingSource> Discover(
         string root, RepositoryIndexingConfiguration configuration, ConfiguredSourceAnalyzers analyzers,
-        IProgress<RepositoryIndexingProgress>? progress, CancellationToken cancellationToken)
+        string? folder, IProgress<RepositoryIndexingProgress>? progress, CancellationToken cancellationToken)
     {
         var candidates = new List<IndexingSource>();
         progress?.Report(new(RepositoryIndexingPhase.Discovering, 0, 0));
 
-        foreach (var path in fileEnumerator.EnumerateFiles(root, configuration.Exclusions, cancellationToken))
+        foreach (var path in fileEnumerator.EnumerateFiles(root, configuration.Exclusions, cancellationToken, folder))
         {
             var analyzer = analyzers.Select(path);
 

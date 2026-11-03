@@ -80,14 +80,7 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
-
-        if (maxResults > 200)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxResults), "Limit must not exceed 200.");
-        }
-
-        var match = FullTextSearchQuery.Build(query);
+        var match = FullTextSearchQuery.Build(query, maxResults);
         var path = paths.GetDatabasePath(scope.RootPath);
 
         if (!File.Exists(path))
@@ -99,6 +92,14 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         using var transaction = connection.BeginTransaction(deferred: true);
         var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
 
+        var symbols = ReadSearchMatches(connection, transaction, snapshot.SnapshotId, match, kind, maxResults, cancellationToken);
+        return new SymbolSearchResult(snapshot, symbols.Take(maxResults).ToArray(), symbols.Count > maxResults);
+    }
+
+    internal static List<SymbolDefinition> ReadSearchMatches(
+        SqliteConnection connection, SqliteTransaction transaction, long snapshotId,
+        string match, string? kind, int maxResults, CancellationToken cancellationToken)
+    {
         using (var version = IndexDatabase.Command(connection, transaction, "PRAGMA user_version;"))
         {
             if (Convert.ToInt32(version.ExecuteScalar()) < 5)
@@ -120,7 +121,7 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
                      s.path COLLATE BINARY, s.line, s.column_number, s.ordinal
             LIMIT $limit;
             """,
-            ("$match", match), ("$snapshot", snapshot.SnapshotId),
+            ("$match", match), ("$snapshot", snapshotId),
             ("$kind", string.IsNullOrWhiteSpace(kind) ? null : kind.Trim()),
             ("$limit", maxResults + 1));
 
@@ -133,7 +134,7 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
             symbols.Add(ReadSymbol(reader));
         }
 
-        return new SymbolSearchResult(snapshot, symbols.Take(maxResults).ToArray(), symbols.Count > maxResults);
+        return symbols;
     }
 
     public IReadOnlyList<IndexedDeclaration> SelectDeclarations(

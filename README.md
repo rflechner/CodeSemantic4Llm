@@ -338,7 +338,8 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- dashboard --port 5080
 
 Open **http://127.0.0.1:5080/**. The dashboard serves its own offline UI,
 never reads source contents, and does not start the MCP transport or reindex.
-Run `index` on each checkout/branch you want to explore first. It uses the
+Run `index` on the branch you want to explore. The dashboard shows each completed
+file and its symbols during indexing and keeps them available if you stop the run. It uses the
 same optional `CODESEMANTIC4LLM_INDEX_ROOT` environment setting as MCP.
 See [dashboard documentation](docs/dashboard.md) for exploration features and
 the internal read-only JSON API.
@@ -355,6 +356,12 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
 The path must identify a Git checkout root on a named branch. Interactive terminals show
 Spectre progress for discovery, indexing, verification and publication. Redirected output
 contains a plain summary. Unlike preview, indexing has no file-count limit.
+
+After an interruption, rerun `index .` to reuse files already analyzed on the same branch.
+Use `index . --force` to reanalyze every selected file.
+To start with one directory, run `index . --folder src/XXX.Domain` from the checkout root.
+The command stops after that subtree. Inspect its declarations in the dashboard, then run
+`index .` when you want the full branch index and cross-folder references.
 
 Rerunning `index` reuses unchanged declarations and removes stale records after deletions
 or renames. FTS5 search entries follow the same atomic snapshot lifecycle. Each branch keeps its own completed snapshot. Failures and cancellation preserve

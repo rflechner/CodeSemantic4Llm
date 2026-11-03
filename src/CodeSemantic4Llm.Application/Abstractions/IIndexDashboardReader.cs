@@ -3,12 +3,12 @@ using CodeSemantic4Llm.Domain.Repositories;
 namespace CodeSemantic4Llm.Application.Abstractions;
 
 /// <summary>
-/// Read-only, cache-wide exploration of published indexes. Project ids identify cache entries,
+/// Read-only, cache-wide exploration of partial and published indexes. Project ids identify cache entries,
 /// not paths provided by HTTP clients. No operation reads or changes source files.
 /// </summary>
 public interface IIndexDashboardReader
 {
-    /// <summary>Lists every valid indexed checkout and its published Git branches.</summary>
+    /// <summary>Lists every valid indexed checkout and its indexed Git branches.</summary>
     IReadOnlyList<DashboardProject> ListProjects(CancellationToken cancellationToken = default);
 
     /// <summary>Returns language/kind distributions and reference counts for an active branch.</summary>
@@ -26,7 +26,7 @@ public interface IIndexDashboardReader
 
     /// <summary>
     /// Searches names and saved summaries with the same ranking as MCP code search.
-    /// Uses the selected published branch without checking the working tree or invoking a model.
+    /// Uses the selected branch generation without checking the working tree or invoking a model.
     /// </summary>
     DashboardCodeSearchResult SearchCode(
         string projectId, string branch, string query, string? kind, int maxResults,
@@ -41,17 +41,17 @@ public interface IIndexDashboardReader
         int offset, int limit, CancellationToken cancellationToken = default);
 }
 
-/// <summary>One checkout in the index cache, with only its currently published branches.</summary>
+/// <summary>One checkout in the index cache, with its indexed branches.</summary>
 public sealed record DashboardProject(
     string Id, string Name, string RootPath, IReadOnlyList<DashboardBranch> Branches);
 
-/// <summary>Published snapshot metadata; the recorded revision is not a current-working-tree guarantee.</summary>
+/// <summary>Branch generation metadata. CompletedAt is null until the generation is verified and published.</summary>
 public sealed record DashboardBranch(
     string Name, long SnapshotId, string? RecordedRevision, string SemanticLanguage,
-    DateTimeOffset CompletedAt, int FileCount, int SymbolCount,
+    DateTimeOffset? CompletedAt, int FileCount, int SymbolCount,
     bool HasTypeMembership, bool HasReferences);
 
-/// <summary>Aggregated declaration and reference information for a published snapshot.</summary>
+/// <summary>Aggregated declaration and reference information for the visible branch generation.</summary>
 public sealed record DashboardSummary(
     long ReferenceCount, IReadOnlyList<DashboardFacet> Kinds, IReadOnlyList<DashboardFacet> Languages);
 
@@ -68,9 +68,14 @@ public sealed record DashboardSymbol(
     string Path, int Line, int Column, int? ContainingTypeLine, int? ContainingTypeColumn,
     string? Summary = null);
 
+/// <summary>The dashboard generation used by a search. Partial generations have no completion time.</summary>
+public sealed record DashboardSnapshot(
+    RepositoryScope Scope, long SnapshotId, string? RecordedRevision, string SemanticLanguage,
+    DateTimeOffset? CompletedAt, int FileCount, int SymbolCount);
+
 /// <summary>Ranked matches and their exact saved snapshot; HasMore indicates a truncated result set.</summary>
 public sealed record DashboardCodeSearchResult(
-    RepositoryIndexSnapshot Snapshot, IReadOnlyList<DashboardSymbol> Symbols, bool HasMore);
+    DashboardSnapshot Snapshot, IReadOnlyList<DashboardSymbol> Symbols, bool HasMore);
 
 /// <summary>A saved relation between a target declaration and an occurrence elsewhere in the checkout.</summary>
 public sealed record DashboardReference(

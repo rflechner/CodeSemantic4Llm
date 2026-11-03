@@ -362,6 +362,7 @@
       state.project = project;
       state.branch = project.branches.some(branch => branch.name === state.branch)
         ? state.branch : (project.branches[0] && project.branches[0].name) || null;
+      state.intentKind = '';
       state.kind = '';
       state.file = '';
       state.offset = 0;
@@ -373,7 +374,6 @@
 
     function renderSelection() {
       state.summary = null;
-      state.intentKind = '';
       renderProjects();
       const project = state.project;
       const branch = currentBranch();
@@ -391,7 +391,7 @@
       picker.disabled = !branch;
       if (branch) picker.value = branch.name;
       byId('indexed-at').textContent = branch
-        ? 'Published ' + new Date(branch.completedAt).toLocaleString()
+        ? (branch.completedAt ? 'Published ' + new Date(branch.completedAt).toLocaleString() : 'Partial index · completed files only')
         : 'No published branch snapshots';
       byId('stat-files').textContent = branch ? number(branch.fileCount) : '—';
       byId('stat-symbols').textContent = branch ? number(branch.symbolCount) : '—';
@@ -405,11 +405,31 @@
       updateFilterUI();
     }
 
-    async function refresh() {
-      resetIntentSearch();
+    async function refresh(automatic = false) {
+      if (automatic && document.hidden) return;
       try {
         const projects = await api('/api/projects');
+        if (automatic && JSON.stringify(projects) === JSON.stringify(state.projects)) return;
         const selectedId = state.project && state.project.id;
+        const selected = projects.find(project => project.id === selectedId);
+        if (automatic && selected && selected.branches.some(branch => branch.name === state.branch)) {
+          const previous = currentBranch();
+          state.projects = projects;
+          state.project = selected;
+          if (JSON.stringify(previous) === JSON.stringify(currentBranch())) {
+            renderProjects();
+            return;
+          }
+          if (previous.snapshotId !== currentBranch().snapshotId) {
+            closeDrawer();
+            resetIntentSearch();
+          }
+          renderSelection();
+          loadSummary();
+          loadTable();
+          return;
+        }
+        resetIntentSearch();
         state.projects = projects;
         renderProjects();
         if (!projects.length) {
@@ -784,9 +804,10 @@
       resetIntentSearch();
     });
     byId('intent-limit').addEventListener('change', resetIntentSearch);
-    byId('refresh').addEventListener('click', refresh);
+    byId('refresh').addEventListener('click', () => refresh());
     byId('branch').addEventListener('change', event => {
       state.branch = event.target.value;
+      state.intentKind = '';
       state.offset = 0;
       closeDrawer();
       renderSelection();
@@ -845,7 +866,11 @@
       loadDrawerReferences();
     });
 
-    refresh();
+    async function monitorIndexes() {
+      await refresh(true);
+      setTimeout(monitorIndexes, 5000);
+    }
+    refresh().then(() => setTimeout(monitorIndexes, 5000));
   </script>
 </body>
 </html>

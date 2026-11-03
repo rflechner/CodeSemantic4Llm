@@ -7,7 +7,7 @@ using Microsoft.Data.Sqlite;
 namespace CodeSemantic4Llm.Persistence.Sqlite;
 
 /// <summary>
-/// Browses every published branch in the shared cache using SQLite read-only connections.
+/// Browses partial and published branch indexes in the shared cache using SQLite read-only connections.
 /// It does not enumerate source trees, run analyzers, migrate schemas or create databases.
 /// </summary>
 public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndexDashboardReader
@@ -87,24 +87,22 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
         CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        RepositoryScope scope;
-
-        using (var connection = OpenProject(projectId))
-        {
-            scope = new RepositoryScope(ReadRoot(connection), branch);
-            using var transaction = connection.BeginTransaction(deferred: true);
-            RequireSnapshot(connection, transaction, branch);
-        }
-
-        // Resolve only validated cache ids, then reuse the MCP store's query and ordering.
-        // The dashboard can inspect a saved branch even when its checkout is unavailable.
-        var result = new SqliteIndexStore(paths).SearchCode(scope, query, kind, maxResults, cancellationToken);
-        var symbols = result.Symbols.Select(symbol => new DashboardSymbol(
+        using var connection = OpenProject(projectId);
+        using var transaction = connection.BeginTransaction(deferred: true);
+        var version = ReadSchemaVersion(connection, transaction);
+        var selected = ReadBranches(connection, version, cancellationToken, transaction, branch).SingleOrDefault()
+            ?? throw new KeyNotFoundException("No index exists for this branch.");
+        var scope = new RepositoryScope(ReadRoot(connection, transaction), branch);
+        var snapshot = new DashboardSnapshot(scope, selected.SnapshotId, selected.RecordedRevision,
+            selected.SemanticLanguage, selected.CompletedAt, selected.FileCount, selected.SymbolCount);
+        var matches = SqliteIndexStore.ReadSearchMatches(connection, transaction, selected.SnapshotId,
+            FullTextSearchQuery.Build(query, maxResults), kind, maxResults, cancellationToken);
+        var symbols = matches.Take(maxResults).Select(symbol => new DashboardSymbol(
             symbol.Language, symbol.Kind, symbol.Name, symbol.QualifiedName,
             symbol.Location.RelativePath, symbol.Location.Line, symbol.Location.Column,
             symbol.ContainingType?.Line, symbol.ContainingType?.Column, symbol.Summary)).ToArray();
 
-        return new DashboardCodeSearchResult(result.Snapshot, symbols, result.HasMore);
+        return new DashboardCodeSearchResult(snapshot, symbols, matches.Count > maxResults);
     }
 
     public DashboardPage<DashboardFile> GetFiles(
@@ -276,9 +274,9 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
         return IndexDatabase.Open(database, root, writable: false);
     }
 
-    private static string ReadRoot(SqliteConnection connection)
+    private static string ReadRoot(SqliteConnection connection, SqliteTransaction? transaction = null)
     {
-        using var command = IndexDatabase.Command(connection, null, "SELECT root FROM repository_info WHERE id = 1;");
+        using var command = IndexDatabase.Command(connection, transaction, "SELECT root FROM repository_info WHERE id = 1;");
         return command.ExecuteScalar() as string
             ?? throw new InvalidOperationException("Index repository identity is missing.");
     }
@@ -290,15 +288,17 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
     }
 
     private static IReadOnlyList<DashboardBranch> ReadBranches(
-        SqliteConnection connection, int version, CancellationToken cancellationToken)
+        SqliteConnection connection, int version, CancellationToken cancellationToken,
+        SqliteTransaction? transaction = null, string? branch = null)
     {
         var referenceColumn = version >= 3 ? "s.reference_index_version" : "0";
-        using var command = IndexDatabase.Command(connection, null, $"""
-            SELECT b.branch, s.id, s.revision, s.semantic_language, s.completed_utc, s.file_count,
+        using var command = IndexDatabase.Command(connection, transaction, $"""
+            SELECT s.branch, s.id, s.revision, s.semantic_language, s.completed_utc, s.file_count,
                    s.symbol_count, s.member_index_version, {referenceColumn}
-            FROM active_branches b JOIN snapshots s ON s.id = b.snapshot_id
-            ORDER BY b.branch COLLATE BINARY;
-            """);
+            FROM ({VisibleBranchesSql}) b JOIN snapshots s ON b.snapshot_id = s.id
+            WHERE $branch IS NULL OR s.branch = $branch
+            ORDER BY s.branch COLLATE BINARY;
+            """, ("$branch", branch));
 
         var branches = new List<DashboardBranch>();
         using var reader = command.ExecuteReader();
@@ -308,23 +308,30 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
             cancellationToken.ThrowIfCancellationRequested();
             branches.Add(new DashboardBranch(reader.GetString(0), reader.GetInt64(1),
                 reader.IsDBNull(2) ? null : reader.GetString(2), reader.GetString(3),
-                DateTimeOffset.Parse(reader.GetString(4), CultureInfo.InvariantCulture),
+                reader.IsDBNull(4) ? null : DateTimeOffset.Parse(reader.GetString(4), CultureInfo.InvariantCulture),
                 reader.GetInt32(5), reader.GetInt32(6), reader.GetInt32(7) == 1,
-                version >= 3 && reader.GetInt32(8) == 1));
+                !reader.IsDBNull(4) && version >= 3 && reader.GetInt32(8) == 1));
         }
 
         return branches;
     }
 
+    // Older partial generations can retain reusable files. Only the newest generation is visible.
+    private const string VisibleBranchesSql = """
+        SELECT branch, MAX(id) AS snapshot_id FROM snapshots
+        WHERE completed_utc IS NULL OR id IN (SELECT snapshot_id FROM active_branches)
+        GROUP BY branch
+        """;
+
     private static long RequireSnapshot(
         SqliteConnection connection, SqliteTransaction transaction, string branch)
     {
         using var command = IndexDatabase.Command(connection, transaction,
-            "SELECT snapshot_id FROM active_branches WHERE branch = $branch COLLATE BINARY;",
+            $"SELECT snapshot_id FROM ({VisibleBranchesSql}) WHERE branch = $branch;",
             ("$branch", branch));
 
         return command.ExecuteScalar() is long id
-            ? id : throw new KeyNotFoundException("No published index exists for this branch.");
+            ? id : throw new KeyNotFoundException("No index exists for this branch.");
     }
 
     private static IReadOnlyList<DashboardFacet> ReadFacets(

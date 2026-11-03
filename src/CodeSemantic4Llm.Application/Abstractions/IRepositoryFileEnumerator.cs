@@ -6,8 +6,10 @@ namespace CodeSemantic4Llm.Application.Abstractions;
 /// </summary>
 public interface IRepositoryFileEnumerator
 {
+    /// <summary>Optionally restricts traversal to a directory relative to the checkout root.</summary>
     IEnumerable<string> EnumerateFiles(
         string repositoryRoot,
         IReadOnlyList<string> exclusionPatterns,
-        CancellationToken cancellationToken = default);
+        CancellationToken cancellationToken = default,
+        string? folder = null);
 }

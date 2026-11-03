@@ -95,13 +95,50 @@ public sealed partial class RepositoryIndexingSteps
     }
 
     [When("I index the checkout from the console")]
-    public async Task WhenIndexFromConsole()
+    public Task WhenIndexFromConsole() => RunIndexCommand();
+
+    [When("I force indexing from the console")]
+    public Task WhenForceIndexFromConsole() => RunIndexCommand("--force");
+
+    [Then(@"the console reports (\d+) analyzed files and (\d+) reused files")]
+    public void ThenConsoleReportsReuse(int analyzed, int reused) =>
+        Assert.Contains($"Analyzed files: {analyzed}; reused files: {reused}", _console!.Output);
+
+    [When(@"I stop indexing after (\d+) files?")]
+    public async Task WhenStopIndexing(int count)
+    {
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(Token);
+        var progress = new InlineProgress(item =>
+        {
+            if (item.Phase == RepositoryIndexingPhase.Indexing && item.CompletedFiles == count)
+            {
+                stop.Cancel();
+            }
+        });
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateIndexer().ExecuteAsync(_root, progress, stop.Token));
+    }
+
+    [When("I index only folder \"(.*)\" from the console")]
+    public Task WhenIndexFolder(string folder) => RunIndexCommand("--folder", folder);
+
+    [Then(@"the folder command succeeds with (\d+) matching files")]
+    public void ThenFolderSucceeded(int count)
+    {
+        Assert.Equal(0, _console!.ExitCode);
+        Assert.Contains($"matching files: {count}", _console.Output);
+        Assert.DoesNotContain("Published snapshot:", _console.Output);
+    }
+
+    [Then("the folder command fails")]
+    public void ThenFolderFailed() => Assert.NotEqual(0, _console!.ExitCode);
+
+    private async Task RunIndexCommand(params string[] options)
     {
         var services = new ServiceCollection();
         services.AddSingleton(CreateIndexer());
         services.AddSingleton(Paths);
         var relativeRoot = Path.GetRelativePath(Directory.GetCurrentDirectory(), _root);
-        _console = await ConsoleCommandRunner.RunAsync(["index", relativeRoot], services, Token);
+        _console = await ConsoleCommandRunner.RunAsync(["index", relativeRoot, .. options], services, Token);
     }
 
     [When("I attempt to index the checkout")]
@@ -324,14 +361,22 @@ public sealed partial class RepositoryIndexingSteps
     [Then("only one snapshot remains for the indexed branch")]
     public void ThenOnlyOneCurrentSnapshot() => ThenOnlyOneBranchSnapshot(_result!.Snapshot.Scope.BranchName);
 
-    [Then("only one snapshot remains for branch \"(.*)\"")]
-    public void ThenOnlyOneBranchSnapshot(string branch)
+    private void ThenOnlyOneBranchSnapshot(string branch)
     {
         using var connection = OpenDatabase();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT count(*) FROM snapshots WHERE branch = $branch;";
         command.Parameters.AddWithValue("$branch", branch);
         Assert.Equal(1L, command.ExecuteScalar());
+    }
+
+    [Then("the dashboard shows declaration \"(.*)\" for branch \"(.*)\"")]
+    public void ThenDashboardShowsDeclaration(string name, string branch)
+    {
+        var reader = new SqliteIndexDashboardReader(Paths);
+        var project = Assert.Single(reader.ListProjects(TestContext.Current.CancellationToken));
+        var symbols = reader.GetSymbols(project.Id, branch, null, null, null, 0, 20, TestContext.Current.CancellationToken);
+        Assert.Equal(name, Assert.Single(symbols.Items).Name);
     }
 
     [Then("branch \"(.*)\" retains declaration \"(.*)\"")]

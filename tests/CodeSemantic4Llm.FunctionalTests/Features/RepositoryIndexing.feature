@@ -38,6 +38,66 @@ Feature: Persist a repository index before starting MCP
     Then the run analyzes 0 files and reuses 3 files
     And only one snapshot remains for the indexed branch
 
+  Scenario: Resume after repeated interruptions and reanalyze changed files
+    Given the indexing checkout contains 4 C# files
+    When I stop indexing after 3 files
+    And I stop indexing after 1 file
+    And I replace indexing source "src/File0001.cs" with "public class EditedType {}"
+    And I index the checkout again
+    Then the run analyzes 2 files and reuses 2 files
+    And declaration "EditedType" is stored at "src/File0001.cs"
+    And only one snapshot remains for the indexed branch
+
+  Scenario: Force analysis even when published and partial file hashes match
+    Given the indexing checkout contains 3 C# files
+    And the checkout has a completed index
+    When I stop indexing after 2 files
+    And I force indexing from the console
+    Then the index command succeeds with 3 indexed files
+    And the console reports 3 analyzed files and 0 reused files
+
+  Scenario: Start with one folder and reuse it when indexing the checkout
+    Given the indexing checkout contains these sources:
+      | path                          | source                    |
+      | src/XXX.Domain/sub/Order.cs   | public class Order {}     |
+      | src/XXX.Domain/bin/Ignored.cs | public class Ignored {}   |
+      | src/XXX.Domain.Api/Api.cs     | public class Api {}       |
+    When I index only folder "./src/XXX.Domain/" from the console
+    Then the folder command succeeds with 1 matching files
+    And the dashboard shows declaration "Order" for branch "main"
+    When I read the saved index status
+    Then the status has no snapshot
+    When I index the checkout again
+    Then the run analyzes 1 files and reuses 1 files
+    And declaration "Order" is stored at "src/XXX.Domain/sub/Order.cs"
+
+  Scenario: A folder run preserves the published checkout and skips excluded ancestors
+    Given the indexing checkout contains these sources:
+      | path                    | source                      |
+      | Core/Model.cs           | public class BeforeType {}  |
+      | vendor/Lib/Generated.cs | public class Generated {}   |
+    And the checkout has a completed index
+    When I replace indexing source "Core/Model.cs" with "public class AfterType {}"
+    And I index only folder "Core" from the console
+    Then the folder command succeeds with 1 matching files
+    And the previous snapshot still contains "BeforeType"
+    And the dashboard shows declaration "AfterType" for branch "main"
+    When I index only folder "vendor/Lib" from the console
+    Then the folder command succeeds with 0 matching files
+    And the dashboard shows declaration "AfterType" for branch "main"
+
+  Scenario Outline: Invalid folder requests do not start an index update
+    Given the indexing checkout contains 1 C# file
+    When I index only folder "<folder>" from the console
+    Then the folder command fails
+    And no index database was created
+
+    Examples:
+      | folder          |
+      | ../outside      |
+      | missing         |
+      | src/File0000.cs |
+
   Scenario: Reindex modifications, deletions and renames without stale declarations
     Given the indexing checkout contains these sources:
       | path        | source                     |
@@ -84,16 +144,16 @@ Feature: Persist a repository index before starting MCP
     When I attempt to index the checkout
     Then indexing fails without publishing a snapshot
     And the previous snapshot still contains "OldType"
-    And only one snapshot remains for branch "main"
+    And the dashboard shows declaration "<visible>" for branch "main"
 
     Examples:
-      | failure                  |
-      | cancellation             |
-      | analyzer failure         |
-      | source modification      |
-      | branch switch            |
-      | configuration change     |
-      | source deletion          |
+      | failure              | visible |
+      | cancellation         | OldType |
+      | analyzer failure     | OldType |
+      | source modification  | NewType |
+      | branch switch        | NewType |
+      | configuration change | NewType |
+      | source deletion      | NewType |
 
   Scenario: Readers see the old snapshot until the replacement commits
     Given the indexing checkout contains these sources:

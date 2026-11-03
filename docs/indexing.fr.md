@@ -52,11 +52,17 @@ Un schéma non pris en charge provoque un échec sans modification. Sélectionne
 
 ## Réindexation et publication
 
+Depuis la racine du dépôt, lancez `codesemantic4llm index . --folder src/XXX.Domain` pour indexer uniquement ce dossier et ses sous-dossiers. Indiquez son chemin relatif à la racine, entre guillemets s’il contient des espaces. Les exclusions, la configuration des analyseurs et les contrôles des liens symboliques s’appliquent. Un dossier vide ou exclu indique zéro fichier correspondant. Ajoutez `--force` pour réanalyser les fichiers sélectionnés.
+
+La commande s’arrête avec un index partiel consultable dans le tableau de bord. MCP continue d’utiliser le dernier instantané publié, s’il existe. En lançant ensuite `codesemantic4llm index .`, vous réutilisez les fichiers inchangés, calculez les références entre dossiers et publiez l’instantané complet de la branche.
+
 Relancez la même commande après modification. Empreintes de contenu, identité/version de l’analyseur et empreinte de configuration déterminent la réutilisation des déclarations. Fichiers nouveaux ou modifiés sont analysés. Les chemins supprimés ou renommés disparaissent à la publication. Un changement d’analyseurs, d’extensions, d’exclusions, de langue ou de réglages LLM invalide la réutilisation. Les fichiers inchangés réutilisent leurs résumés sans appel au LLM. Tous les fichiers sélectionnés sont néanmoins lus et hachés.
 
 Les références sont globales. Si un fichier sélectionné apparaît, change ou disparaît, toutes les références C# sont résolues sur la nouvelle compilation. Seul un ensemble identique entièrement réutilisé peut reprendre toutes les lignes de référence précédentes. Un appelant inchangé ne conserve donc pas un lien périmé vers une cible modifiée.
 
-Une transaction SQLite prépare le remplacement, bascule l’instantané de la branche et retire l’ancienne génération atomiquement. Les autres branches conservent leurs instantanés. Un échec (y compris d’une requête LLM) ou une annulation entraîne un rollback. Les lecteurs voient le dernier instantané achevé. Un premier échec peut laisser une base initialisée sans instantané publié. SQLite sérialise les écritures concurrentes et échoue si le délai de verrouillage est dépassé.
+Relancez `index .` après une interruption pour réutiliser les fichiers terminés des tentatives précédentes sur la même branche, résumés compris. Le chemin, l’empreinte du contenu, l’analyseur, la configuration et l’empreinte du résumé partagé doivent toujours correspondre. Utilisez `index . --force` pour réanalyser chaque fichier et recalculer les références. La politique configurée pour importer les résumés partagés continue de s’appliquer.
+
+SQLite enregistre chaque fichier terminé avec ses déclarations dans un index partiel consultable depuis le tableau de bord. La publication bascule l’instantané de la branche et retire l’ancienne génération atomiquement. Les autres branches conservent leurs instantanés. Un échec (y compris d’une requête LLM) ou une annulation laisse les fichiers terminés consultables dans le tableau de bord. MCP utilise le dernier instantané publié, s’il existe. SQLite sérialise les écritures concurrentes et échoue si le délai de verrouillage est dépassé.
 
 Avant le commit, la commande recalcule les empreintes, vérifie les chemins découverts et relit l’état Git et le YAML. Un changement détecté empêche la publication. Cette vérification reste imparfaite : évitez les éditions et changements de branche pendant l’indexation. Le HEAD enregistré identifie l’historique observé, sans prouver que la copie correspond au commit ni qu’elle est restée inchangée.
 

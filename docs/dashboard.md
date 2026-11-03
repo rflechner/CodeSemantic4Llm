@@ -3,7 +3,7 @@
 **English** · [Français](dashboard.fr.md)
 
 The `dashboard` console command launches a **read-only browser explorer** of all
-published indexes in the configured local SQLite cache. Unlike `serve`, it does
+partial and published indexes in the configured local SQLite cache. Unlike `serve`, it does
 not require a repository argument, start MCP, or perform any indexing.
 
 ```sh
@@ -23,9 +23,11 @@ and `serve`. Index each checkout and Git branch you want to examine first:
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- index /path/to/checkout
 ```
 
+The dashboard checks for updates every five seconds while visible. **Partial index** shows files and symbols as each file finishes. Stopping indexing preserves those files for browsing and search. References become available after verification and publication. MCP queries use the last published snapshot.
+
 The declaration inspector displays stored XML documentation summaries and optional
 LLM-generated summaries. Generation is controlled by `semanticIndexing.llm`; source
-documentation is indexed even when generation is disabled. Summaries come from the published SQLite
+documentation is indexed even when generation is disabled. Summaries come from the saved SQLite
 index; the dashboard never sends code to a model and never opens source files.
 The server renders Markdown with [Markdig](https://github.com/xoofx/markdig): headings,
 lists, emphasis, inline/fenced code, quotes and tables are formatted in the inspector.
@@ -35,10 +37,10 @@ uses the stored Markdown without changing it or requiring reindexing or an LLM c
 
 ## What you can browse
 
-- **Projects:** every recognized, published cache database, identified by the
+- **Projects:** every recognized cache database, identified by the
   original checkout location. The display label is the final directory name;
   the YAML's optional `projectName` is not stored in SQLite.
-- **Branches:** independently published Git branch snapshots, including
+- **Branches:** the latest visible generation of each Git branch, including
   recorded HEAD, completion time, semantic language and reference availability.
 - **Overview:** counts for projects, source files, declarations, resolved usages,
   and a breakdown of declaration kinds.
@@ -56,7 +58,7 @@ uses the stored Markdown without changing it or requiring reindexing or an LLM c
   and target locations. Legacy snapshots without reference indexing show no
   usages; reindex to enable them.
 
-Navigation uses **published snapshots**, not the current working tree. The
+Navigation uses saved index data. The
 recorded revision does not guarantee that files still match the snapshot.
 Only metadata already stored in SQLite is displayed: the dashboard never reads
 or copies source content. Searches are bounded to 200 records per request and
@@ -80,7 +82,7 @@ queries or infer synonyms. The displayed rank is an ordering, not a confidence s
 
 The dashboard resolves a validated cache ID and delegates to the same store
 search as MCP, preserving ranking and limits without duplicating SQL. Unlike
-the MCP use case, it searches the selected **published branch** without checking
+the MCP use case, it searches the selected branch generation without checking
 the checkout's current branch or HEAD. This permits offline inspection of saved
 indexes; it does not promise that their locations match today's working tree.
 Indexes predating FTS5 must be reindexed with `index`; searching never upgrades
@@ -93,7 +95,7 @@ All endpoints use GET and return JSON; the UI is embedded in the executable.
 | Endpoint | Purpose |
 | --- | --- |
 | `/` | Embedded offline HTML/CSS/JavaScript interface |
-| `/api/projects` | Valid cached projects with their published branches |
+| `/api/projects` | Valid cached projects with their indexed branches |
 | `/api/summary?project=ID&branch=NAME` | Kind/language breakdown and reference count |
 | `/api/files?project=ID&branch=NAME` | File metadata page |
 | `/api/symbols?project=ID&branch=NAME` | Declaration page |

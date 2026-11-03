@@ -2,7 +2,7 @@
 
 [English](dashboard.md) · **Français**
 
-La commande `dashboard` ouvre un **explorateur en lecture seule** pour tous les index publiés dans le cache SQLite local configuré. Elle n’exige aucun chemin de dépôt, ne lance pas MCP et n’effectue aucune indexation.
+La commande `dashboard` ouvre un **explorateur en lecture seule** pour tous les index partiels et publiés dans le cache SQLite local configuré. Elle n’exige aucun chemin de dépôt, ne lance pas MCP et n’effectue aucune indexation.
 
 ```sh
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- dashboard
@@ -17,19 +17,21 @@ L’explorateur utilise `CODESEMANTIC4LLM_INDEX_ROOT` ou, par défaut, `LocalApp
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- index /path/to/checkout
 ```
 
+Le tableau de bord vérifie les mises à jour toutes les cinq secondes lorsqu’il est visible. La mention **Partial index** indique que les fichiers terminés et leurs symboles sont consultables, y compris après un arrêt. Les références deviennent disponibles après vérification et publication. Les requêtes MCP utilisent le dernier instantané publié.
+
 L’inspecteur affiche les résumés XML enregistrés et ceux du LLM facultatif, configuré par `semanticIndexing.llm`. La documentation source est indexée même sans génération. Le tableau de bord lit SQLite sans ouvrir les sources ni envoyer de code au modèle. [Markdig](https://github.com/xoofx/markdig) rend les titres, listes, emphases, blocs de code, citations et tableaux dans le panneau de résumé. Le HTML brut s’affiche comme du texte, les images gardent leur libellé et seuls les liens HTTP(S) et mailto sont cliquables. Ce rendu ne modifie pas le Markdown et ne nécessite ni réindexation ni appel au LLM.
 
 ## Données consultables
 
-- **Projets** : bases reconnues et publiées, identifiées par le chemin d’origine. Le libellé est le dernier nom de dossier ; le `projectName` facultatif du YAML n’est pas stocké dans SQLite.
-- **Branches** : instantanés publiés indépendamment, avec HEAD enregistré, date de fin, langue des descriptions et disponibilité des références.
+- **Projets** : bases reconnues, identifiées par le chemin d’origine. Le libellé est le dernier nom de dossier ; le `projectName` facultatif du YAML n’est pas stocké dans SQLite.
+- **Branches** : dernière génération visible de chaque branche, avec HEAD enregistré, date de fin, langue des descriptions et disponibilité des références.
 - **Vue d’ensemble** : nombre de projets, fichiers, déclarations et usages résolus, avec répartition par catégorie.
 - **Intent search** : questions en langage naturel sur les noms simples ou qualifiés et les résumés. Le classement SQLite FTS5/BM25 est celui de `search_code`. Sélectionnez une catégorie et une limite (10 par défaut, 200 maximum). Chaque résultat affiche rang, emplacement et résumé Markdown. Sélectionnez une déclaration pour voir ses usages. Un avis signale les résultats tronqués.
 - **Symboles** : recherche paginée dans les noms qualifiés et les chemins, filtrée par catégorie et fichier. L’inspecteur indique l’emplacement exact, le type contenant et les usages enregistrés.
 - **Fichiers** : recherche par chemin relatif, avec identifiant et version de l’analyseur, empreinte et nombre de déclarations. Sélectionnez un fichier pour voir ses symboles.
 - **Références** : relations résolues sémantiquement et paginées, avec emplacements source et cible. Réindexez les anciens instantanés sans références pour les voir.
 
-La navigation porte sur les **instantanés publiés**. La révision enregistrée ne garantit pas que les fichiers actuels correspondent encore. Le tableau de bord affiche uniquement les métadonnées SQLite. Les recherches utilisent des paramètres SQL et renvoient au plus 200 entrées par requête. Les bases absentes ou corrompues sont ignorées lors de la découverte.
+La navigation porte sur les données enregistrées. La révision enregistrée ne garantit pas que les fichiers actuels correspondent encore. Le tableau de bord affiche uniquement les métadonnées SQLite. Les recherches utilisent des paramètres SQL et renvoient au plus 200 entrées par requête. Les bases absentes ou corrompues sont ignorées lors de la découverte.
 
 ## Essayer la recherche avant de connecter un LLM
 
@@ -37,7 +39,7 @@ Choisissez un projet et une branche, ouvrez **Intent search** et posez par exemp
 
 La recherche est lexicale. Elle normalise la requête (mots vides anglais et français, préfixes littéraux) et applique les poids BM25 8, 4 et 1 au nom simple, au nom qualifié et au résumé. Les identifiants et résumés XML restent recherchables sans LLM. Privilégiez la langue de la documentation ou celle des descriptions générées : le moteur ne traduit pas les questions et ne déduit pas de synonymes. Le rang indique un ordre, pas une probabilité.
 
-Le tableau de bord valide l’identifiant opaque du cache et délègue au même moteur que MCP, avec le même classement et les mêmes limites. Il interroge la **branche publiée sélectionnée** sans vérifier la branche actuelle ni HEAD. On peut ainsi examiner hors ligne un index dont les emplacements ont changé depuis. Pour un index antérieur à FTS5, relancez `index` ; une recherche ne le met jamais à niveau.
+Le tableau de bord valide l’identifiant opaque du cache et délègue au même moteur que MCP, avec le même classement et les mêmes limites. Il interroge la génération visible de la branche sélectionnée sans vérifier la branche actuelle ni HEAD. On peut ainsi examiner hors ligne un index dont les emplacements ont changé depuis. Pour un index antérieur à FTS5, relancez `index` ; une recherche ne le met jamais à niveau.
 
 ## Points d’accès HTTP internes
 
@@ -45,7 +47,7 @@ L’interface HTML/CSS/JavaScript hors ligne est intégrée à l’exécutable e
 
 | Route | Rôle |
 | --- | --- |
-| `/api/projects` | Projets valides et branches publiées |
+| `/api/projects` | Projets valides et branches indexées |
 | `/api/summary?project=ID&branch=NAME` | Répartition par catégorie et langage, nombre de références |
 | `/api/files?project=ID&branch=NAME` | Page de métadonnées de fichiers |
 | `/api/symbols?project=ID&branch=NAME` | Page de déclarations |
