@@ -83,8 +83,8 @@ public sealed class DashboardCodeSearchSteps
         var search = new SearchCode(_store, new SavedRepositoryStateProvider(_selectedState!));
         var expected = await search.ExecuteAsync(_selectedState!.Scope.RootPath, _query, _kind, _limit,
             TestContext.Current.CancellationToken);
-        Assert.Equal(expected.Snapshot, _result!.Snapshot);
-        Assert.Equal(expected.HasMore, _result.HasMore);
+        AssertSnapshot(expected.Snapshot);
+        Assert.Equal(expected.HasMore, _result!.HasMore);
         Assert.Equal(expected.Symbols.Select(symbol => new DashboardSymbol(
             symbol.Language, symbol.Kind, symbol.Name, symbol.QualifiedName,
             symbol.Location.RelativePath, symbol.Location.Line, symbol.Location.Column,
@@ -102,7 +102,11 @@ public sealed class DashboardCodeSearchSteps
 
     [Then(@"the dashboard search identifies the published snapshot for ""(.*)"" branch ""(.*)""")]
     public void ThenSnapshot(string project, string branch) =>
-        Assert.Equal(_store.GetSnapshot(new RepositoryScope(Root(project), branch)), _result!.Snapshot);
+        AssertSnapshot(_store.GetSnapshot(new RepositoryScope(Root(project), branch))!);
+
+    private void AssertSnapshot(RepositoryIndexSnapshot expected) =>
+        Assert.Equal(new DashboardSnapshot(expected.Scope, expected.SnapshotId, expected.RecordedRevision,
+            expected.SemanticLanguage, expected.CompletedAt, expected.FileCount, expected.SymbolCount), _result!.Snapshot);
 
     [Then("the dashboard search rejects the invalid request")]
     public void ThenInvalid() => Assert.IsAssignableFrom<ArgumentException>(_error);

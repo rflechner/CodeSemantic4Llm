@@ -115,11 +115,9 @@ identical, fully reused set of files may copy all reference rows from the previo
 snapshot. This prevents an unchanged caller from retaining a stale edge after its
 target is edited.
 
-One SQLite transaction stages the replacement. Publication switches the branch snapshot
+SQLite commits each completed file and its declarations to a partial generation visible in the dashboard. Publication switches the branch snapshot
 and removes its old generation atomically. Other branches retain their snapshots. A failed
-or canceled run, including an LLM request failure, rolls back; readers continue to see the last
-completed snapshot. A first
-failed run may leave an initialized database with no published snapshot. Concurrent writers
+or canceled run, including an LLM request failure, leaves the completed files available in the dashboard. MCP continues to use the last published snapshot, if one exists. Concurrent writers
 are serialized by SQLite and fail if the lock timeout is exceeded.
 
 Before commit, the command rehashes source files, checks the discovered paths, and rereads

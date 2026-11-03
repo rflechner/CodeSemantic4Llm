@@ -228,7 +228,7 @@ Lancez l’explorateur HTTP local en lecture seule pour consulter dépôts, bran
 dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- dashboard --port 5080
 ```
 
-Ouvrez **http://127.0.0.1:5080/**. L’interface fonctionne hors ligne, sans lire les sources, démarrer MCP ni relancer l’indexation. Indexez d’abord chaque branche à consulter. Le tableau de bord utilise le même `CODESEMANTIC4LLM_INDEX_ROOT` que MCP. [Fonctions et API JSON](docs/dashboard.fr.md)
+Ouvrez **http://127.0.0.1:5080/**. L’interface fonctionne hors ligne, sans lire les sources, démarrer MCP ni relancer l’indexation. Lancez `index` sur la branche à consulter. Chaque fichier terminé et ses symboles apparaissent au fil de l’indexation et restent consultables si vous l’interrompez. Le tableau de bord utilise le même `CODESEMANTIC4LLM_INDEX_ROOT` que MCP. [Fonctions et API JSON](docs/dashboard.fr.md)
 
 ## Indexer avant de lancer MCP
 

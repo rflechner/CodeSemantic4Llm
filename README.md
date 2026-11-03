@@ -338,7 +338,8 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- dashboard --port 5080
 
 Open **http://127.0.0.1:5080/**. The dashboard serves its own offline UI,
 never reads source contents, and does not start the MCP transport or reindex.
-Run `index` on each checkout/branch you want to explore first. It uses the
+Run `index` on the branch you want to explore. The dashboard shows each completed
+file and its symbols during indexing and keeps them available if you stop the run. It uses the
 same optional `CODESEMANTIC4LLM_INDEX_ROOT` environment setting as MCP.
 See [dashboard documentation](docs/dashboard.md) for exploration features and
 the internal read-only JSON API.

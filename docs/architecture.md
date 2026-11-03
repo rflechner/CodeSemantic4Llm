@@ -111,7 +111,7 @@ A repository index must be uniquely identified by a checkout and branch. A branc
 
 `IndexRepository` coordinates Git state, YAML configuration, discovery, source reads,
 analysis, verification and publication through application-owned ports. `IIndexUpdate`
-owns one unpublished generation: disposing it without publication rolls back the update.
+owns one unpublished generation: disposing it without publication preserves completed files for dashboard inspection.
 `ISourceAnalyzer.IndexVersion` invalidates reused analysis when the compiled adapter changes.
 The C# declaration adapter parses syntax independently per file. A second C# adapter now
 builds a transient repository-wide compilation and uses Roslyn SemanticModel to bind
@@ -134,7 +134,7 @@ The declaration pass grows with discovered paths and file metadata; the referenc
 holds Roslyn syntax trees for the selected C# files in memory until binding finishes.
 This increases peak memory on large repositories but never persists source copies.
 
-A single writer transaction builds the new snapshot. Unchanged files reuse derived rows
+The writer commits each complete file to the staged snapshot so dashboard readers can inspect it during indexing. Unchanged files reuse derived rows
 from the same branch when hashes, adapter versions and configuration match. New or changed
 files are analyzed; absent paths never enter the replacement snapshot. Publication switches
 the branch pointer and deletes the old generation in the same transaction. WAL allows

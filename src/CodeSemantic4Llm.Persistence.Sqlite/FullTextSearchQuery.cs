@@ -32,8 +32,15 @@ internal static class FullTextSearchQuery
         "ton", "tu", "un", "une", "vous"
     };
 
-    public static string Build(string query)
+    public static string Build(string query, int maxResults)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
+
+        if (maxResults > 200)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxResults), "Limit must not exceed 200.");
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(query);
 
         if (query.Length > MaximumCharacters)

@@ -27,6 +27,40 @@ public sealed class FullTextSearchTests : IDisposable
         _store = new SqliteIndexStore(_paths);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Dashboard_reads_complete_files_during_and_after_an_interrupted_run(bool hasPublishedIndex)
+    {
+        var token = TestContext.Current.CancellationToken;
+        var scope = Scope("main");
+        var file = File("New.cs", "hash", Symbol("class", "NewType", "New.cs", 1, null));
+        var previous = hasPublishedIndex ? Publish(scope, [File("Old.cs", "old")]) : null;
+        var reader = new SqliteIndexDashboardReader(_paths);
+        using (var update = _store.BeginUpdate(State(scope), "config", "en", token))
+        {
+            update.AddFile(file.File, file.Symbols, token);
+            var project = Assert.Single(reader.ListProjects(token));
+            var branch = Assert.Single(project.Branches);
+            Assert.Null(branch.CompletedAt);
+            Assert.False(branch.HasReferences);
+            Assert.Equal(1, branch.FileCount);
+            Assert.Equal("New.cs", Assert.Single(reader.GetFiles(project.Id, "main", null, 0, 10, token).Items).Path);
+            Assert.Equal("NewType", Assert.Single(reader.SearchCode(project.Id, "main", "NewType", null, 10, token).Symbols).Name);
+            Assert.Equal(previous, _store.GetSnapshot(scope, token));
+            var invalid = File("Bad.cs", "bad", Symbol("class", "Invalid", "Different.cs", 1, null));
+            Assert.Throws<InvalidOperationException>(() => update.AddFile(invalid.File, invalid.Symbols, token));
+        }
+
+        var preview = Assert.Single(reader.ListProjects(token));
+        Assert.Null(Assert.Single(preview.Branches).CompletedAt);
+        Assert.Single(reader.GetFiles(preview.Id, "main", null, 0, 10, token).Items);
+        Assert.Equal(previous, _store.GetSnapshot(scope, token));
+        var published = Publish(scope, [File("Final.cs", "final")]);
+        Assert.Equal(published.CompletedAt, Assert.Single(Assert.Single(reader.ListProjects(token)).Branches).CompletedAt);
+        Assert.Equal("Final.cs", Assert.Single(reader.GetFiles(preview.Id, "main", null, 0, 10, token).Items).Path);
+    }
+
     [Fact]
     public void Ranks_relevant_summaries_and_identifiers_without_reading_source()
     {

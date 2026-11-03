@@ -7,11 +7,11 @@ using Microsoft.Data.Sqlite;
 
 namespace CodeSemantic4Llm.Persistence.Sqlite;
 
-/// <summary>A single writer transaction publishes a complete snapshot; readers retain the previous WAL snapshot.</summary>
+/// <summary>Checkpoints complete files for dashboard reads and publishes the verified generation atomically.</summary>
 internal sealed class SqliteIndexUpdate : IIndexUpdate
 {
     private readonly SqliteConnection _connection;
-    private readonly SqliteTransaction _transaction;
+    private SqliteTransaction _transaction;
     private readonly RepositoryState _state;
     private readonly string _language;
     private readonly long _snapshotId;
@@ -32,6 +32,10 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _transaction = connection.BeginTransaction();
         _previousId = SqliteIndexStore.ReadSnapshot(connection, _transaction, state.Scope)?.SnapshotId;
         _reusableId = GetReusableSnapshot(fingerprint);
+        // Keep the previous preview until this run commits its first complete file (or publishes).
+        using var cleanup = Command("DELETE FROM snapshots WHERE branch = $branch AND completed_utc IS NULL;",
+            ("$branch", state.Scope.BranchName));
+        cleanup.ExecuteNonQuery();
         using var insert = Command("""
             INSERT INTO snapshots(branch, revision, configuration_hash, semantic_language, member_index_version, reference_index_version)
             VALUES ($branch, $revision, $configuration, $language, 1, 1) RETURNING id;
@@ -75,6 +79,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _files++;
         _reusedFiles++;
         _symbols += Convert.ToInt32(symbolCount);
+        CheckpointFile();
         return true;
     }
 
@@ -143,6 +148,7 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
 
         _files++;
         _symbols += symbols.Count;
+        CheckpointFile();
     }
 
     public RepositoryIndexSnapshot Publish(CancellationToken cancellationToken = default)
@@ -171,6 +177,25 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         _insertReference.Dispose();
         _transaction.Dispose();
         _connection.Dispose();
+    }
+
+    private void CheckpointFile()
+    {
+        using var counts = Command("UPDATE snapshots SET file_count = $files, symbol_count = $symbols WHERE id = $snapshot;",
+            ("$files", _files), ("$symbols", _symbols), ("$snapshot", _snapshotId));
+        counts.ExecuteNonQuery();
+        _transaction.Commit();
+        _transaction.Dispose();
+        _transaction = _connection.BeginTransaction();
+        _insertSymbol.Transaction = _transaction;
+        _insertReference.Transaction = _transaction;
+
+        // A concurrent writer may have replaced this branch's preview between transactions.
+        using var owner = Command("SELECT id FROM snapshots WHERE id = $snapshot;", ("$snapshot", _snapshotId));
+        if (owner.ExecuteScalar() is null)
+        {
+            throw new InvalidOperationException("Another index run superseded this branch update.");
+        }
     }
 
     private long? GetReusableSnapshot(string fingerprint)

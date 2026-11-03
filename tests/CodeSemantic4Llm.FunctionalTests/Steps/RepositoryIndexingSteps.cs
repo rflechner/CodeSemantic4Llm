@@ -324,14 +324,22 @@ public sealed partial class RepositoryIndexingSteps
     [Then("only one snapshot remains for the indexed branch")]
     public void ThenOnlyOneCurrentSnapshot() => ThenOnlyOneBranchSnapshot(_result!.Snapshot.Scope.BranchName);
 
-    [Then("only one snapshot remains for branch \"(.*)\"")]
-    public void ThenOnlyOneBranchSnapshot(string branch)
+    private void ThenOnlyOneBranchSnapshot(string branch)
     {
         using var connection = OpenDatabase();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT count(*) FROM snapshots WHERE branch = $branch;";
         command.Parameters.AddWithValue("$branch", branch);
         Assert.Equal(1L, command.ExecuteScalar());
+    }
+
+    [Then("the dashboard shows declaration \"(.*)\" for branch \"(.*)\"")]
+    public void ThenDashboardShowsDeclaration(string name, string branch)
+    {
+        var reader = new SqliteIndexDashboardReader(Paths);
+        var project = Assert.Single(reader.ListProjects(TestContext.Current.CancellationToken));
+        var symbols = reader.GetSymbols(project.Id, branch, null, null, null, 0, 20, TestContext.Current.CancellationToken);
+        Assert.Equal(name, Assert.Single(symbols.Items).Name);
     }
 
     [Then("branch \"(.*)\" retains declaration \"(.*)\"")]

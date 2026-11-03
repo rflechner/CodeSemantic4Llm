@@ -84,16 +84,16 @@ Feature: Persist a repository index before starting MCP
     When I attempt to index the checkout
     Then indexing fails without publishing a snapshot
     And the previous snapshot still contains "OldType"
-    And only one snapshot remains for branch "main"
+    And the dashboard shows declaration "<visible>" for branch "main"
 
     Examples:
-      | failure                  |
-      | cancellation             |
-      | analyzer failure         |
-      | source modification      |
-      | branch switch            |
-      | configuration change     |
-      | source deletion          |
+      | failure              | visible |
+      | cancellation         | OldType |
+      | analyzer failure     | OldType |
+      | source modification  | NewType |
+      | branch switch        | NewType |
+      | configuration change | NewType |
+      | source deletion      | NewType |
 
   Scenario: Readers see the old snapshot until the replacement commits
     Given the indexing checkout contains these sources:
