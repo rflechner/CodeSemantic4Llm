@@ -16,7 +16,7 @@ internal sealed class RepositoryIndexProgressDisplay(ProgressContext context) : 
             FinishTask();
             _phase = value.Phase;
 
-            if (value.Phase == RepositoryIndexingPhase.Completed)
+            if (value.Phase is RepositoryIndexingPhase.Completed or RepositoryIndexingPhase.FolderCompleted)
             {
                 return;
             }

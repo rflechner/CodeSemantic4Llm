@@ -17,17 +17,26 @@ public sealed class RepositoryIndexCommand(IndexRepository indexRepository, Inde
             ? await console.Progress().AutoClear(true)
                 .Columns(new SpinnerColumn(), new TaskDescriptionColumn(), new ProgressBarColumn(),
                     new PercentageColumn(), new ElapsedTimeColumn())
-                .StartAsync(progress => indexRepository.ExecuteAsync(
-                    settings.RepositoryRoot, new RepositoryIndexProgressDisplay(progress), cancellationToken, settings.Force))
-            : await indexRepository.ExecuteAsync(settings.RepositoryRoot, cancellationToken: cancellationToken, force: settings.Force);
+                .StartAsync(progress => indexRepository.RunAsync(
+                    settings.RepositoryRoot, settings.Folder, new RepositoryIndexProgressDisplay(progress), cancellationToken, settings.Force))
+            : await indexRepository.RunAsync(settings.RepositoryRoot, settings.Folder, cancellationToken: cancellationToken, force: settings.Force);
 
-        console.WriteLine($"Repository: {result.Snapshot.Scope.RootPath}");
-        console.WriteLine($"Index database: {storagePaths.GetDatabasePath(result.Snapshot.Scope.RootPath)}");
-        console.WriteLine($"Branch: {result.Snapshot.Scope.BranchName}");
-        console.WriteLine($"Recorded HEAD: {result.Snapshot.RecordedRevision ?? "unborn branch"}");
-        console.WriteLine($"Indexed files: {result.Snapshot.FileCount}; declarations: {result.Snapshot.SymbolCount}");
+        console.WriteLine($"Repository: {result.State.Scope.RootPath}");
+        console.WriteLine($"Index database: {storagePaths.GetDatabasePath(result.State.Scope.RootPath)}");
+        console.WriteLine($"Branch: {result.State.Scope.BranchName}");
+        console.WriteLine($"Recorded HEAD: {result.State.Revision ?? "unborn branch"}");
+        if (result.PublishedSnapshot is { } snapshot)
+        {
+            console.WriteLine($"Indexed files: {snapshot.FileCount}; declarations: {snapshot.SymbolCount}");
+            console.WriteLine($"Published snapshot: {snapshot.SnapshotId}");
+        }
+        else
+        {
+            console.WriteLine($"Indexed folder: {settings.Folder}; matching files: {result.AnalyzedFiles + result.ReusedFiles}");
+            console.WriteLine("Run index without --folder to publish a complete branch snapshot.");
+        }
+
         console.WriteLine($"Analyzed files: {result.AnalyzedFiles}; reused files: {result.ReusedFiles}");
-        console.WriteLine($"Published snapshot: {result.Snapshot.SnapshotId}");
         return 0;
     }
 }

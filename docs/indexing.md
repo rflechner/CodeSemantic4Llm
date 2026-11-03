@@ -103,6 +103,10 @@ Unsupported schema versions fail without changes; select a fresh cache directory
 
 ## Reindexing and publication
 
+From the checkout root, run `codesemantic4llm index . --folder src/XXX.Domain` to index just that directory and its descendants. Use the path relative to the checkout, with quotes if it contains spaces. Repository exclusions, analyzer settings and symlink checks apply. An empty or excluded folder reports zero matching files. Add `--force` to reanalyze the selected files.
+
+The command stops with a partial index visible in the dashboard. MCP continues to use the last published checkout snapshot, if one exists. A later `codesemantic4llm index .` reuses matching files, computes references across the checkout and publishes the complete branch snapshot.
+
 Rerun the same command after edits. Content hashes, analyzer identity/version and a
 configuration fingerprint decide whether prior declarations can be reused. New and
 changed files are analyzed; deleted files and old rename locations disappear on publication.

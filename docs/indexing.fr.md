@@ -52,6 +52,10 @@ Un schéma non pris en charge provoque un échec sans modification. Sélectionne
 
 ## Réindexation et publication
 
+Depuis la racine du dépôt, lancez `codesemantic4llm index . --folder src/XXX.Domain` pour indexer uniquement ce dossier et ses sous-dossiers. Indiquez son chemin relatif à la racine, entre guillemets s’il contient des espaces. Les exclusions, la configuration des analyseurs et les contrôles des liens symboliques s’appliquent. Un dossier vide ou exclu indique zéro fichier correspondant. Ajoutez `--force` pour réanalyser les fichiers sélectionnés.
+
+La commande s’arrête avec un index partiel consultable dans le tableau de bord. MCP continue d’utiliser le dernier instantané publié, s’il existe. En lançant ensuite `codesemantic4llm index .`, vous réutilisez les fichiers inchangés, calculez les références entre dossiers et publiez l’instantané complet de la branche.
+
 Relancez la même commande après modification. Empreintes de contenu, identité/version de l’analyseur et empreinte de configuration déterminent la réutilisation des déclarations. Fichiers nouveaux ou modifiés sont analysés. Les chemins supprimés ou renommés disparaissent à la publication. Un changement d’analyseurs, d’extensions, d’exclusions, de langue ou de réglages LLM invalide la réutilisation. Les fichiers inchangés réutilisent leurs résumés sans appel au LLM. Tous les fichiers sélectionnés sont néanmoins lus et hachés.
 
 Les références sont globales. Si un fichier sélectionné apparaît, change ou disparaît, toutes les références C# sont résolues sur la nouvelle compilation. Seul un ensemble identique entièrement réutilisé peut reprendre toutes les lignes de référence précédentes. Un appelant inchangé ne conserve donc pas un lien périmé vers une cible modifiée.

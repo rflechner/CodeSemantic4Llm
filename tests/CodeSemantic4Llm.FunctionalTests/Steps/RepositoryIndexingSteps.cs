@@ -95,10 +95,10 @@ public sealed partial class RepositoryIndexingSteps
     }
 
     [When("I index the checkout from the console")]
-    public Task WhenIndexFromConsole() => RunIndexCommand(false);
+    public Task WhenIndexFromConsole() => RunIndexCommand();
 
     [When("I force indexing from the console")]
-    public Task WhenForceIndexFromConsole() => RunIndexCommand(true);
+    public Task WhenForceIndexFromConsole() => RunIndexCommand("--force");
 
     [Then(@"the console reports (\d+) analyzed files and (\d+) reused files")]
     public void ThenConsoleReportsReuse(int analyzed, int reused) =>
@@ -118,13 +118,27 @@ public sealed partial class RepositoryIndexingSteps
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => CreateIndexer().ExecuteAsync(_root, progress, stop.Token));
     }
 
-    private async Task RunIndexCommand(bool force)
+    [When("I index only folder \"(.*)\" from the console")]
+    public Task WhenIndexFolder(string folder) => RunIndexCommand("--folder", folder);
+
+    [Then(@"the folder command succeeds with (\d+) matching files")]
+    public void ThenFolderSucceeded(int count)
+    {
+        Assert.Equal(0, _console!.ExitCode);
+        Assert.Contains($"matching files: {count}", _console.Output);
+        Assert.DoesNotContain("Published snapshot:", _console.Output);
+    }
+
+    [Then("the folder command fails")]
+    public void ThenFolderFailed() => Assert.NotEqual(0, _console!.ExitCode);
+
+    private async Task RunIndexCommand(params string[] options)
     {
         var services = new ServiceCollection();
         services.AddSingleton(CreateIndexer());
         services.AddSingleton(Paths);
         var relativeRoot = Path.GetRelativePath(Directory.GetCurrentDirectory(), _root);
-        _console = await ConsoleCommandRunner.RunAsync(force ? ["index", relativeRoot, "--force"] : ["index", relativeRoot], services, Token);
+        _console = await ConsoleCommandRunner.RunAsync(["index", relativeRoot, .. options], services, Token);
     }
 
     [When("I attempt to index the checkout")]

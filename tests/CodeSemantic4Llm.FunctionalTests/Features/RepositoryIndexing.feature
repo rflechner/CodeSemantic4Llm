@@ -56,6 +56,48 @@ Feature: Persist a repository index before starting MCP
     Then the index command succeeds with 3 indexed files
     And the console reports 3 analyzed files and 0 reused files
 
+  Scenario: Start with one folder and reuse it when indexing the checkout
+    Given the indexing checkout contains these sources:
+      | path                          | source                    |
+      | src/XXX.Domain/sub/Order.cs   | public class Order {}     |
+      | src/XXX.Domain/bin/Ignored.cs | public class Ignored {}   |
+      | src/XXX.Domain.Api/Api.cs     | public class Api {}       |
+    When I index only folder "./src/XXX.Domain/" from the console
+    Then the folder command succeeds with 1 matching files
+    And the dashboard shows declaration "Order" for branch "main"
+    When I read the saved index status
+    Then the status has no snapshot
+    When I index the checkout again
+    Then the run analyzes 1 files and reuses 1 files
+    And declaration "Order" is stored at "src/XXX.Domain/sub/Order.cs"
+
+  Scenario: A folder run preserves the published checkout and skips excluded ancestors
+    Given the indexing checkout contains these sources:
+      | path                    | source                      |
+      | Core/Model.cs           | public class BeforeType {}  |
+      | vendor/Lib/Generated.cs | public class Generated {}   |
+    And the checkout has a completed index
+    When I replace indexing source "Core/Model.cs" with "public class AfterType {}"
+    And I index only folder "Core" from the console
+    Then the folder command succeeds with 1 matching files
+    And the previous snapshot still contains "BeforeType"
+    And the dashboard shows declaration "AfterType" for branch "main"
+    When I index only folder "vendor/Lib" from the console
+    Then the folder command succeeds with 0 matching files
+    And the dashboard shows declaration "AfterType" for branch "main"
+
+  Scenario Outline: Invalid folder requests do not start an index update
+    Given the indexing checkout contains 1 C# file
+    When I index only folder "<folder>" from the console
+    Then the folder command fails
+    And no index database was created
+
+    Examples:
+      | folder          |
+      | ../outside      |
+      | missing         |
+      | src/File0000.cs |
+
   Scenario: Reindex modifications, deletions and renames without stale declarations
     Given the indexing checkout contains these sources:
       | path        | source                     |

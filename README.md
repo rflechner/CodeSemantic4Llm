@@ -359,6 +359,9 @@ contains a plain summary. Unlike preview, indexing has no file-count limit.
 
 After an interruption, rerun `index .` to reuse files already analyzed on the same branch.
 Use `index . --force` to reanalyze every selected file.
+To start with one directory, run `index . --folder src/XXX.Domain` from the checkout root.
+The command stops after that subtree. Inspect its declarations in the dashboard, then run
+`index .` when you want the full branch index and cross-folder references.
 
 Rerunning `index` reuses unchanged declarations and removes stale records after deletions
 or renames. FTS5 search entries follow the same atomic snapshot lifecycle. Each branch keeps its own completed snapshot. Failures and cancellation preserve
