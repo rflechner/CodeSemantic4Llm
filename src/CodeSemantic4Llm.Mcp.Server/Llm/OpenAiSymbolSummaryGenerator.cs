@@ -95,6 +95,12 @@ public sealed class OpenAiSymbolSummaryGenerator(
             }
         }
 
+        // Preserve the legacy single-endpoint exception contract for existing clients.
+        if (settings.Endpoints.Count == 1 && lastFailure is not null)
+        {
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(lastFailure).Throw();
+        }
+
         throw new IOException("All configured LLM endpoints failed to generate a summary.", lastFailure);
     }
 

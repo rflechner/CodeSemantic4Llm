@@ -114,4 +114,42 @@ public sealed partial class RepositoryConfigurationSteps
         Assert.Equal(_loadedConfiguration.SemanticIndexing.Llm.ApiKeyEnvironmentVariable,
             llm.GetProperty("apiKeyEnvironmentVariable").GetString());
     }
+    [Then("the configured LLM endpoints are:")]
+    public void ThenConfiguredLlmEndpoints(Table table)
+    {
+        var endpoints = _loadedConfiguration!.SemanticIndexing.Llm.Endpoints;
+        Assert.Equal(table.Rows.Count, endpoints.Count);
+
+        for (var index = 0; index < endpoints.Count; index++)
+        {
+            var row = table.Rows[index];
+            Assert.Equal(row["url"], endpoints[index].BaseUrl.ToString());
+            Assert.Equal(string.IsNullOrWhiteSpace(row["apiKey"]) ? null : row["apiKey"], endpoints[index].ApiKey);
+            Assert.Equal(string.IsNullOrWhiteSpace(row["environment"]) ? null : row["environment"],
+                endpoints[index].ApiKeyEnvironmentVariable);
+        }
+    }
+
+    [Then(@"the LLM dispatch settings are (\d+), (\d+), (\d+) and (\d+)")]
+    public void ThenLlmDispatchSettings(int concurrency, int retry, int delay, int failedFiles)
+    {
+        var settings = _loadedConfiguration!.SemanticIndexing.Llm;
+        Assert.Equal(concurrency, settings.MaxConcurrentRequestsPerEndpoint);
+        Assert.Equal(retry, settings.RetryCount);
+        Assert.Equal(delay, settings.RetryDelayMilliseconds);
+        Assert.Equal(failedFiles, settings.MaxConsecutiveFailedFiles);
+    }
+
+    [Then("the MCP configuration hides endpoint API keys")]
+    public void ThenMcpConfigurationHidesEndpointApiKeys()
+    {
+        var raw = _llmConfigurationResponse.GetRawText();
+        Assert.DoesNotContain("token-one", raw);
+        Assert.DoesNotContain("token-two", raw);
+        Assert.DoesNotContain("\"apiKey\"", raw);
+
+        var llm = McpCodeClient.ReadContent(_llmConfigurationResponse).GetProperty("semanticIndexing").GetProperty("llm");
+        Assert.Equal(2, llm.GetProperty("endpoints").GetArrayLength());
+    }
+
 }
