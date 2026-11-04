@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace CodeSemantic4Llm.Domain.Configuration;
@@ -28,11 +29,13 @@ public sealed class LlmEndpointConfiguration
     public Uri BaseUrl { get; }
 
     /// <summary>Optional inline Bearer token. Never include this in logs or MCP responses.</summary>
+    [JsonIgnore]
     public string? ApiKey { get; }
 
     /// <summary>Fallback variable for a Bearer token; each endpoint resolves its own variable.</summary>
     public string? ApiKeyEnvironmentVariable { get; }
 
+    [JsonIgnore]
     public Uri ChatCompletionsEndpoint =>
         new(BaseUrl.AbsoluteUri.TrimEnd('/') + "/chat/completions", UriKind.Absolute);
 

@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 namespace CodeSemantic4Llm.Domain.Configuration;
 
 /// <summary>Repository-local LLM settings with backwards-compatible single-endpoint authentication.</summary>
@@ -121,6 +122,7 @@ public sealed class LlmSummaryConfiguration
 
     public string? Model { get; }
     public string? ApiKeyEnvironmentVariable { get; }
+    [JsonIgnore]
     public string? ApiKey { get; }
     public string? ReasoningEffort { get; }
     public int? MaxCompletionTokens { get; }
@@ -136,6 +138,7 @@ public sealed class LlmSummaryConfiguration
     /// <summary>Stop a run after this many consecutive failed files, not failed HTTP attempts.</summary>
     public int MaxConsecutiveFailedFiles { get; }
 
+    [JsonIgnore]
     public Uri ChatCompletionsEndpoint => BaseUrl is null
         ? throw new InvalidOperationException("LLM legacy baseUrl is not configured.")
         : new Uri(BaseUrl.AbsoluteUri.TrimEnd('/') + "/chat/completions", UriKind.Absolute);
