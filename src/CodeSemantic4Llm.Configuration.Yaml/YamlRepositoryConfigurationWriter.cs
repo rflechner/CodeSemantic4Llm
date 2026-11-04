@@ -108,6 +108,49 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
             llmDocument["model"] = llm.Model;
         }
 
+        if (llm.BaseUrl is null && llm.Endpoints.Count > 0)
+        {
+            llmDocument["endpoints"] = llm.Endpoints.Select(endpoint =>
+            {
+                var entry = new Dictionary<string, object>
+                {
+                    ["baseUrl"] = endpoint.BaseUrl.ToString()
+                };
+
+                if (endpoint.ApiKeyEnvironmentVariable is not null)
+                {
+                    entry["apiKeyEnvironmentVariable"] = endpoint.ApiKeyEnvironmentVariable;
+                }
+
+                if (endpoint.ApiKey is not null)
+                {
+                    entry["apiKey"] = endpoint.ApiKey;
+                }
+
+                return entry;
+            }).ToArray();
+        }
+
+        if (llm.MaxConcurrentRequestsPerEndpoint != LlmSummaryConfiguration.DefaultMaxConcurrentRequestsPerEndpoint)
+        {
+            llmDocument["maxConcurrentRequestsPerEndpoint"] = llm.MaxConcurrentRequestsPerEndpoint;
+        }
+
+        if (llm.RetryCount != LlmSummaryConfiguration.DefaultRetryCount)
+        {
+            llmDocument["retryCount"] = llm.RetryCount;
+        }
+
+        if (llm.RetryDelayMilliseconds != LlmSummaryConfiguration.DefaultRetryDelayMilliseconds)
+        {
+            llmDocument["retryDelayMilliseconds"] = llm.RetryDelayMilliseconds;
+        }
+
+        if (llm.MaxConsecutiveFailedFiles != LlmSummaryConfiguration.DefaultMaxConsecutiveFailedFiles)
+        {
+            llmDocument["maxConsecutiveFailedFiles"] = llm.MaxConsecutiveFailedFiles;
+        }
+
         if (llm.ApiKeyEnvironmentVariable is not null)
         {
             llmDocument["apiKeyEnvironmentVariable"] = llm.ApiKeyEnvironmentVariable;

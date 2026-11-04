@@ -8,7 +8,8 @@ internal static class RepositoryConfigurationJson
 {
     public static void RemoveSecrets(JsonTypeInfo typeInfo)
     {
-        if (typeInfo.Type != typeof(LlmSummaryConfiguration))
+        if (typeInfo.Type != typeof(LlmSummaryConfiguration) &&
+            typeInfo.Type != typeof(LlmEndpointConfiguration))
         {
             return;
         }
