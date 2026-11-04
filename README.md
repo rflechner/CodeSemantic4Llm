@@ -123,6 +123,9 @@ Indexing sends method and type declarations to the configured LLM when summaries
 are needed. Choose an endpoint suitable for your source code. See
 [LLM configuration](docs/repository-configuration.md#optional-per-repository-llm-summaries)
 for prompt customization and other options.
+For multiple machines, replace `baseUrl` with an `endpoints` list, each with its own
+optional API key. Requests are distributed concurrently with retries and failover.
+See [parallel LLM endpoints](docs/repository-configuration.md#parallel-llm-endpoints-and-resilience).
 
 ### Preview the selected files
 
