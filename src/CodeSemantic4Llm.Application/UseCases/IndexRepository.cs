@@ -23,7 +23,7 @@ public sealed record RepositoryIndexingResult(RepositoryIndexSnapshot Snapshot, 
 public sealed record RepositoryIndexRun(
     RepositoryState State, int AnalyzedFiles, int ReusedFiles, RepositoryIndexSnapshot? PublishedSnapshot);
 
-/// <summary>Indexes all selected files, one at a time, into an atomic branch-specific generation.</summary>
+/// <summary>Indexes selected files with bounded parallel summary generation and serialized SQLite staging.</summary>
 public sealed class IndexRepository(
     IRepositoryStateProvider stateProvider,
     IRepositoryConfigurationLoader configurationLoader,
@@ -83,40 +83,131 @@ public sealed class IndexRepository(
             folder is null ? null : Path.GetRelativePath(root, Path.GetFullPath(folder, root)).Replace('\\', '/'));
         var reused = 0;
         var indexedFiles = new List<IndexedSourceFile>(candidates.Count);
+        var pending = new Queue<PendingSummary>();
+        var failedFiles = new List<string>();
+        var consecutiveFailures = 0;
+        var completed = 0;
+        var llm = configuration.SemanticIndexing.Llm;
+        var maxInFlight = llm.Enabled
+            ? Math.Clamp(llm.Endpoints.Count * llm.MaxConcurrentRequestsPerEndpoint, 1, 32)
+            : 1;
+        using var summaryCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         progress?.Report(new(RepositoryIndexingPhase.Indexing, 0, candidates.Count));
 
-        for (var index = 0; index < candidates.Count; index++)
+        // Both TryReuse and AddFile are deliberately serialized. Only HTTP-backed summary work
+        // is in flight concurrently, keeping SQLite transactions and file ordering deterministic.
+        async Task CommitNextAsync()
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var candidate = candidates[index];
-            var source = await sourceReader.ReadAsync(root, candidate.RelativePath, cancellationToken);
-            var adapter = candidate.Analyzer.Analyzer;
-            var shared = useSharedSummaries && sharedSummaryCache is not null
-                ? await sharedSummaryCache.ReadAsync(root, candidate.RelativePath, cancellationToken)
-                : new SharedSummaryRead("", null);
-            var file = new IndexedSourceFile(candidate.RelativePath, source.ContentHash, adapter.AnalyzerId,
-                adapter.IndexVersion, shared.Digest);
-            indexedFiles.Add(file);
+            var work = pending.Dequeue();
 
-            if (requireValidSyntax)
+            if (work.Summaries is { } task)
             {
-                ValidateSyntax(state.Scope, file, source.Document, cancellationToken);
-            }
+                try
+                {
+                    var described = await task;
+                    update.AddFile(work.File, described, cancellationToken);
+                    consecutiveFailures = 0;
+                }
+                catch (Exception exception) when (!cancellationToken.IsCancellationRequested &&
+                                                   exception is not OperationCanceledException)
+                {
+                    failedFiles.Add(work.File.RelativePath);
+                    consecutiveFailures++;
 
-            if (!force && update.TryReuse(file, cancellationToken))
-            {
-                reused++;
+                    if (consecutiveFailures >= llm.MaxConsecutiveFailedFiles)
+                    {
+                        throw new IOException(
+                            $"LLM generation failed for {consecutiveFailures} consecutive files. " +
+                            $"Stopping at '{work.File.RelativePath}' without publishing the index.", exception);
+                    }
+                }
             }
             else
             {
-                var symbols = await adapter.AnalyzeAsync(source.Document, cancellationToken);
-                var described = await SummarizeSymbolsAsync(
-                    source.Document, candidate.Analyzer, symbols, configuration.SemanticIndexing,
-                    shared.File?.Matches(file, summaryProfile) == true ? shared.File : null, cancellationToken);
-                update.AddFile(file, described, cancellationToken);
+                // Reused files count as successful files for consecutive-failure accounting.
+                consecutiveFailures = 0;
             }
 
-            progress?.Report(new(RepositoryIndexingPhase.Indexing, index + 1, candidates.Count));
+            completed++;
+            progress?.Report(new(RepositoryIndexingPhase.Indexing, completed, candidates.Count));
+        }
+
+        try
+        {
+            foreach (var candidate in candidates)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var source = await sourceReader.ReadAsync(root, candidate.RelativePath, cancellationToken);
+                var adapter = candidate.Analyzer.Analyzer;
+                var shared = useSharedSummaries && sharedSummaryCache is not null
+                    ? await sharedSummaryCache.ReadAsync(root, candidate.RelativePath, cancellationToken)
+                    : new SharedSummaryRead("", null);
+                var file = new IndexedSourceFile(candidate.RelativePath, source.ContentHash, adapter.AnalyzerId,
+                    adapter.IndexVersion, shared.Digest);
+                indexedFiles.Add(file);
+
+                if (requireValidSyntax)
+                {
+                    ValidateSyntax(state.Scope, file, source.Document, cancellationToken);
+                }
+
+                if (!force && update.TryReuse(file, cancellationToken))
+                {
+                    reused++;
+                    pending.Enqueue(new PendingSummary(file, null));
+                }
+                else
+                {
+                    var symbols = await adapter.AnalyzeAsync(source.Document, cancellationToken);
+                    var task = SummarizeSymbolsAsync(
+                        source.Document, candidate.Analyzer, symbols, configuration.SemanticIndexing,
+                        shared.File?.Matches(file, summaryProfile) == true ? shared.File : null,
+                        summaryCancellation.Token);
+                    pending.Enqueue(new PendingSummary(file, task));
+                }
+
+                if (pending.Count >= maxInFlight)
+                {
+                    await CommitNextAsync();
+                }
+            }
+
+            while (pending.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await CommitNextAsync();
+            }
+
+            if (failedFiles.Count > 0)
+            {
+                throw new IOException(
+                    $"LLM summaries failed for {failedFiles.Count} source file(s). " +
+                    "Successful files remain staged for reuse; the published index was not replaced.");
+            }
+        }
+        catch
+        {
+            // Stop work already scheduled beyond the file that crossed the failure threshold.
+            summaryCancellation.Cancel();
+
+            foreach (var work in pending)
+            {
+                if (work.Summaries is not { } task)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    await task;
+                }
+                catch (Exception)
+                {
+                    // The original failure or cancellation is the relevant outcome.
+                }
+            }
+
+            throw;
         }
 
         // Reference binding depends on other files and cannot be reused per file like declarations.
@@ -349,7 +440,6 @@ public sealed class IndexRepository(
             {
                 configuration.SemanticIndexing.Llm.Enabled,
                 configuration.SemanticIndexing.Llm.ForceGeneration,
-                Url = configuration.SemanticIndexing.Llm.BaseUrl?.AbsoluteUri,
                 configuration.SemanticIndexing.Llm.Model,
                 configuration.SemanticIndexing.Llm.ReasoningEffort,
                 configuration.SemanticIndexing.Llm.MaxCompletionTokens,
@@ -380,6 +470,9 @@ public sealed class IndexRepository(
     /// <summary>Portable model, prompt and language identity; secrets never enter exported metadata.</summary>
     public SummaryProfile GetSummaryProfile(RepositoryIndexingConfiguration configuration) =>
         SummaryProfile.Create(configuration.SemanticIndexing, summaryGenerator?.CacheVersion ?? "unavailable");
+
+    private sealed record PendingSummary(
+        IndexedSourceFile File, Task<IReadOnlyList<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition>>? Summaries);
 
     private sealed record IndexingSource(string RelativePath, ConfiguredSourceAnalyzer Analyzer);
 
