@@ -247,6 +247,31 @@ public sealed class LlmSummaryIndexTests : IDisposable
     }
 
     [Fact]
+    public async Task A_successful_file_resets_the_consecutive_llm_failure_counter()
+    {
+        await CreateCheckoutAsync();
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
+        ConfigureParallelLlm();
+
+        for (var i = 1; i <= 11; i++)
+        {
+            var path = $"File{i:00}.cs";
+            File.WriteAllText(Path.Combine(Root, path), $"public class File{i:00} {{}}");
+
+            if (i != 6)
+            {
+                _generator.FailingPaths.Add(path);
+            }
+        }
+
+        var failure = await Assert.ThrowsAsync<IOException>(() =>
+            CreateIndexer().ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken));
+
+        // Five failures, one success, five failures: never reaches the six-file cutoff.
+        Assert.Contains("LLM summaries failed for 10", failure.Message);
+    }
+
+    [Fact]
     public async Task Switching_from_legacy_url_to_multiple_endpoints_does_not_regenerate_unchanged_files()
     {
         await CreateCheckoutAsync();

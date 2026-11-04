@@ -102,11 +102,11 @@ public sealed class IndexRepository(
 
             if (work.Summaries is { } task)
             {
+                IReadOnlyList<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition>? described = null;
+
                 try
                 {
-                    var described = await task;
-                    update.AddFile(work.File, described, cancellationToken);
-                    consecutiveFailures = 0;
+                    described = await task;
                 }
                 catch (Exception exception) when (!cancellationToken.IsCancellationRequested &&
                                                    exception is not OperationCanceledException)
@@ -120,6 +120,13 @@ public sealed class IndexRepository(
                             $"LLM generation failed for {consecutiveFailures} consecutive files. " +
                             $"Stopping at '{work.File.RelativePath}' without publishing the index.", exception);
                     }
+                }
+
+                if (described is not null)
+                {
+                    // Persistence failures are fatal: never mistake them for recoverable LLM failures.
+                    update.AddFile(work.File, described, cancellationToken);
+                    consecutiveFailures = 0;
                 }
             }
             else
