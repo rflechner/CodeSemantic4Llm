@@ -198,6 +198,23 @@ public sealed class LlmSummaryIndexTests : IDisposable
 
 
     [Fact]
+    public async Task Indexing_multiple_files_keeps_two_llm_summary_requests_in_flight()
+    {
+        await CreateCheckoutAsync();
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
+        ConfigureParallelLlm();
+        File.WriteAllText(Path.Combine(Root, "Other.cs"), "public class Other {}");
+        File.WriteAllText(Path.Combine(Root, "Third.cs"), "public class Third {}");
+        _generator.DelayMilliseconds = 75;
+
+        var result = await CreateIndexer().ExecuteAsync(
+            Root, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, result.AnalyzedFiles);
+        Assert.Equal(2, _generator.PeakConcurrentRequests);
+    }
+
+    [Fact]
     public async Task Failed_summary_files_do_not_publish_but_successful_checkpoints_are_reused()
     {
         await CreateCheckoutAsync();
@@ -379,10 +396,14 @@ public sealed class LlmSummaryIndexTests : IDisposable
         public List<(SymbolDefinition Symbol, string Source, string Language)> Requests { get; } = [];
         public bool Fail { get; set; }
         public HashSet<string> FailingPaths { get; } = [];
+        public int DelayMilliseconds { get; set; }
+        private int _active;
+        private int _peak;
+        public int PeakConcurrentRequests => Volatile.Read(ref _peak);
         public string? SummaryOverride { get; set; }
         public LlmSummaryConfiguration? LastSettings { get; private set; }
 
-        public Task<string> SummarizeAsync(
+        public async Task<string> SummarizeAsync(
             SymbolDefinition symbol, string declarationSource, SemanticIndexingConfiguration configuration,
             CancellationToken cancellationToken = default)
         {
@@ -393,12 +414,34 @@ public sealed class LlmSummaryIndexTests : IDisposable
                 throw new IOException("Simulated LLM failure");
             }
 
-            lock (Requests)
+            var active = Interlocked.Increment(ref _active);
+            int peak;
+
+            do
             {
-                Requests.Add((symbol, declarationSource, configuration.Language));
-                LastSettings = configuration.Llm;
+                peak = Volatile.Read(ref _peak);
             }
-            return Task.FromResult(SummaryOverride ?? string.Join("\n", Enumerable.Range(1, 12).Select(n => $"Summary line {n}")));
+            while (peak < active && Interlocked.CompareExchange(ref _peak, active, peak) != peak);
+
+            try
+            {
+                lock (Requests)
+                {
+                    Requests.Add((symbol, declarationSource, configuration.Language));
+                    LastSettings = configuration.Llm;
+                }
+
+                if (DelayMilliseconds > 0)
+                {
+                    await Task.Delay(DelayMilliseconds, cancellationToken);
+                }
+
+                return SummaryOverride ?? string.Join("\n", Enumerable.Range(1, 12).Select(n => $"Summary line {n}"));
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _active);
+            }
         }
     }
 }
