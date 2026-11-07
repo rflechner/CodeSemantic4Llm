@@ -222,6 +222,12 @@ The command reads the configured debounce at startup: restart an existing watche
 to apply a changed interval. Changing only the debounce does not invalidate
 indexed declarations, hashes, or cached summaries.
 
+When `sharedSummaries` is enabled with LLM indexing, each successful watch
+reconciliation also refreshes the versioned Markdown summaries so they can be
+committed together with the source changes; see
+[Shared LLM summaries in Git](shared-summaries.md). With sharing disabled, the
+watcher never writes Markdown.
+
 ## Select the advertised MCP tools
 
 `tools` lists the MCP tools this repository's server may advertise and accept. Use it when a
@@ -610,6 +616,7 @@ Run all tests with `dotnet test CodeSemantic4Llm.slnx`.
 The optional top-level boolean `sharedSummaries` defaults to `false`. Set it to `true`
 to import compatible `.codesemantic4llm/summaries/**/*.md` when LLM indexing is enabled.
 The existing `semanticIndexing.llm` and `semanticIndexing.language` settings remain the
-only generation configuration. Export remains explicit through `cache-export`.
+only generation configuration. `cache-export` publishes explicitly; `watch` also refreshes
+the summaries automatically after each successful reconciliation.
 The `.codesemantic4llm` directory is always excluded from source discovery.
 See [Shared LLM summaries in Git](shared-summaries.md) for the complete workflow.

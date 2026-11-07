@@ -143,7 +143,9 @@ codesemantic4llm watch .
 
 La surveillance se suspend pendant un merge, rebase, cherry-pick, revert, verrouillage de l’index Git ou présence de chemins non résolus. À la fin, l’événement ou le contrôle périodique suivant valide la copie réelle. Les échecs sont signalés puis réessayés. Une annulation annule la mise à jour inachevée. `index` vérifie également sources et fichiers partagés à chaque appel sans rester en écoute.
 
-Lancez un seul `watch` par copie dans un terminal distinct de `codesemantic4llm serve .`. `serve` ne démarre pas de surveillance et sa politique MCP par défaut reste en lecture seule. Aucun hook Git n’est installé. Sans `watch` ou `index` actif, `git pull` seul ne déclenche aucun LLM. Le surveillant peut appeler le modèle si une description est invalidée. Il n’exporte jamais le Markdown régénéré : la publication demande une action explicite.
+Lancez un seul `watch` par copie dans un terminal distinct de `codesemantic4llm serve .`. `serve` ne démarre pas de surveillance et sa politique MCP par défaut reste en lecture seule. Aucun hook Git n’est installé. Sans `watch` ou `index` actif, `git pull` seul ne déclenche aucun LLM. Le surveillant peut appeler le modèle si une description est invalidée.
+
+Quand `sharedSummaries` est activé avec l’indexation LLM, chaque réconciliation réussie du surveillant rafraîchit aussi le Markdown versionné dans `.codesemantic4llm/summaries`, afin que les descriptions soient prêtes à committer avec les changements de sources qui les ont produites. Ce rafraîchissement applique les règles de vérification de `cache-export` et remplace les documents qui diffèrent de l’index publié ; relisez `git diff` avant d’ajouter les fichiers, comme pour un export explicite. Un échec de rafraîchissement n’invalide jamais l’instantané publié : il est signalé puis retenté au cycle suivant. Avec `sharedSummaries` désactivé, le surveillant n’écrit jamais de Markdown et l’export reste une invocation explicite de `cache-export`.
 
 ## Politique de conflits Git
 

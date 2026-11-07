@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using CodeSemantic4Llm.Configuration.Yaml;
 using CodeSemantic4Llm.Domain.Repositories;
 using CodeSemantic4Llm.Infrastructure.Workspace;
 using Reqnroll;
@@ -33,7 +34,7 @@ public sealed class WatchRepositorySteps
     {
         var repo = Repository;
         _cancellation = CancellationTokenSource.CreateLinkedTokenSource(repo.Token);
-        _running = new RepositoryIndexWatcher(repo.Indexer, new GitSummaryIntegration())
+        _running = new RepositoryIndexWatcher(repo.Indexer, new GitSummaryIntegration(), repo.Exporter, new YamlRepositoryConfigurationLoader())
             .RunAsync(repo.Root, _reports.Enqueue, _cancellation.Token,
                 reconciliationInterval: TimeSpan.FromSeconds(10),
                 debounceInterval: TimeSpan.FromMilliseconds(750));
@@ -104,6 +105,13 @@ public sealed class WatchRepositorySteps
     public async Task ThenDeleted() =>
         await Eventually(() => Repository.Store.FindSymbols(Scope, "Sample", 10, Repository.Token)
             .Symbols.Count == 0);
+
+    [Then("the watcher refreshes the shared summary for commit")]
+    public async Task ThenRefreshesSharedSummaryForCommit()
+    {
+        await Eventually(() => File.Exists(Repository.SummaryPath)
+            && File.ReadAllText(Repository.SummaryPath).Contains("Completed", StringComparison.Ordinal));
+    }
 
     [AfterScenario]
     public async Task StopAsync()

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using CodeSemantic4Llm.Configuration.Yaml;
 using CodeSemantic4Llm.Infrastructure.Workspace;
 using Xunit;
 
@@ -16,7 +17,7 @@ public sealed class SharedSummaryWatcherTests
         repo.UseFreshDatabase();
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(repo.Token);
         var reports = new ConcurrentQueue<string>();
-        var watcher = new RepositoryIndexWatcher(repo.Indexer, new GitSummaryIntegration());
+        var watcher = new RepositoryIndexWatcher(repo.Indexer, new GitSummaryIntegration(), repo.Exporter, new YamlRepositoryConfigurationLoader());
         var running = watcher.RunAsync(repo.Root, reports.Enqueue, cancellation.Token, TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(100));
         try
         {
@@ -53,7 +54,7 @@ public sealed class SharedSummaryWatcherTests
         repo.Generator.Timeout = providerTimeout;
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(repo.Token);
         var reports = new ConcurrentQueue<string>();
-        var running = new RepositoryIndexWatcher(repo.Indexer, new GitSummaryIntegration())
+        var running = new RepositoryIndexWatcher(repo.Indexer, new GitSummaryIntegration(), repo.Exporter, new YamlRepositoryConfigurationLoader())
             .RunAsync(repo.Root, reports.Enqueue, cancellation.Token, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(100));
         try
         {
@@ -61,6 +62,33 @@ public sealed class SharedSummaryWatcherTests
             Assert.Equal(first.Snapshot.SnapshotId, repo.Store.GetSnapshot(first.Snapshot.Scope, repo.Token)!.SnapshotId);
             repo.Generator.Fail = false;
             await Eventually(() => repo.Store.FindSymbols(first.Snapshot.Scope, "Retry", 10, repo.Token).Symbols.Count == 1, repo.Token);
+        }
+        finally
+        {
+            await cancellation.CancelAsync();
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => running);
+        }
+    }
+
+    [Fact]
+    public async Task Watch_refreshes_shared_summaries_for_commit_after_each_reconciliation()
+    {
+        using var repo = new SharedSummaryTestRepository();
+        await repo.InitializeAsync();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(repo.Token);
+        var reports = new ConcurrentQueue<string>();
+        var running = new RepositoryIndexWatcher(
+            repo.Indexer, new GitSummaryIntegration(), repo.Exporter, new YamlRepositoryConfigurationLoader())
+            .RunAsync(repo.Root, reports.Enqueue, cancellation.Token, TimeSpan.FromSeconds(1), TimeSpan.FromMilliseconds(100));
+        try
+        {
+            // The startup reconciliation exports descriptions even though no export command ran.
+            await Eventually(() => File.Exists(repo.SummaryPath), repo.Token);
+
+            File.AppendAllText(Path.Combine(repo.Root, "Sample.cs"), "\nclass Refreshed {}\n");
+            await Eventually(() => File.ReadAllText(repo.SummaryPath).Contains("Refreshed", StringComparison.Ordinal), repo.Token);
+            Assert.Contains(reports, report => report.StartsWith("Shared summaries refreshed:", StringComparison.Ordinal));
+            Assert.DoesNotContain(reports, report => report.Contains("failed", StringComparison.Ordinal));
         }
         finally
         {
