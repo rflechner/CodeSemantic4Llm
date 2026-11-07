@@ -1,11 +1,18 @@
 using System.Diagnostics;
 using System.Threading.Channels;
+using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.UseCases;
 
 namespace CodeSemantic4Llm.Infrastructure.Workspace;
 
-/// <summary>Serial, syntax-safe index reconciliation after a configurable filesystem quiet period.</summary>
-public sealed class RepositoryIndexWatcher(IndexRepository indexer, GitSummaryIntegration git)
+/// <summary>
+/// Serial, syntax-safe index reconciliation after a configurable filesystem quiet period. When shared
+/// summaries are enabled, each successful reconciliation also refreshes the versioned Markdown so a
+/// developer can commit descriptions together with the source changes that produced them.
+/// </summary>
+public sealed class RepositoryIndexWatcher(
+    IndexRepository indexer, GitSummaryIntegration git, ExportSharedSummaries exporter,
+    IRepositoryConfigurationLoader configurationLoader)
 {
     /// <summary>
     /// Verifies the checkout at startup, debounces subsequent edits, and periodically recovers from missed
@@ -43,7 +50,8 @@ public sealed class RepositoryIndexWatcher(IndexRepository indexer, GitSummaryIn
                 part.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
                 part.Equals("obj", StringComparison.OrdinalIgnoreCase));
 
-            if (excluded || relative.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
+            if (excluded || relative.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ||
+                relative.StartsWith(MarkdownSummaryCache.DirectoryName + "/", StringComparison.Ordinal))
             {
                 return;
             }
@@ -89,6 +97,10 @@ public sealed class RepositoryIndexWatcher(IndexRepository indexer, GitSummaryIn
                 var result = await indexer.ExecuteAsync(
                     root, cancellationToken: cancellationToken, requireValidSyntax: true);
                 report?.Invoke($"Index verified: {result.AnalyzedFiles} analyzed, {result.ReusedFiles} reused.");
+                if (result.AnalyzedFiles > 0)
+                {
+                    await RefreshSharedSummariesAsync(root, report, cancellationToken);
+                }
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
@@ -96,6 +108,36 @@ public sealed class RepositoryIndexWatcher(IndexRepository indexer, GitSummaryIn
                 // A failed generation never replaces the published branch snapshot.
                 report?.Invoke("Index reconciliation failed; the previous snapshot remains available: " + exception.Message);
             }
+        }
+    }
+
+    /// <summary>
+    /// Keeps the versioned Markdown in sync with the published index so descriptions can be committed
+    /// with the code. A refresh failure never invalidates the published snapshot; the next cycle retries.
+    /// </summary>
+    private async Task RefreshSharedSummariesAsync(
+        string root, Action<string>? report, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var configuration = await configurationLoader.LoadAsync(root, cancellationToken);
+            if (!configuration.SharedSummaries || !configuration.SemanticIndexing.Llm.Enabled)
+            {
+                return;
+            }
+
+            var exported = await exporter.ExecuteAsync(root, overwrite: true, cancellationToken);
+            if (exported > 0)
+            {
+                report?.Invoke($"Shared summaries refreshed: {exported} file(s) ready to commit with the source.");
+            }
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
+        {
+            // Concurrent edits legitimately abort the export's strict verification; the next
+            // cycle retries against the then-published snapshot.
+            report?.Invoke("Shared summaries not refreshed: " + exception.Message
+                + " The next reconciliation retries; the published index remains available.");
         }
     }
 

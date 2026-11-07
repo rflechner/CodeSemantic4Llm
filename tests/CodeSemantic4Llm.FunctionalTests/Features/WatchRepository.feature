@@ -17,6 +17,13 @@ Feature: Debounced, syntax-safe source watching
     When I save two valid C# edits within the quiet period
     Then the watcher publishes the final declaration but not the intermediate one
 
+  Scenario: Successful reconciliation refreshes shared summaries for commit
+    Given a C# repository with a published code index
+    And I watch the repository with a short debounce
+    When I finish the C# declaration
+    Then the watcher publishes the corrected declaration
+    And the watcher refreshes the shared summary for commit
+
   Scenario: Rename and deletion remove stale source locations
     Given a C# repository with a published code index
     And I watch the repository with a short debounce
