@@ -50,7 +50,8 @@ public sealed class RepositoryIndexWatcher(
                 part.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
                 part.Equals("obj", StringComparison.OrdinalIgnoreCase));
 
-            if (excluded || relative.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase))
+            if (excluded || relative.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase) ||
+                relative.StartsWith(MarkdownSummaryCache.DirectoryName + "/", StringComparison.Ordinal))
             {
                 return;
             }
@@ -96,7 +97,10 @@ public sealed class RepositoryIndexWatcher(
                 var result = await indexer.ExecuteAsync(
                     root, cancellationToken: cancellationToken, requireValidSyntax: true);
                 report?.Invoke($"Index verified: {result.AnalyzedFiles} analyzed, {result.ReusedFiles} reused.");
-                await RefreshSharedSummariesAsync(root, report, cancellationToken);
+                if (result.AnalyzedFiles > 0)
+                {
+                    await RefreshSharedSummariesAsync(root, report, cancellationToken);
+                }
             }
             catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {

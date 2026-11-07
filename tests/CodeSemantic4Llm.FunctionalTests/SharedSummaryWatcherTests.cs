@@ -26,9 +26,9 @@ public sealed class SharedSummaryWatcherTests
             await Eventually(() => reports.Any(report => report.StartsWith("Index verified:", StringComparison.Ordinal)), repo.Token, reports);
             Assert.NotNull(repo.Store.GetSnapshot(scope, repo.Token));
             Assert.Equal(2, repo.Generator.Calls); // Startup reused the other developer's output.
-            File.WriteAllText(repo.SummaryPath, File.ReadAllText(repo.SummaryPath).Replace("nebula", "watcherquasar"));
-            await Eventually(() => repo.Store.SearchCode(scope, "watcherquasar", null, 10, repo.Token).Symbols.Count == 2, repo.Token, reports);
-            Assert.Equal(2, repo.Generator.Calls);
+            File.AppendAllText(Path.Combine(repo.Root, "Sample.cs"), "\npublic class WatcherQuasar {}\n");
+            await Eventually(() => repo.Store.FindSymbols(scope, "WatcherQuasar", 10, repo.Token).Symbols.Count == 1, repo.Token, reports);
+            Assert.True(repo.Generator.Calls > 2);
             File.AppendAllText(Path.Combine(repo.Root, "Sample.cs"), "\nclass Added {}\n");
             await Eventually(() => repo.Store.FindSymbols(scope, "Added", 10, repo.Token).Symbols.Count == 1, repo.Token, reports);
             Assert.True(repo.Generator.Calls > 2);
