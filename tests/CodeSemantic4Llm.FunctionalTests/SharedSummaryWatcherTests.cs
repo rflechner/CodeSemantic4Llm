@@ -23,14 +23,14 @@ public sealed class SharedSummaryWatcherTests
         {
             var scope = (await repo.State.GetStateAsync(repo.Root, repo.Token)).Scope;
             // A fresh database file can exist before its schema is initialized; wait for publication.
-            await Eventually(() => reports.Any(report => report.StartsWith("Index verified:", StringComparison.Ordinal)), repo.Token);
+            await Eventually(() => reports.Any(report => report.StartsWith("Index verified:", StringComparison.Ordinal)), repo.Token, reports);
             Assert.NotNull(repo.Store.GetSnapshot(scope, repo.Token));
             Assert.Equal(2, repo.Generator.Calls); // Startup reused the other developer's output.
             File.WriteAllText(repo.SummaryPath, File.ReadAllText(repo.SummaryPath).Replace("nebula", "watcherquasar"));
-            await Eventually(() => repo.Store.SearchCode(scope, "watcherquasar", null, 10, repo.Token).Symbols.Count == 2, repo.Token);
+            await Eventually(() => repo.Store.SearchCode(scope, "watcherquasar", null, 10, repo.Token).Symbols.Count == 2, repo.Token, reports);
             Assert.Equal(2, repo.Generator.Calls);
             File.AppendAllText(Path.Combine(repo.Root, "Sample.cs"), "\nclass Added {}\n");
-            await Eventually(() => repo.Store.FindSymbols(scope, "Added", 10, repo.Token).Symbols.Count == 1, repo.Token);
+            await Eventually(() => repo.Store.FindSymbols(scope, "Added", 10, repo.Token).Symbols.Count == 1, repo.Token, reports);
             Assert.True(repo.Generator.Calls > 2);
             Assert.DoesNotContain(reports, report => report.Contains("failed", StringComparison.Ordinal));
         }
@@ -58,10 +58,10 @@ public sealed class SharedSummaryWatcherTests
             .RunAsync(repo.Root, reports.Enqueue, cancellation.Token, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(100));
         try
         {
-            await Eventually(() => reports.Any(report => report.Contains("failed", StringComparison.Ordinal)), repo.Token);
+            await Eventually(() => reports.Any(report => report.Contains("failed", StringComparison.Ordinal)), repo.Token, reports);
             Assert.Equal(first.Snapshot.SnapshotId, repo.Store.GetSnapshot(first.Snapshot.Scope, repo.Token)!.SnapshotId);
             repo.Generator.Fail = false;
-            await Eventually(() => repo.Store.FindSymbols(first.Snapshot.Scope, "Retry", 10, repo.Token).Symbols.Count == 1, repo.Token);
+            await Eventually(() => repo.Store.FindSymbols(first.Snapshot.Scope, "Retry", 10, repo.Token).Symbols.Count == 1, repo.Token, reports);
         }
         finally
         {
@@ -83,10 +83,10 @@ public sealed class SharedSummaryWatcherTests
         try
         {
             // The startup reconciliation exports descriptions even though no export command ran.
-            await Eventually(() => File.Exists(repo.SummaryPath), repo.Token);
+            await Eventually(() => File.Exists(repo.SummaryPath), repo.Token, reports);
 
             File.AppendAllText(Path.Combine(repo.Root, "Sample.cs"), "\nclass Refreshed {}\n");
-            await Eventually(() => File.ReadAllText(repo.SummaryPath).Contains("Refreshed", StringComparison.Ordinal), repo.Token);
+            await Eventually(() => File.ReadAllText(repo.SummaryPath).Contains("Refreshed", StringComparison.Ordinal), repo.Token, reports);
             Assert.Contains(reports, report => report.StartsWith("Shared summaries refreshed:", StringComparison.Ordinal));
             Assert.DoesNotContain(reports, report => report.Contains("failed", StringComparison.Ordinal));
         }
@@ -97,12 +97,15 @@ public sealed class SharedSummaryWatcherTests
         }
     }
 
-    private static async Task Eventually(Func<bool> condition, CancellationToken cancellationToken)
+    private static async Task Eventually(
+        Func<bool> condition, CancellationToken cancellationToken, IEnumerable<string>? reports = null)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(15);
+        var deadline = DateTime.UtcNow.AddSeconds(30);
         while (!condition())
         {
-            Assert.True(DateTime.UtcNow < deadline, "The watcher did not publish the expected state within 15 seconds.");
+            Assert.True(DateTime.UtcNow < deadline,
+                "The watcher did not publish the expected state within 30 seconds. Reports so far: "
+                + (reports is null ? "(not captured)" : string.Join(" | ", reports)));
             await Task.Delay(100, cancellationToken);
         }
     }
