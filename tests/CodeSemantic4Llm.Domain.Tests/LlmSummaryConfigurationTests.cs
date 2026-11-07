@@ -105,4 +105,70 @@ public sealed class LlmSummaryConfigurationTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new LlmSummaryConfiguration(maxCompletionTokens: value));
     }
+    [Fact]
+    public void Multiple_endpoints_have_independent_credentials_and_dispatch_settings()
+    {
+        var first = new LlmEndpointConfiguration("http://localhost:1234/v1", "FIRST_KEY");
+        var second = new LlmEndpointConfiguration("https://second.example.test/v1", apiKey: "second-secret");
+        var settings = new LlmSummaryConfiguration(
+            enabled: true, model: "shared-model", endpoints: [first, second],
+            maxConcurrentRequestsPerEndpoint: 2, retryCount: 4,
+            retryDelayMilliseconds: 250, maxConsecutiveFailedFiles: 6);
+
+        Assert.Null(settings.BaseUrl);
+        Assert.Equal(2, settings.Endpoints.Count);
+        Assert.Equal("FIRST_KEY", settings.Endpoints[0].ApiKeyEnvironmentVariable);
+        Assert.Equal("second-secret", settings.Endpoints[1].ApiKey);
+        Assert.Equal("https://second.example.test/v1/chat/completions",
+            settings.Endpoints[1].ChatCompletionsEndpoint.ToString());
+        Assert.Equal(2, settings.MaxConcurrentRequestsPerEndpoint);
+        Assert.Equal(4, settings.RetryCount);
+        Assert.Equal(250, settings.RetryDelayMilliseconds);
+        Assert.Equal(6, settings.MaxConsecutiveFailedFiles);
+    }
+
+    [Fact]
+    public void Single_endpoint_settings_keep_the_legacy_configuration_compatible()
+    {
+        var settings = new LlmSummaryConfiguration(true, "http://localhost:1234/v1",
+            "model", "LLM_KEY", "inline-secret");
+
+        var endpoint = Assert.Single(settings.Endpoints);
+        Assert.Equal(settings.BaseUrl, endpoint.BaseUrl);
+        Assert.Equal(settings.ApiKey, endpoint.ApiKey);
+        Assert.Equal(settings.ApiKeyEnvironmentVariable, endpoint.ApiKeyEnvironmentVariable);
+        Assert.Equal(1, settings.MaxConcurrentRequestsPerEndpoint);
+        Assert.Equal(3, settings.RetryCount);
+        Assert.Equal(6, settings.MaxConsecutiveFailedFiles);
+    }
+
+    [Fact]
+    public void Legacy_authentication_and_endpoint_list_cannot_be_combined()
+    {
+        Assert.Throws<ArgumentException>(() => new LlmSummaryConfiguration(
+            enabled: true, baseUrl: "http://localhost:1234/v1", model: "model",
+            endpoints: [new LlmEndpointConfiguration("http://localhost:5678/v1")]));
+    }
+
+    [Fact]
+    public void Empty_endpoint_lists_are_not_accepted()
+    {
+        Assert.Throws<ArgumentException>(() => new LlmSummaryConfiguration(
+            enabled: true, model: "model", endpoints: []));
+    }
+
+    [Theory]
+    [InlineData(0, 3, 100, 6)]
+    [InlineData(33, 3, 100, 6)]
+    [InlineData(1, -1, 100, 6)]
+    [InlineData(1, 11, 100, 6)]
+    [InlineData(1, 3, -1, 6)]
+    [InlineData(1, 3, 100, 0)]
+    public void Dispatch_settings_are_bounded(int concurrency, int retry, int delay, int failureThreshold)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LlmSummaryConfiguration(
+            maxConcurrentRequestsPerEndpoint: concurrency, retryCount: retry,
+            retryDelayMilliseconds: delay, maxConsecutiveFailedFiles: failureThreshold));
+    }
+
 }

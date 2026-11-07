@@ -35,6 +35,16 @@ semanticIndexing:
     # maxCompletionTokens: 2048
     # apiKey: your-api-key # Takes priority over apiKeyEnvironmentVariable when non-empty.
     # apiKeyEnvironmentVariable: CODESEMANTIC4LLM_LLM_API_KEY
+    # Or configure multiple independently authenticated endpoints instead of baseUrl:
+    # endpoints:
+    #   - baseUrl: http://127.0.0.1:1234/v1
+    #     apiKeyEnvironmentVariable: FIRST_LLM_KEY
+    #   - baseUrl: http://192.168.1.50:1234/v1
+    #     apiKeyEnvironmentVariable: SECOND_LLM_KEY
+    # maxConcurrentRequestsPerEndpoint: 1
+    # retryCount: 3
+    # retryDelayMilliseconds: 1000
+    # maxConsecutiveFailedFiles: 6
 
 # User-defined excludes extend built-in .git, bin, obj and .codesemantic4llm exclusions.
 # Git submodules are NOT automatically excluded; opt out by path as needed.

@@ -79,7 +79,15 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
                         document.SemanticIndexing.Llm.ReasoningEffort,
                         document.SemanticIndexing.Llm.MaxCompletionTokens,
                         document.SemanticIndexing.Llm.ForceGeneration,
-                        document.SemanticIndexing.Llm.SystemPrompt));
+                        document.SemanticIndexing.Llm.SystemPrompt,
+                        document.SemanticIndexing.Llm.Endpoints?.Select(endpoint =>
+                            new LlmEndpointConfiguration(
+                                endpoint?.BaseUrl ?? throw new ArgumentException("Each LLM endpoint needs a baseUrl."),
+                                endpoint.ApiKeyEnvironmentVariable, endpoint.ApiKey)),
+                        document.SemanticIndexing.Llm.MaxConcurrentRequestsPerEndpoint,
+                        document.SemanticIndexing.Llm.RetryCount,
+                        document.SemanticIndexing.Llm.RetryDelayMilliseconds,
+                        document.SemanticIndexing.Llm.MaxConsecutiveFailedFiles));
 
             var fileExtensions = MapFileExtensions(document.FileExtensions);
             var tools = MapTools(document.Tools);
@@ -197,5 +205,24 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         public string? ReasoningEffort { get; set; }
 
         public int? MaxCompletionTokens { get; set; }
+
+        public List<LlmEndpointYamlDocument?>? Endpoints { get; set; }
+
+        public int MaxConcurrentRequestsPerEndpoint { get; set; } =
+            LlmSummaryConfiguration.DefaultMaxConcurrentRequestsPerEndpoint;
+
+        public int RetryCount { get; set; } = LlmSummaryConfiguration.DefaultRetryCount;
+
+        public int RetryDelayMilliseconds { get; set; } = LlmSummaryConfiguration.DefaultRetryDelayMilliseconds;
+
+        public int MaxConsecutiveFailedFiles { get; set; } =
+            LlmSummaryConfiguration.DefaultMaxConsecutiveFailedFiles;
+    }
+
+    private sealed class LlmEndpointYamlDocument
+    {
+        public string? BaseUrl { get; set; }
+        public string? ApiKeyEnvironmentVariable { get; set; }
+        public string? ApiKey { get; set; }
     }
 }

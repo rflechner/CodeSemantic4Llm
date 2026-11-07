@@ -80,7 +80,7 @@ semanticIndexing:
 
 Conservez `version`, `analyzers` et `tools`. Renseignez l’adresse et le modèle de votre serveur compatible avec l’API OpenAI. Si nécessaire, décommentez `apiKeyEnvironmentVariable` et définissez cette variable dans le terminal avant l’indexation. Pour des descriptions en français, utilisez `language: fr`.
 
-Lorsque des descriptions manquent, l’indexeur envoie les déclarations de méthodes et de types au serveur choisi. Tenez-en compte dans le choix du serveur. Voir les [options du LLM et du prompt](docs/repository-configuration.fr.md#résumés-facultatifs-par-llm).
+Lorsque des descriptions manquent, l’indexeur envoie les déclarations de méthodes et de types au serveur choisi. Tenez-en compte dans le choix du serveur. Voir les [options du LLM et du prompt](docs/repository-configuration.fr.md#résumés-facultatifs-par-llm). Pour plusieurs machines, remplacez `baseUrl` par une liste `endpoints`, avec une clé API par serveur. Les requêtes sont parallélisées avec retries et basculement. Voir [la configuration multiserveur](docs/repository-configuration.fr.md#plusieurs-endpoints-llm-et-tolérance-aux-erreurs).
 
 ### Vérifier les fichiers sélectionnés
 

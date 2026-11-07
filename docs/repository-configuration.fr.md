@@ -271,6 +271,56 @@ Activez `semanticIndexing.llm.enabled: true` dans le YAML de chaque copie concer
 - Les clés directes sont en clair dans le YAML. Gardez les vraies clés hors du contrôle de version. Les réponses MCP de configuration et leurs journaux de charge utile omettent `apiKey`. Les clés ne sont pas stockées dans SQLite ; leur rotation ne régénère pas les résumés.
 - `baseUrl` accepte uniquement HTTP(S), sans identifiants intégrés ni chaîne de requête. L’API doit prendre en charge les chat completions compatibles OpenAI. Un fournisseur exigeant d’autres chemins ou mécanismes d’authentification nécessite une passerelle compatible.
 
+### Plusieurs endpoints LLM et tolérance aux erreurs
+
+Utilisez une liste `endpoints` **à la place** de l’ancien `baseUrl` ; les deux
+formats ne peuvent pas coexister. Chaque serveur possède sa propre `apiKey`
+et/ou `apiKeyEnvironmentVariable` facultatives. La clé directe est prioritaire
+uniquement pour ce serveur. Modèle, prompt et options de génération restent communs.
+
+```yaml
+semanticIndexing:
+  language: fr
+  llm:
+    enabled: true
+    model: my-local-model
+    endpoints:
+      - baseUrl: http://127.0.0.1:1234/v1
+        apiKeyEnvironmentVariable: LOCAL_LLM_KEY
+      - baseUrl: http://192.168.1.50:1234/v1
+        apiKeyEnvironmentVariable: SECOND_LLM_KEY
+    maxConcurrentRequestsPerEndpoint: 1
+    retryCount: 3
+    retryDelayMilliseconds: 1000
+    maxConsecutiveFailedFiles: 6
+```
+
+Chaque emplacement HTTP disponible reçoit la prochaine requête ; les serveurs
+rapides traitent donc plus de travail. Jusqu’à
+`min(32, endpoints × maxConcurrentRequestsPerEndpoint)` fichiers peuvent être
+traités en parallèle, mais les écritures SQLite restent séquentielles.
+
+- `maxConcurrentRequestsPerEndpoint` vaut **1** par défaut (1–32).
+- `retryCount` vaut **3 tentatives supplémentaires** par endpoint (0–10).
+  Les erreurs HTTP 408/429/5xx, réseau, timeout et JSON invalide sont retentées.
+  Les erreurs HTTP 4xx permanentes, dont 401/403, et les clés absentes ne le sont pas.
+- `retryDelayMilliseconds` vaut **1000** par défaut (0–60000) : attente
+  exponentielle avec dispersion aléatoire, plafonnée à 30 secondes.
+- Un endpoint en échec définitif est retiré de la file pour cette configuration ;
+  un autre serveur reprend la requête avec sa propre authentification.
+- `maxConsecutiveFailedFiles` vaut **6** (1–1000). Un fichier n’échoue
+  qu’après l’échec de tous les serveurs disponibles. Les échecs sont comptés dans
+  l’ordre des fichiers, et non des réponses HTTP ; chaque succès, même réutilisé,
+  remet le compteur à zéro. Au seuil, le traitement s’arrête.
+- Si un fichier échoue, l’index incomplet n’est **pas publié**. L’ancien index
+  reste visible, les fichiers réussis restent en cache SQLite et sont réutilisés
+  à la prochaine exécution. Les fichiers échoués seront retentés.
+
+URLs, clés, parallélisme et retries sont des paramètres techniques et
+**n’invalident pas les résumés déjà générés**. Modèle, prompt, langue et options
+de génération continuent de les invalider. Ne versionnez pas de vraies clés API :
+les réponses MCP masquent également les clés imbriquées dans `endpoints`.
+
 ### Privilégier la documentation source
 
 Classes, structures, interfaces, records, méthodes et constructeurs C# utilisent par défaut leur propre `<summary>` XML non vide. Roslyn extrait le texte complet, sans limite de dix lignes. Les marqueurs de commentaire et balises sont retirés. Entités, références `<see>`, `<paramref>` et paragraphes deviennent du texte lisible. `<param>`, `<returns>` et `<remarks>` ne font pas partie du résumé.
@@ -290,7 +340,7 @@ Ce réglage seul n’active pas les appels. Le modifier invalide la réutilisati
 
 Lorsque la génération est nécessaire, le modèle reçoit **la méthode C# entière** avec les commentaires XML qui la précèdent (`summary`, `param`, `returns`…) ou **la déclaration de type entière**, membres compris. Le prompt demande un résumé précis et concis dans `semanticIndexing.language`, limité à **10 lignes non vides par déclaration**. Le résumé est enregistré avec le symbole dans SQLite, renvoyé par MCP et affiché dans le tableau de bord. Extraits source et prompts ne sont pas enregistrés dans le cache.
 
-L’envoi de code propriétaire à un service HTTP nécessite un choix explicite. Utilisez un serveur local de confiance ou un service autorisé. Une requête LLM qui échoue ou ne répond pas annule la nouvelle génération d’index et conserve l’instantané publié précédent. Changer modèle, URL, langue, activation, effort de raisonnement, budget, prompt, priorité de la documentation ou source invalide la réutilisation concernée. Les fichiers inchangés conservent leurs résumés. Aucune représentation vectorielle n’est encore générée.
+L’envoi de code propriétaire à un service HTTP nécessite un choix explicite. Utilisez un serveur local de confiance ou un service autorisé. Les appels LLM sont retentés et peuvent basculer vers un autre endpoint. Si des fichiers échouent malgré tout, l’ancien index reste visible et les résultats intermédiaires réussis sont réutilisables. Changer modèle, langue, activation, effort de raisonnement, budget, prompt, priorité de la documentation ou source invalide la réutilisation ; changer seulement les URLs ou les retries ne l’invalide pas. Aucune représentation vectorielle n’est encore générée.
 
 ### Personnaliser le prompt système
 

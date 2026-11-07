@@ -12,7 +12,7 @@ public sealed record SummaryProfile(string ModelHash, string PromptHash, string 
     public static SummaryProfile Create(SemanticIndexingConfiguration settings, string promptVersion) => new(
         Hash(JsonSerializer.Serialize(new
         {
-            Url = settings.Llm.BaseUrl?.AbsoluteUri.TrimEnd('/'), settings.Llm.Model,
+            settings.Llm.Model,
             settings.Llm.ReasoningEffort, settings.Llm.MaxCompletionTokens, settings.Llm.ForceGeneration
         })),
         Hash(JsonSerializer.Serialize(new { promptVersion, settings.Llm.SystemPrompt })),

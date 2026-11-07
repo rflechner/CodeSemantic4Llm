@@ -196,6 +196,125 @@ public sealed class LlmSummaryIndexTests : IDisposable
         Assert.Equal("Computes a total.", Assert.Single(store.FindSymbols(scope, "Calculate", 10, cancellationToken).Symbols).Summary);
     }
 
+
+    [Fact]
+    public async Task Indexing_multiple_files_keeps_two_llm_summary_requests_in_flight()
+    {
+        await CreateCheckoutAsync();
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
+        ConfigureParallelLlm();
+        File.WriteAllText(Path.Combine(Root, "Other.cs"), "public class Other {}");
+        File.WriteAllText(Path.Combine(Root, "Third.cs"), "public class Third {}");
+        _generator.DelayMilliseconds = 75;
+
+        var result = await CreateIndexer().ExecuteAsync(
+            Root, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, result.AnalyzedFiles);
+        Assert.Equal(2, _generator.PeakConcurrentRequests);
+    }
+
+    [Fact]
+    public async Task Failed_summary_files_do_not_publish_but_successful_checkpoints_are_reused()
+    {
+        await CreateCheckoutAsync();
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
+        ConfigureParallelLlm();
+        File.WriteAllText(Path.Combine(Root, "One.cs"), "public class One {}");
+        File.WriteAllText(Path.Combine(Root, "Two.cs"), "public class Two {}");
+        File.WriteAllText(Path.Combine(Root, "Three.cs"), "public class Three {}");
+        _generator.FailingPaths.Add("Two.cs");
+        var indexer = CreateIndexer();
+
+        var error = await Assert.ThrowsAsync<IOException>(() =>
+            indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Contains("LLM summaries failed for 1", error.Message);
+        _generator.FailingPaths.Clear();
+
+        var completed = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(3, completed.ReusedFiles);
+        Assert.Equal(1, completed.AnalyzedFiles);
+        Assert.NotNull(Assert.Single(
+            new SqliteIndexStore(Paths).FindSymbols(completed.Snapshot.Scope, "Two", 10).Symbols).Summary);
+    }
+
+    [Fact]
+    public async Task Six_consecutive_failed_files_stop_without_replacing_a_published_snapshot()
+    {
+        await CreateCheckoutAsync();
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
+        ConfigureParallelLlm();
+        var indexer = CreateIndexer();
+        var previous = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+
+        for (var i = 1; i <= 6; i++)
+        {
+            var path = $"Fail{i:00}.cs";
+            File.WriteAllText(Path.Combine(Root, path), $"public class Fail{i:00} {{}}");
+            _generator.FailingPaths.Add(path);
+        }
+
+        var failure = await Assert.ThrowsAsync<IOException>(() =>
+            indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken));
+
+        Assert.Contains("6 consecutive files", failure.Message);
+        var saved = new SqliteIndexStore(Paths).GetSnapshot(previous.Snapshot.Scope);
+        Assert.Equal(previous.Snapshot.SnapshotId, saved!.SnapshotId);
+    }
+
+    [Fact]
+    public async Task A_successful_file_resets_the_consecutive_llm_failure_counter()
+    {
+        await CreateCheckoutAsync();
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
+        ConfigureParallelLlm();
+
+        for (var i = 1; i <= 11; i++)
+        {
+            var path = $"File{i:00}.cs";
+            File.WriteAllText(Path.Combine(Root, path), $"public class File{i:00} {{}}");
+
+            if (i != 6)
+            {
+                _generator.FailingPaths.Add(path);
+            }
+        }
+
+        var failure = await Assert.ThrowsAsync<IOException>(() =>
+            CreateIndexer().ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken));
+
+        // Five failures, one success, five failures: never reaches the six-file cutoff.
+        Assert.Contains("LLM summaries failed for 10", failure.Message);
+    }
+
+    [Fact]
+    public async Task Switching_from_legacy_url_to_multiple_endpoints_does_not_regenerate_unchanged_files()
+    {
+        await CreateCheckoutAsync();
+        WriteYaml(enabled: true, forceGeneration: true, model: "model-one");
+        var indexer = CreateIndexer();
+        await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(2, _generator.Requests.Count);
+
+        ConfigureParallelLlm();
+        var second = await indexer.ExecuteAsync(Root, cancellationToken: TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, second.ReusedFiles);
+        Assert.Equal(2, _generator.Requests.Count);
+    }
+
+    private void ConfigureParallelLlm()
+    {
+        var yaml = File.ReadAllText(ConfigPath).Replace(
+            "    baseUrl: http://127.0.0.1:1234/v1\n",
+            "    endpoints:\n" +
+            "      - baseUrl: http://127.0.0.1:1234/v1\n" +
+            "      - baseUrl: http://127.0.0.1:1235/v1\n",
+            StringComparison.Ordinal);
+        File.WriteAllText(ConfigPath, yaml);
+    }
+
     private IndexRepository CreateIndexer() => new(
         _git,
         new YamlRepositoryConfigurationLoader(),
@@ -276,23 +395,53 @@ public sealed class LlmSummaryIndexTests : IDisposable
     {
         public List<(SymbolDefinition Symbol, string Source, string Language)> Requests { get; } = [];
         public bool Fail { get; set; }
+        public HashSet<string> FailingPaths { get; } = [];
+        public int DelayMilliseconds { get; set; }
+        private int _active;
+        private int _peak;
+        public int PeakConcurrentRequests => Volatile.Read(ref _peak);
         public string? SummaryOverride { get; set; }
         public LlmSummaryConfiguration? LastSettings { get; private set; }
 
-        public Task<string> SummarizeAsync(
+        public async Task<string> SummarizeAsync(
             SymbolDefinition symbol, string declarationSource, SemanticIndexingConfiguration configuration,
             CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (Fail)
+            if (Fail || FailingPaths.Contains(symbol.Location.RelativePath))
             {
                 throw new IOException("Simulated LLM failure");
             }
 
-            Requests.Add((symbol, declarationSource, configuration.Language));
-            LastSettings = configuration.Llm;
-            return Task.FromResult(SummaryOverride ?? string.Join("\n", Enumerable.Range(1, 12).Select(n => $"Summary line {n}")));
+            var active = Interlocked.Increment(ref _active);
+            int peak;
+
+            do
+            {
+                peak = Volatile.Read(ref _peak);
+            }
+            while (peak < active && Interlocked.CompareExchange(ref _peak, active, peak) != peak);
+
+            try
+            {
+                lock (Requests)
+                {
+                    Requests.Add((symbol, declarationSource, configuration.Language));
+                    LastSettings = configuration.Llm;
+                }
+
+                if (DelayMilliseconds > 0)
+                {
+                    await Task.Delay(DelayMilliseconds, cancellationToken);
+                }
+
+                return SummaryOverride ?? string.Join("\n", Enumerable.Range(1, 12).Select(n => $"Summary line {n}"));
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _active);
+            }
         }
     }
 }

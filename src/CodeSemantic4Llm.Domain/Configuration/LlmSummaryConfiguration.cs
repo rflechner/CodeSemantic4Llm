@@ -1,15 +1,13 @@
-using System.Text.RegularExpressions;
-
+using System.Text.Json.Serialization;
 namespace CodeSemantic4Llm.Domain.Configuration;
 
-/// <summary>
-/// Opt-in, repository-local LLM settings. An inline API key takes precedence over
-/// the optional environment variable used for authentication.
-/// </summary>
+/// <summary>Repository-local LLM settings with backwards-compatible single-endpoint authentication.</summary>
 public sealed class LlmSummaryConfiguration
 {
-    private static readonly Regex EnvironmentVariablePattern = new(
-        "^[A-Za-z_][A-Za-z0-9_]*$", RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
+    public const int DefaultRetryCount = 3;
+    public const int DefaultRetryDelayMilliseconds = 1000;
+    public const int DefaultMaxConsecutiveFailedFiles = 6;
+    public const int DefaultMaxConcurrentRequestsPerEndpoint = 1;
 
     public LlmSummaryConfiguration(
         bool enabled = false,
@@ -20,7 +18,12 @@ public sealed class LlmSummaryConfiguration
         string? reasoningEffort = null,
         int? maxCompletionTokens = null,
         bool forceGeneration = false,
-        string? systemPrompt = null)
+        string? systemPrompt = null,
+        IEnumerable<LlmEndpointConfiguration>? endpoints = null,
+        int maxConcurrentRequestsPerEndpoint = DefaultMaxConcurrentRequestsPerEndpoint,
+        int retryCount = DefaultRetryCount,
+        int retryDelayMilliseconds = DefaultRetryDelayMilliseconds,
+        int maxConsecutiveFailedFiles = DefaultMaxConsecutiveFailedFiles)
     {
         Enabled = enabled;
         ForceGeneration = forceGeneration;
@@ -32,17 +35,31 @@ public sealed class LlmSummaryConfiguration
 
         SystemPrompt = systemPrompt;
 
-        if (baseUrl is not null)
-        {
-            if (!Uri.TryCreate(baseUrl.Trim(), UriKind.Absolute, out var uri)
-                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)
-                || uri.UserInfo.Length > 0 || uri.Query.Length > 0 || uri.Fragment.Length > 0)
-            {
-                throw new ArgumentException("LLM baseUrl must be an absolute HTTP(S) URL without credentials or query parameters.", nameof(baseUrl));
-            }
+        var configuredEndpoints = endpoints?.ToArray();
 
-            BaseUrl = uri;
+        if (configuredEndpoints is { Length: 0 } || configuredEndpoints?.Any(endpoint => endpoint is null) == true)
+        {
+            throw new ArgumentException("LLM endpoints must be a non-empty list of endpoint configurations.", nameof(endpoints));
         }
+
+        if (configuredEndpoints is not null
+            && (baseUrl is not null || apiKey is not null || apiKeyEnvironmentVariable is not null))
+        {
+            throw new ArgumentException(
+                "Use either endpoints or the legacy baseUrl/authentication fields, not both.", nameof(endpoints));
+        }
+
+        var legacyEndpoint = baseUrl is null
+            ? null
+            : new LlmEndpointConfiguration(baseUrl, apiKeyEnvironmentVariable, apiKey);
+
+        BaseUrl = legacyEndpoint?.BaseUrl;
+        ApiKey = legacyEndpoint?.ApiKey ?? (string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim());
+        ApiKeyEnvironmentVariable = legacyEndpoint?.ApiKeyEnvironmentVariable
+            ?? LlmEndpointConfiguration.NormalizeEnvironmentVariable(apiKeyEnvironmentVariable);
+
+        Endpoints = Array.AsReadOnly(configuredEndpoints ??
+            (legacyEndpoint is null ? Array.Empty<LlmEndpointConfiguration>() : [legacyEndpoint]));
 
         if (model is not null && string.IsNullOrWhiteSpace(model))
         {
@@ -50,7 +67,6 @@ public sealed class LlmSummaryConfiguration
         }
 
         Model = model?.Trim();
-        ApiKey = string.IsNullOrWhiteSpace(apiKey) ? null : apiKey.Trim();
         ReasoningEffort = NormalizeReasoningEffort(reasoningEffort);
 
         if (maxCompletionTokens is <= 0)
@@ -60,62 +76,71 @@ public sealed class LlmSummaryConfiguration
 
         MaxCompletionTokens = maxCompletionTokens;
 
-        if (apiKeyEnvironmentVariable is not null)
+        if (maxConcurrentRequestsPerEndpoint is < 1 or > 32)
         {
-            var variable = apiKeyEnvironmentVariable.Trim();
-
-            if (!EnvironmentVariablePattern.IsMatch(variable))
-            {
-                throw new ArgumentException("LLM apiKeyEnvironmentVariable must be a valid environment variable name.", nameof(apiKeyEnvironmentVariable));
-            }
-
-            ApiKeyEnvironmentVariable = variable;
+            throw new ArgumentOutOfRangeException(nameof(maxConcurrentRequestsPerEndpoint),
+                "LLM maxConcurrentRequestsPerEndpoint must be between 1 and 32.");
         }
 
-        if (enabled && (BaseUrl is null || Model is null))
+        if (retryCount is < 0 or > 10)
         {
-            throw new ArgumentException("Enabled LLM indexing requires both baseUrl and model.");
+            throw new ArgumentOutOfRangeException(nameof(retryCount), "LLM retryCount must be between 0 and 10.");
+        }
+
+        if (retryDelayMilliseconds is < 0 or > 60000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(retryDelayMilliseconds),
+                "LLM retryDelayMilliseconds must be between 0 and 60000.");
+        }
+
+        if (maxConsecutiveFailedFiles is < 1 or > 1000)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxConsecutiveFailedFiles),
+                "LLM maxConsecutiveFailedFiles must be between 1 and 1000.");
+        }
+
+        MaxConcurrentRequestsPerEndpoint = maxConcurrentRequestsPerEndpoint;
+        RetryCount = retryCount;
+        RetryDelayMilliseconds = retryDelayMilliseconds;
+        MaxConsecutiveFailedFiles = maxConsecutiveFailedFiles;
+
+        if (enabled && (Endpoints.Count == 0 || Model is null))
+        {
+            throw new ArgumentException("Enabled LLM indexing requires model and at least one baseUrl or endpoints entry.");
         }
     }
 
     public bool Enabled { get; }
-
-    /// <summary>
-    /// When LLM indexing is enabled, generates summaries even for declarations with source documentation.
-    /// Does not enable LLM calls by itself or bypass reuse of unchanged indexed files.
-    /// </summary>
     public bool ForceGeneration { get; }
-
-    /// <summary>
-    /// Optional replacement for the default system prompt. Each exact {lang} token is replaced
-    /// with the semantic indexing language; other text and whitespace are preserved.
-    /// Null selects the built-in prompt; empty or whitespace-only prompts are rejected.
-    /// </summary>
     public string? SystemPrompt { get; }
 
-    /// <summary>OpenAI-compatible API root, for example http://127.0.0.1:1234/v1.</summary>
+    /// <summary>Legacy single endpoint URL; null when using the endpoints list.</summary>
     public Uri? BaseUrl { get; }
 
-    /// <summary>Model name used in chat completion requests.</summary>
+    /// <summary>Independent endpoints, including a legacy baseUrl represented as a single entry.</summary>
+    public IReadOnlyList<LlmEndpointConfiguration> Endpoints { get; }
+
     public string? Model { get; }
-
-    /// <summary>Optional variable containing a Bearer token, used only when ApiKey is absent.</summary>
     public string? ApiKeyEnvironmentVariable { get; }
-
-    /// <summary>Optional inline Bearer token. Blank values are treated as absent; surrounding whitespace is removed.</summary>
+    [JsonIgnore]
     public string? ApiKey { get; }
-
-    /// <summary>
-    /// Optional reasoning effort sent to compatible chat completion APIs. Null keeps the server default;
-    /// supported levels vary by provider and model and are not inferred from the model name.
-    /// </summary>
     public string? ReasoningEffort { get; }
-
-    /// <summary>Optional completion token budget, including reasoning tokens on APIs that count them.</summary>
     public int? MaxCompletionTokens { get; }
 
+    /// <summary>Maximum simultaneous HTTP requests per endpoint.</summary>
+    public int MaxConcurrentRequestsPerEndpoint { get; }
+
+    /// <summary>Number of additional attempts after the first failed request, per endpoint.</summary>
+    public int RetryCount { get; }
+
+    public int RetryDelayMilliseconds { get; }
+
+    /// <summary>Stop a run after this many consecutive failed files, not failed HTTP attempts.</summary>
+    public int MaxConsecutiveFailedFiles { get; }
+
+    [JsonIgnore]
     public Uri ChatCompletionsEndpoint => BaseUrl is null
-        ? throw new InvalidOperationException("LLM baseUrl is not configured.")
+        ? throw new InvalidOperationException("LLM legacy baseUrl is not configured.")
         : new Uri(BaseUrl.AbsoluteUri.TrimEnd('/') + "/chat/completions", UriKind.Absolute);
 
     private static string? NormalizeReasoningEffort(string? value)

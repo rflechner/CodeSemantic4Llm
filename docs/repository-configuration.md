@@ -356,7 +356,7 @@ configuration fingerprint.
 ## Optional per-repository LLM summaries
 
 Set `semanticIndexing.llm.enabled: true` in each checkout's YAML to opt in.
-Only this repository sends snippets to the configured LLM endpoint. Without this option
+Only this repository sends snippets to the configured LLM endpoints. Without this option
 (or when false), indexing remains fully offline and does not call an LLM.
 
 - `baseUrl` is an OpenAI-compatible API root, such as `http://127.0.0.1:1234/v1`
@@ -380,6 +380,55 @@ Only this repository sends snippets to the configured LLM endpoint. Without this
 - The base URL supports only HTTP(S), without embedded credentials or query strings.
   The API must implement OpenAI-compatible chat completions; vendor-specific endpoints
   requiring different paths or authentication need a compatible gateway.
+
+### Parallel LLM endpoints and resilience
+
+Use an `endpoints` list **instead of** the legacy `baseUrl`; do not combine the two.
+Each endpoint has its own optional `apiKey` and/or `apiKeyEnvironmentVariable`.
+An inline key takes precedence only for its endpoint. The model, prompt and
+generation parameters remain shared, so configure compatible LLM servers.
+
+```yaml
+semanticIndexing:
+  language: en
+  llm:
+    enabled: true
+    model: my-local-model
+    endpoints:
+      - baseUrl: http://127.0.0.1:1234/v1
+        apiKeyEnvironmentVariable: LOCAL_LLM_KEY
+      - baseUrl: http://192.168.1.50:1234/v1
+        apiKeyEnvironmentVariable: SECOND_LLM_KEY
+    maxConcurrentRequestsPerEndpoint: 1
+    retryCount: 3
+    retryDelayMilliseconds: 1000
+    maxConsecutiveFailedFiles: 6
+```
+
+A free endpoint slot takes the next summary request, so faster servers do more work.
+Up to `min(32, endpoints × maxConcurrentRequestsPerEndpoint)` source files may
+have LLM summaries in flight; the SQLite staging writer remains sequential.
+
+- `maxConcurrentRequestsPerEndpoint` defaults to **1** (range 1–32).
+- `retryCount` defaults to **3 additional attempts** per endpoint (range 0–10).
+  HTTP 408/429/5xx, transport errors, timeouts and malformed JSON are retried.
+  Permanent HTTP 4xx responses, including 401/403, and missing API keys are not retried.
+- `retryDelayMilliseconds` defaults to **1000** (range 0–60000). Retries use
+  exponential backoff and jitter, with a 30-second cap.
+- A failed endpoint is removed from the pool for the current configuration;
+  the request fails over to another available endpoint, with its own key.
+- `maxConsecutiveFailedFiles` defaults to **6** (range 1–1000). A file fails
+  only after every available endpoint fails. File failures are counted in source
+  order, not HTTP completion order. A success or cache reuse resets the counter.
+  At the threshold, processing stops.
+- If any files fail, the run does **not publish** a partial snapshot. The last
+  published index remains available, and successfully staged files remain
+  reusable in the SQLite cache. Failed files will be attempted again next run.
+
+Endpoint URLs, keys, parallelism and retry settings are operational settings and
+**do not invalidate existing summaries**. Model, prompt, language and generation
+options still do. Never commit production credentials: MCP configuration responses
+hide inline API keys, including those nested inside `endpoints`.
 
 ### Prefer source documentation
 
@@ -420,10 +469,12 @@ Source snippets and prompt bodies are never saved in the index cache.
 
 LLM summarization is opt-in because sending source to any HTTP endpoint can expose
 proprietary code. Use a trusted local endpoint or an explicitly authorized service.
-An unresponsive or failed LLM request aborts the new index generation: the previous
-published snapshot remains readable. Changing the model, URL, language, enable flag,
-reasoning effort, completion budget, system prompt, documentation override or source content invalidates the appropriate
-reuse. Unchanged files preserve their summaries; no vector embeddings are generated yet.
+LLM requests are retried and may fail over to another endpoint. When files still fail,
+the previous published snapshot remains readable, and successfully staged files can
+be reused on the next run. Changing the model, language, enable flag, reasoning effort,
+completion budget, system prompt, documentation override or source content invalidates
+reuse; changing only endpoint URLs or retry settings does not.
+No vector embeddings are generated yet.
 
 ### Customize the summary system prompt
 

@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -269,4 +270,134 @@ public sealed class OpenAiSymbolSummaryGeneratorTests
             };
         }
     }
+    [Fact]
+    public async Task Concurrent_requests_use_distinct_endpoints_and_their_own_keys()
+    {
+        var handler = new MultiEndpointHandler { DelayMilliseconds = 100 };
+        using var client = new HttpClient(handler);
+        var generator = new OpenAiSymbolSummaryGenerator(client, NullLogger<OpenAiSymbolSummaryGenerator>.Instance);
+        var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
+            enabled: true, model: "model",
+            endpoints:
+            [
+                new LlmEndpointConfiguration("https://first.example.test/v1", apiKey: "token-one"),
+                new LlmEndpointConfiguration("https://second.example.test/v1", apiKey: "token-two")
+            ]));
+        var symbol = new SymbolDefinition("csharp", "class", "Worker", "Demo.Worker",
+            new SourceLocation("Worker.cs", 1, 1));
+
+        var tasks = Enumerable.Range(0, 2).Select(_ =>
+            generator.SummarizeAsync(symbol, "public class Worker { }", configuration,
+                TestContext.Current.CancellationToken)).ToArray();
+        var summaries = await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(2, summaries.Length);
+        Assert.All(summaries, value => Assert.Equal("Generated summary", value));
+        Assert.Equal(1, handler.Requests["first.example.test"]);
+        Assert.Equal(1, handler.Requests["second.example.test"]);
+        Assert.Equal("Bearer token-one", handler.Authorizations["first.example.test"]);
+        Assert.Equal("Bearer token-two", handler.Authorizations["second.example.test"]);
+        Assert.True(handler.PeakConcurrentRequests >= 2);
+    }
+
+    [Fact]
+    public async Task Transient_failure_retries_then_fails_over_with_the_other_endpoints_key()
+    {
+        var handler = new MultiEndpointHandler();
+        handler.StatusCodes["first.example.test"] = HttpStatusCode.ServiceUnavailable;
+        using var client = new HttpClient(handler);
+        var generator = new OpenAiSymbolSummaryGenerator(client, NullLogger<OpenAiSymbolSummaryGenerator>.Instance);
+        var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
+            enabled: true, model: "model",
+            endpoints:
+            [
+                new LlmEndpointConfiguration("https://first.example.test/v1", apiKey: "token-one"),
+                new LlmEndpointConfiguration("https://second.example.test/v1", apiKey: "token-two")
+            ], retryCount: 2, retryDelayMilliseconds: 0));
+        var symbol = new SymbolDefinition("csharp", "class", "Worker", "Demo.Worker",
+            new SourceLocation("Worker.cs", 1, 1));
+
+        var summary = await generator.SummarizeAsync(
+            symbol, "public class Worker { }", configuration, TestContext.Current.CancellationToken);
+
+        Assert.Equal("Generated summary", summary);
+        Assert.Equal(3, handler.Requests["first.example.test"]);
+        Assert.Equal(1, handler.Requests["second.example.test"]);
+        Assert.Equal("Bearer token-two", handler.Authorizations["second.example.test"]);
+    }
+
+    [Fact]
+    public async Task Unauthorized_endpoint_is_skipped_without_retries()
+    {
+        var handler = new MultiEndpointHandler();
+        handler.StatusCodes["first.example.test"] = HttpStatusCode.Unauthorized;
+        using var client = new HttpClient(handler);
+        var generator = new OpenAiSymbolSummaryGenerator(client, NullLogger<OpenAiSymbolSummaryGenerator>.Instance);
+        var configuration = new SemanticIndexingConfiguration(llm: new LlmSummaryConfiguration(
+            enabled: true, model: "model",
+            endpoints:
+            [
+                new LlmEndpointConfiguration("https://first.example.test/v1", apiKey: "bad-key"),
+                new LlmEndpointConfiguration("https://second.example.test/v1", apiKey: "good-key")
+            ], retryCount: 3, retryDelayMilliseconds: 0));
+        var symbol = new SymbolDefinition("csharp", "class", "Worker", "Demo.Worker",
+            new SourceLocation("Worker.cs", 1, 1));
+
+        var summary = await generator.SummarizeAsync(
+            symbol, "public class Worker { }", configuration, TestContext.Current.CancellationToken);
+
+        Assert.Equal("Generated summary", summary);
+        Assert.Equal(1, handler.Requests["first.example.test"]);
+        Assert.Equal(1, handler.Requests["second.example.test"]);
+        Assert.Equal("Bearer good-key", handler.Authorizations["second.example.test"]);
+    }
+
+    private sealed class MultiEndpointHandler : HttpMessageHandler
+    {
+        public ConcurrentDictionary<string, int> Requests { get; } = new();
+        public ConcurrentDictionary<string, string> Authorizations { get; } = new();
+        public ConcurrentDictionary<string, HttpStatusCode> StatusCodes { get; } = new();
+        public int DelayMilliseconds { get; init; }
+        private int _active;
+        private int _peak;
+
+        public int PeakConcurrentRequests => Volatile.Read(ref _peak);
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var host = request.RequestUri!.Host;
+            Requests.AddOrUpdate(host, 1, (_, count) => count + 1);
+            Authorizations[host] = request.Headers.Authorization?.ToString() ?? "<none>";
+            var active = Interlocked.Increment(ref _active);
+            int peak;
+
+            do
+            {
+                peak = Volatile.Read(ref _peak);
+            }
+            while (peak < active && Interlocked.CompareExchange(ref _peak, active, peak) != peak);
+
+            try
+            {
+                if (DelayMilliseconds > 0)
+                {
+                    await Task.Delay(DelayMilliseconds, cancellationToken);
+                }
+
+                var code = StatusCodes.GetValueOrDefault(host, HttpStatusCode.OK);
+                return new HttpResponseMessage(code)
+                {
+                    Content = new StringContent(
+                        """{"choices":[{"message":{"content":"Generated summary"}}]}""",
+                        Encoding.UTF8, "application/json")
+                };
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _active);
+            }
+        }
+    }
+
 }
