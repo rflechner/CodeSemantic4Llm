@@ -163,6 +163,11 @@ Le délai est chargé au démarrage : redémarrez le surveillant après avoir mo
 paramètre. Changer uniquement ce délai n'invalide pas les déclarations ou les résumés
 déjà indexés.
 
+Quand `sharedSummaries` est activé avec l'indexation LLM, chaque réconciliation réussie du
+surveillant rafraîchit aussi les résumés Markdown versionnés afin de les committer avec les
+changements de sources ; voir [Résumés LLM partagés via Git](shared-summaries.fr.md).
+Avec le partage désactivé, le surveillant n'écrit jamais de Markdown.
+
 ## Sélectionner les outils MCP
 
 `tools` énumère les outils que le serveur du dépôt peut annoncer et accepter. Utilisez-le par exemple pour masquer les outils d’édition à un agent qui en possède déjà :
@@ -448,4 +453,4 @@ Lancez tous les tests avec `dotnet test CodeSemantic4Llm.slnx`.
 
 ## Distribution des résumés partagés
 
-Le booléen racine `sharedSummaries` vaut `false` par défaut. Activez-le pour importer les fichiers compatibles `.codesemantic4llm/summaries/**/*.md` si l’indexation LLM est activée. `semanticIndexing.llm` et `semanticIndexing.language` restent la seule configuration de génération. L’export est explicite via `cache-export`. Le répertoire `.codesemantic4llm` est toujours exclu de la découverte des sources. [Parcours complet de partage via Git](shared-summaries.fr.md)
+Le booléen racine `sharedSummaries` vaut `false` par défaut. Activez-le pour importer les fichiers compatibles `.codesemantic4llm/summaries/**/*.md` si l’indexation LLM est activée. `semanticIndexing.llm` et `semanticIndexing.language` restent la seule configuration de génération. `cache-export` publie explicitement ; `watch` rafraîchit aussi automatiquement les résumés après chaque réconciliation réussie. Le répertoire `.codesemantic4llm` est toujours exclu de la découverte des sources. [Parcours complet de partage via Git](shared-summaries.fr.md)
