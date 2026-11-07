@@ -130,7 +130,10 @@ public sealed class RepositoryIndexWatcher(
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
-            report?.Invoke("Shared summary refresh failed; the published index remains available: " + exception.Message);
+            // Concurrent edits legitimately abort the export's strict verification; the next
+            // cycle retries against the then-published snapshot.
+            report?.Invoke("Shared summaries not refreshed: " + exception.Message
+                + " The next reconciliation retries; the published index remains available.");
         }
     }
 
