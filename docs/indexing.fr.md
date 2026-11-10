@@ -292,4 +292,4 @@ Un dernier contrôle d’empreinte détecte les éditions concurrentes ordinaire
 
 ### Chemins source dans les réponses MCP
 
-Tout objet de réponse avec `relativePath` inclut aussi `absolutePath`, y compris emplacements imbriqués, références, diagnostics, lectures/éditions et candidats d’aperçu. Le chemin absolu se résout depuis la racine configurée au format du serveur. Les arguments d’entrée restent relatifs au dépôt. Les chemins absolus sont ajoutés à la présentation JSON de MCP ; les données persistées conservent les chemins relatifs.
+Par défaut (`mcpPaths: both`), tout objet de réponse avec `relativePath` inclut aussi `absolutePath`, y compris emplacements imbriqués, références, diagnostics, lectures/éditions et candidats d’aperçu. Le chemin absolu se résout depuis la racine configurée au format du serveur. Les arguments d’entrée restent relatifs au dépôt. Configurez [`mcpPaths`](repository-configuration.fr.md) à `relative` ou `absolute` pour ne renvoyer que le champ correspondant, sans réindexation. Les chemins absolus sont ajoutés à la présentation JSON de MCP ; les données persistées conservent les chemins relatifs.

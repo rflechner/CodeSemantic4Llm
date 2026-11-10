@@ -79,6 +79,7 @@ public sealed class YamlRepositoryConfigurationWriter : IRepositoryConfiguration
         {
             ["debounceSeconds"] = configuration.Watch.DebounceSeconds
         };
+        document["mcpPaths"] = configuration.McpPaths.ToString().ToLowerInvariant();
         document["tools"] = configuration.Tools.EnabledToolNames.ToArray();
         document["sharedSummaries"] = configuration.SharedSummaries;
 

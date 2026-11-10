@@ -7,6 +7,19 @@ namespace CodeSemantic4Llm.Domain.Tests;
 public sealed class RepositoryIndexingConfigurationTests
 {
     [Fact]
+    public void Mcp_paths_default_to_both()
+    {
+        Assert.Equal(McpPathFormat.Both, new RepositoryIndexingConfiguration(["dotnet-csharp"]).McpPaths);
+    }
+
+    [Fact]
+    public void Undefined_mcp_path_format_is_rejected()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new RepositoryIndexingConfiguration(["dotnet-csharp"], mcpPaths: (McpPathFormat)99));
+    }
+
+    [Fact]
     public void Watch_debounce_defaults_to_15_seconds()
     {
         var configuration = new RepositoryIndexingConfiguration(["dotnet-csharp"]);
