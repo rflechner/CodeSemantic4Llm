@@ -10,13 +10,13 @@ namespace CodeSemantic4Llm.Mcp.Server.Tools;
 [McpServerToolType]
 public sealed class RepositoryCodeTools(CodeToolOperations operations)
 {
-    [McpServerTool, Description("Finds declarations by exact, case-sensitive simple name. For types, includes up to 5 resolved references per type (typeUsages); use find_usages for the rest. An incomplete index marks references unavailable. Use the returned file path and name to select a declaration; add its line and column when ambiguous.")]
+    [McpServerTool, Description("Finds declarations by exact, case-sensitive simple name. For types, includes up to 5 resolved references per type (typeUsages); use find_usages for the rest. References not yet computed are marked unavailable. Use the returned file path and name to select a declaration; add its line and column when ambiguous.")]
     public Task<CodeSymbolSearchResult> FindSymbolsAsync(
         string name, [Description("Maximum results, 1–200.")] int maxResults = 20,
         CancellationToken cancellationToken = default) =>
         operations.FindAsync(name, maxResults, cancellationToken);
 
-    [McpServerTool, Description("Finds declarations using saved names and optional generated descriptions. Returns locations and short summaries, plus up to 5 resolved references for each matching type (typeUsages). An incomplete index marks references unavailable; use find_usages for more. No model calls are made during search.")]
+    [McpServerTool, Description("Finds declarations using saved names and optional generated descriptions. Returns locations and short summaries, plus up to 5 resolved references for each matching type (typeUsages). Uncomputed references are marked unavailable; use find_usages for more. No model calls are made during search.")]
     public Task<CodeSymbolSearchResult> SearchCodeAsync(
         [Description("Plain-language keywords or question about what code does.")] string query,
         [Description("Optional exact declaration kind, such as method, class or interface. Omit this parameter or use JSON null to search all kinds.")] string? kind = null,
