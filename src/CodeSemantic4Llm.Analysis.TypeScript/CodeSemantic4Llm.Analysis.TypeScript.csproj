@@ -2,4 +2,7 @@
   <ItemGroup>
     <ProjectReference Include="../CodeSemantic4Llm.Application/CodeSemantic4Llm.Application.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="TreeSitter.DotNet" />
+  </ItemGroup>
 </Project>

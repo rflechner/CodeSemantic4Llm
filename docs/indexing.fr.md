@@ -37,6 +37,16 @@ C# classiques. Les blocs `@code` / `@functions` incomplets sont ignorés plutôt
 que de produire de fausses déclarations. Configurez `dotnet-razor: [.razor]`
 dans `fileExtensions` pour exclure les anciennes vues.
 
+Activez l’analyseur `typescript` dans `codesemantic4llm.yaml` pour indexer les
+fichiers `.ts`, `.mts` et `.cts` avec Tree-sitter. Classes, interfaces,
+énumérations, alias de types, méthodes, propriétés, fonctions et variables
+conservent leurs positions et leurs types déclarants immédiats. Les résumés
+JSDoc sont recherchables même sans LLM ; les outils de diagnostics et `watch`
+utilisent les erreurs de syntaxe Tree-sitter. TSX/JSX et la résolution des
+références TypeScript entre fichiers ne sont **pas** implémentés : `find_usages`
+résout actuellement les références C# uniquement. Consultez le
+[guide TypeScript](../src/CodeSemantic4Llm.Analysis.TypeScript/README.fr.md).
+
 `dotnet-csharp` extrait par les arbres syntaxiques Roslyn le langage, la catégorie, les noms, emplacements et types contenants immédiats des déclarations. Pendant l’indexation, `CSharpCompilation` et `SemanticModel` résolvent les références aux méthodes et types indexés entre les fichiers C# sélectionnés. Seuls les emplacements de cible et d’usage sont enregistrés. Les arbres Roslyn et sources restent en mémoire pendant cette passe ; le pic mémoire dépend de la taille de la compilation. Les références aux déclarations du framework ou externes sont omises.
 
 Les méthodes, constructeurs et types C# conservent le texte lisible complet de leur commentaire XML `<summary>` même avec `semanticIndexing.llm.enabled: false`, y compris pour les énumérations et délégués. `<inheritdoc>` et les fichiers externes `<include>` ne sont pas développés. Les descriptions auparavant absentes des énumérations et délégués sont extraites des sources au prochain lancement de `index`. `semanticIndexing.llm` active, par dépôt, la génération de descriptions pour méthodes et types via un serveur compatible OpenAI. Elle est désactivée par défaut. Les déclarations sans documentation exploitable sont envoyées au modèle ; `semanticIndexing.llm.forceGeneration: true` inclut aussi les déclarations documentées. Le modèle reçoit les déclarations entières, documentation XML comprise. Seuls les résumés générés sont limités à dix lignes. Si la réponse ne contient aucun texte exploitable, un avertissement va sur stderr, l’indexation continue et toute documentation existante est préservée. La recherche vectorielle reste prévue. [Configuration](repository-configuration.fr.md#résumés-facultatifs-par-llm)

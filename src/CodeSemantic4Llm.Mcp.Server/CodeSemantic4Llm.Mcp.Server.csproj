@@ -16,6 +16,7 @@
   <ItemGroup>
     <ProjectReference Include="../CodeSemantic4Llm.Application/CodeSemantic4Llm.Application.csproj" />
     <ProjectReference Include="../CodeSemantic4Llm.Analysis.CSharp/CodeSemantic4Llm.Analysis.CSharp.csproj" />
+    <ProjectReference Include="../CodeSemantic4Llm.Analysis.TypeScript/CodeSemantic4Llm.Analysis.TypeScript.csproj" />
     <ProjectReference Include="../CodeSemantic4Llm.Configuration.Yaml/CodeSemantic4Llm.Configuration.Yaml.csproj" />
     <ProjectReference Include="../CodeSemantic4Llm.Infrastructure.Workspace/CodeSemantic4Llm.Infrastructure.Workspace.csproj" />
     <ProjectReference Include="../CodeSemantic4Llm.Persistence.Sqlite/CodeSemantic4Llm.Persistence.Sqlite.csproj" />

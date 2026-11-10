@@ -201,12 +201,12 @@ Feature: Recursive source discovery by configured file extensions
       """
       version: 1
       analyzers:
-        - typescript
+        - unavailable-adapter
       fileExtensions:
-        typescript: [.ts]
+        unavailable-adapter: [.ts]
       """
     When I preview source indexing
-    Then the preview fails with an error containing "Analyzer 'typescript' is not installed or implemented"
+    Then the preview fails with an error containing "Analyzer 'unavailable-adapter' is not installed or implemented"
 
   Scenario: A null extension mapping is rejected
     Given the repository configuration is:

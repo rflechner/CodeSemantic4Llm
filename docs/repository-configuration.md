@@ -131,8 +131,7 @@ Repeat `--analyzer <analyzer-id>` to select multiple analyzers. An explicit sele
 replaces the default `dotnet-csharp` selection. IDs are trimmed, lowercased and
 deduplicated, retaining the order of their first occurrence. Every selected analyzer
 must be available before any configuration is written; unknown or unimplemented IDs
-fail with the available analyzer list. `dotnet-csharp` and `dotnet-razor` are installed; `typescript` remains planned
-and cannot be selected yet.
+fail with the available analyzer list. `dotnet-csharp`, `dotnet-razor` and `typescript` are installed.
 
 Options may appear before or after the repository path, including `--lang` between
 two `--analyzer` options. Spectre.Console.Cli also accepts `--name=MyProject`, `--lang=fr`
@@ -141,7 +140,7 @@ repeatable. Empty names or analyzer IDs, missing values, unknown options, and du
 `--name` or `--lang` options fail without creating a file.
 
 Each analyzer retains its default extensions because no `fileExtensions` override is
-written (`.cs` for C#). Only built-in exclusions apply; submodules remain included.
+written (`.cs` for C#, `.razor`/`.cshtml` for Razor, `.ts`/`.mts`/`.cts` for TypeScript). Only built-in exclusions apply; submodules remain included.
 
 Initialization never replaces an existing configuration, including a symbolic link or
 directory at that path. It writes a temporary file in the target directory and publishes
@@ -167,12 +166,13 @@ projectName: My Project
 analyzers:
   - dotnet-csharp
   - dotnet-razor
-  # - typescript  # Planned, not yet implemented
+  - typescript
 
 # Optional: omitted analyzer entries retain their default extensions.
 fileExtensions:
   dotnet-csharp: [.cs, .csharp]
   dotnet-razor: [.razor, .cshtml]
+  typescript: [.ts, .mts, .cts]
 
 # Optional: the MCP tools this repository advertises; omit the section to advertise all.
 tools:
@@ -210,7 +210,7 @@ exclude:
 
 - `version` must be `1`.
 - `projectName` is an optional, non-empty, single-line display name; omission or null leaves it unspecified.
-- `analyzers` is a required, non-empty list of installed analyzer IDs. `dotnet-csharp` and `dotnet-razor` are registered.
+- `analyzers` is a required, non-empty list of installed analyzer IDs. `dotnet-csharp`, `dotnet-razor` and `typescript` are registered.
 - `fileExtensions` is an optional mapping of enabled analyzer IDs to replacement extension lists.
 - `tools` is an optional, non-empty list of MCP tool names; omitting the section advertises every tool.
 - `semanticIndexing.language` is optional and defaults to `en` (English).
@@ -350,6 +350,7 @@ Each analyzer supplies its own default extensions:
 | --- | --- |
 | `dotnet-csharp` | `.cs` |
 | `dotnet-razor` | `.razor`, `.cshtml` |
+| `typescript` | `.ts`, `.mts`, `.cts` |
 
 An omitted `fileExtensions` section, an empty mapping (`{}`), or an omitted analyzer entry
 keeps the corresponding analyzer's defaults. A configured list **replaces** those defaults:
@@ -363,8 +364,9 @@ Use `[.cs, .csharp]` to retain `.cs` while adding a custom extension. For Blazor
 set `dotnet-razor: [.razor]` to exclude legacy `.cshtml` views. Overrides select
 which paths are sent to that analyzer; they do not add support for another programming
 language or syntax. Custom extensions must contain source understood by the selected analyzer.
-TypeScript discovery requires an implemented and enabled TypeScript adapter, which is not
-available yet. An override cannot bypass analyzer availability checks.
+Enable `typescript` to discover TypeScript declarations. The native grammar currently supports
+`.ts`, `.mts` and `.cts`, but not TSX/JSX; setting `typescript: [.tsx]` in an override
+cannot add the missing grammar.
 
 - Extension comparison is case-insensitive; entries are trimmed, lowercased and deduplicated.
 - Entries must start with `.` followed by one or more ASCII letters, digits, `_` or `-`.

@@ -22,6 +22,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/CodeSemantic4Llm.Domain.Tests/CodeSemantic4Llm.Domain.Tests.csproj" />
     <Project Path="tests/CodeSemantic4Llm.Analysis.CSharp.Tests/CodeSemantic4Llm.Analysis.CSharp.Tests.csproj" />
+    <Project Path="tests/CodeSemantic4Llm.Analysis.TypeScript.Tests/CodeSemantic4Llm.Analysis.TypeScript.Tests.csproj" />
     <Project Path="tests/CodeSemantic4Llm.FunctionalTests/CodeSemantic4Llm.FunctionalTests.csproj" />
   </Folder>
 </Solution>

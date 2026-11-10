@@ -1,4 +1,5 @@
 using CodeSemantic4Llm.Analysis.CSharp;
+using CodeSemantic4Llm.Analysis.TypeScript;
 using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Configuration.Yaml;
@@ -16,8 +17,10 @@ internal static class ServerServiceCollectionExtensions
     {
         services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
         services.AddSingleton<ISourceAnalyzer, RazorSourceAnalyzer>();
+        services.AddSingleton<ISourceAnalyzer, TypeScriptSourceAnalyzer>();
         services.AddSingleton<ISymbolSourceExtractor, CSharpSymbolSourceExtractor>();
         services.AddSingleton<ISymbolSourceExtractor, RazorSymbolSourceExtractor>();
+        services.AddSingleton<ISymbolSourceExtractor, TypeScriptSymbolSourceExtractor>();
         services.AddHttpClient<ISymbolSummaryGenerator, OpenAiSymbolSummaryGenerator>(client =>
             client.Timeout = TimeSpan.FromMinutes(5));
         services.AddSingleton<ISourceReferenceAnalyzer, CSharpReferenceAnalyzer>();
@@ -25,6 +28,7 @@ internal static class ServerServiceCollectionExtensions
         services.AddSingleton<IMethodDeclarationEditor, CSharpMethodDeclarationEditor>();
         services.AddSingleton<IMethodSyntaxDiagnostics, CSharpMethodSyntaxDiagnostics>();
         services.AddSingleton<ISourceSyntaxDiagnostics, CSharpSourceSyntaxDiagnostics>();
+        services.AddSingleton<ISourceSyntaxDiagnostics, TypeScriptSourceSyntaxDiagnostics>();
         services.AddSingleton<IGitBranchProvider, GitBranchProvider>();
         services.AddSingleton<IRepositoryStateProvider, GitRepositoryStateProvider>();
         services.AddSingleton<IRepositorySourceReader, RepositorySourceReader>();

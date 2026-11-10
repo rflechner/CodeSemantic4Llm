@@ -202,19 +202,19 @@ Feature: Per-repository YAML indexing configuration
       | src/Main.cs      | dotnet-csharp |
       | src/SomeOther.cs | dotnet-csharp |
 
-  Scenario: An unknown or not-yet-implemented analyzer fails explicitly
+  Scenario: An unknown analyzer fails explicitly
     Given the repository configuration is:
       """
       version: 1
       analyzers:
         - dotnet-csharp
-        - typescript
+        - missing-adapter
       """
     And the repository contains these source files:
       | path        |
       | src/Main.cs |
     When I preview source indexing
-    Then the preview fails with an error containing "typescript"
+    Then the preview fails with an error containing "missing-adapter"
 
   Scenario: Missing YAML is rejected instead of inheriting settings from elsewhere
     Given the repository has no configuration file
@@ -302,3 +302,30 @@ Feature: Per-repository YAML indexing configuration
       | relative |
       | absolute |
       | both     |
+
+  Scenario: TypeScript and C# adapters discover their respective source extensions
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers: [dotnet-csharp, typescript]
+      """
+    And the repository contains these source files:
+      | path                     |
+      | src/Main.cs              |
+      | src/shared/model.ts      |
+      | src/shared/routes.mts    |
+      | src/shared/runtime.cts   |
+      | src/shared/Component.tsx |
+      | src/shared/legacy.js     |
+    When I preview source indexing
+    Then the indexable files are:
+      | path                   | analyzer      |
+      | src/Main.cs            | dotnet-csharp |
+      | src/shared/model.ts    | typescript    |
+      | src/shared/routes.mts  | typescript    |
+      | src/shared/runtime.cts | typescript    |
+    And the effective extensions for "typescript" are:
+      | extension |
+      | .ts       |
+      | .mts      |
+      | .cts      |
