@@ -118,3 +118,59 @@ Feature: Prefer existing source documentation when indexing summaries
     And I index the checkout again
     Then declaration "Worker" has stored summary "Maintains another catalog."
     And branch "main" retains summary "Maintains the navigation catalog." for "Worker"
+
+  Scenario Outline: Natural type search preserves source descriptions with the LLM explicitly disabled
+    Given summary generation is disabled with forceGeneration "false"
+    And indexing source "Achat.cs" is:
+      """
+      /// <summary>Orchestre les commandes fournisseurs.</summary>
+      public class AchatService {}
+      public class Other { public object AchatService { get; set; } }
+      public class Service {}
+      """
+    When I index the checkout
+    And I index the checkout again
+    And MCP searches all declarations for "<query>"
+    Then the first code result is type "AchatService" with description "Orchestre les commandes fournisseurs."
+    And the LLM has summarized 0 declarations
+
+    Examples:
+      | query                   |
+      | service d’achat         |
+      | achat service           |
+      | commandes fournisseurs  |
+
+  Scenario: Enum and delegate descriptions are persisted without generation
+    Given summary generation is disabled with forceGeneration "false"
+    And indexing source "Contracts.cs" is:
+      """
+      /// <summary>Represents purchase lifecycle phases.</summary>
+      public enum PurchasePhase { Created, Completed }
+      /// <summary>Notifies warehouse subscribers.</summary>
+      public delegate void WarehouseNotification();
+      """
+    When I index the checkout
+    Then declaration "PurchasePhase" has stored summary "Represents purchase lifecycle phases."
+    And declaration "WarehouseNotification" has stored summary "Notifies warehouse subscribers."
+    And summary search "lifecycle" finds "PurchasePhase"
+    And summary search "subscribers" finds "WarehouseNotification"
+    And the LLM has summarized 0 declarations
+
+  Scenario: Cumulative folder indexing preserves flexible type search and XML without an LLM
+    Given summary generation is disabled with forceGeneration "false"
+    And indexing source "Purchases/Achat.cs" is:
+      """
+      /// <summary>Orchestre les commandes fournisseurs.</summary>
+      public class AchatService {}
+      public class Other { public object AchatService { get; set; } }
+      """
+    And indexing source "Customers/Client.cs" is:
+      """
+      public class ClientService {}
+      """
+    When I incrementally index folder "Purchases"
+    And I incrementally index folder "Customers"
+    Then the cumulative partial index contains 2 files
+    When MCP searches all declarations for "service d’achat"
+    Then the first code result is type "AchatService" with description "Orchestre les commandes fournisseurs."
+    And the LLM has summarized 0 declarations

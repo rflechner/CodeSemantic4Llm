@@ -32,7 +32,7 @@ internal static class FullTextSearchQuery
         "ton", "tu", "un", "une", "vous"
     };
 
-    public static string Build(string query, int maxResults)
+    public static IReadOnlyList<string> Terms(string query, int maxResults)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxResults);
 
@@ -52,7 +52,7 @@ internal static class FullTextSearchQuery
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var terms = new List<string>(MaximumTerms);
 
-        foreach (Match word in Words.Matches(query))
+        foreach (Match word in Words.Matches(IdentifierSearchTerms.Split(query)))
         {
             var term = word.Value;
 
@@ -76,6 +76,6 @@ internal static class FullTextSearchQuery
             throw new ArgumentException("Search query must contain at least one searchable word.", nameof(query));
         }
 
-        return string.Join(" OR ", terms);
+        return terms;
     }
 }

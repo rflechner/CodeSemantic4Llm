@@ -97,7 +97,7 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
             selected.SemanticLanguage, selected.CompletedAt, selected.FileCount, selected.SymbolCount,
             selected.IsPartial);
         var matches = SqliteIndexStore.ReadSearchMatches(connection, transaction, selected.SnapshotId,
-            FullTextSearchQuery.Build(query, maxResults), kind, maxResults, cancellationToken);
+            FullTextSearchQuery.Terms(query, maxResults), kind, maxResults, cancellationToken);
         var symbols = matches.Take(maxResults).Select(symbol => new DashboardSymbol(
             symbol.Language, symbol.Kind, symbol.Name, symbol.QualifiedName,
             symbol.Location.RelativePath, symbol.Location.Line, symbol.Location.Column,
@@ -293,7 +293,7 @@ public sealed class SqliteIndexDashboardReader(IndexStoragePaths paths) : IIndex
         SqliteTransaction? transaction = null, string? branch = null)
     {
         var referenceColumn = version >= 3 ? "s.reference_index_version" : "0";
-        var partialColumn = version >= 7 ? "s.is_partial" : "0";
+        var partialColumn = IndexDatabase.PartialColumn(connection, transaction, "s.");
         using var command = IndexDatabase.Command(connection, transaction, $"""
             SELECT s.branch, s.id, s.revision, s.semantic_language, s.completed_utc, s.file_count,
                    s.symbol_count, s.member_index_version, {referenceColumn}, {partialColumn}
