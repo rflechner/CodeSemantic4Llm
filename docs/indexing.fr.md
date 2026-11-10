@@ -18,6 +18,25 @@ La cible doit être la racine d’une copie Git sur une branche nommée et conte
 
 L’indexation traite **tous** les fichiers sélectionnés par le YAML, sans la limite de 200 chemins de l’aperçu. Priorité des analyseurs, extensions et exclusions sont communes aux deux commandes. Les exclusions intégrées s’appliquent toujours. Les sous-modules sont inclus sauf exclusion. Les liens symboliques vers des fichiers ou répertoires sont ignorés et chaque chemin est contrôlé avant et après la lecture. Aucun build, restauration de paquet ou exécution du projet cible.
 
+Activez `dotnet-razor` avec `dotnet-csharp` dans `codesemantic4llm.yaml` pour
+inclure les composants Blazor `.razor` et les vues MVC / Razor Pages `.cshtml`.
+Chaque fichier devient une déclaration `component` ou `view` recherchable,
+avec des informations sur `@page`, `@model`, `@layout`, les titres HTML et les
+composants utilisés. Roslyn extrait les types et membres C# de `@code` et
+`@functions` en conservant les positions réelles, le conteneur et les commentaires
+XML `<summary>`. Les noms de `@section` et `@helper` sont aussi indexés.
+Les extraits transmis au LLM restent transitoires : aucun fichier source n'est
+recopié dans SQLite. Les fichiers `.razor.cs` et `.cshtml.cs` restent gérés
+par `dotnet-csharp`.
+
+**Limites Razor :** ce parseur léger ne compile pas les templates Razor, ne
+résout pas les liaisons des composants ou tag helpers, et n'analyse pas leurs
+références dans le balisage. Le contrôle syntaxique de `watch` ne valide pas
+encore le Razor. `find_usages` résout uniquement les références entre fichiers
+C# classiques. Les blocs `@code` / `@functions` incomplets sont ignorés plutôt
+que de produire de fausses déclarations. Configurez `dotnet-razor: [.razor]`
+dans `fileExtensions` pour exclure les anciennes vues.
+
 `dotnet-csharp` extrait par les arbres syntaxiques Roslyn le langage, la catégorie, les noms, emplacements et types contenants immédiats des déclarations. Pendant l’indexation, `CSharpCompilation` et `SemanticModel` résolvent les références aux méthodes et types indexés entre les fichiers C# sélectionnés. Seuls les emplacements de cible et d’usage sont enregistrés. Les arbres Roslyn et sources restent en mémoire pendant cette passe ; le pic mémoire dépend de la taille de la compilation. Les références aux déclarations du framework ou externes sont omises.
 
 Les méthodes, constructeurs et types C# conservent le texte lisible complet de leur commentaire XML `<summary>` même avec `semanticIndexing.llm.enabled: false`, y compris pour les énumérations et délégués. `<inheritdoc>` et les fichiers externes `<include>` ne sont pas développés. Les descriptions auparavant absentes des énumérations et délégués sont extraites des sources au prochain lancement de `index`. `semanticIndexing.llm` active, par dépôt, la génération de descriptions pour méthodes et types via un serveur compatible OpenAI. Elle est désactivée par défaut. Les déclarations sans documentation exploitable sont envoyées au modèle ; `semanticIndexing.llm.forceGeneration: true` inclut aussi les déclarations documentées. Le modèle reçoit les déclarations entières, documentation XML comprise. Seuls les résumés générés sont limités à dix lignes. Si la réponse ne contient aucun texte exploitable, un avertissement va sur stderr, l’indexation continue et toute documentation existante est préservée. La recherche vectorielle reste prévue. [Configuration](repository-configuration.fr.md#résumés-facultatifs-par-llm)
