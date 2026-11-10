@@ -16,7 +16,7 @@ The goal is to let coding agents retrieve small, relevant slices of a repository
 > Reference binding currently uses a lightweight repository-wide compilation rather than
 > full MSBuild project resolution; optional OpenAI-compatible LLM summaries are implemented
 > for C# methods and types, with local FTS5/BM25 keyword search over stored
-> names and summaries. Embeddings and TypeScript analysis remain planned.
+> names and summaries. Tree-sitter TypeScript declaration indexing is also available; embeddings remain planned.
 
 ## Table of contents
 
@@ -228,7 +228,7 @@ Roslyn detects a C# syntax error; see [continuous indexing](docs/indexing.md#con
 | `CodeSemantic4Llm.Domain` | Repository/branch identity, configuration, source locations and shared symbols |
 | `CodeSemantic4Llm.Application` | Use cases and ports (analysis, configuration, discovery, index storage) |
 | `CodeSemantic4Llm.Analysis.CSharp` | Roslyn-based C# declaration extraction (syntax-level bootstrap) |
-| `CodeSemantic4Llm.Analysis.TypeScript` | Reserved adapter for Tree-sitter and TypeScript/Angular |
+| `CodeSemantic4Llm.Analysis.TypeScript` | Tree-sitter TypeScript declaration extraction, JSDoc and syntax diagnostics |
 | `CodeSemantic4Llm.Configuration.Yaml` | Creates, reads and validates configuration at the checkout root |
 | `CodeSemantic4Llm.Persistence.Sqlite` | Versioned declaration snapshots, atomic publication and bounded queries |
 | `CodeSemantic4Llm.Infrastructure.Workspace` | Git and safe filesystem integration, exclusion glob matching |
@@ -257,7 +257,7 @@ Use `--name "My Project"` to write the optional `projectName` display label. It 
 spaces and Unicode, trims surrounding whitespace and preserves case. Omit it to leave
 the project unnamed. The name is independent of the repository path and index cache identity.
 IDs are trimmed, lowercased and deduplicated in first occurrence order. All selected
-analyzers must be installed; currently only `dotnet-csharp` is available.
+analyzers must be installed; `dotnet-csharp`, `dotnet-razor` and `typescript` are available.
 Each analyzer retains its default extensions, and the command adds no custom exclusions.
 The generated YAML selects every MCP tool under `tools`, so preparing a repository only requires
 commenting out the tools its agents should not see.
@@ -317,7 +317,9 @@ The model receives entire C# methods
 to 10 lines and is available to MCP clients and the dashboard. Source is not copied
 into SQLite, but **the selected LLM endpoint does receive source code**.
 See [LLM configuration and data safety](docs/repository-configuration.md#optional-per-repository-llm-summaries).
-The TypeScript analyzer is planned but not yet registered.
+The `typescript` analyzer indexes `.ts`, `.mts` and `.cts` declarations with Tree-sitter and
+reads JSDoc for local and optional LLM summaries. It does not yet support TSX or
+cross-file TypeScript reference resolution. See [TypeScript analyzer](src/CodeSemantic4Llm.Analysis.TypeScript/README.md).
 
 ## Build and test
 
@@ -623,7 +625,7 @@ NuGet packages use **Central Package Management**:
 ## Planned milestones
 
 1. Add project-aware semantic compilation and stable, cross-project symbol identities.
-2. Implement TypeScript/Angular analysis using a validated Tree-sitter integration.
+2. Add TSX grammar support and compiler-backed TypeScript/Angular references.
 3. Add source excerpts validated against indexed content hashes and paginated navigation.
 4. Add dependency-aware invalidation and reuse across branches as semantic analysis expands.
 5. Add semantic search embeddings and finer-grained summary invalidation independent of declaration extraction.

@@ -46,6 +46,15 @@ references between regular C# files only. Incomplete `@code`/`@functions` blocks
 are skipped rather than turned into unreliable declarations. Use
 `dotnet-razor: [.razor]` in `fileExtensions` to exclude classic views.
 
+Enable the `typescript` analyzer in `codesemantic4llm.yaml` to index `.ts`,
+`.mts` and `.cts` files with Tree-sitter. Classes, interfaces, enums, type aliases,
+methods, properties, functions and variables are indexed with identifier positions
+and immediate owner types. JSDoc summaries are searchable with or without an LLM;
+`get_file_diagnostics`, `get_type_diagnostics` and `watch` also use Tree-sitter syntax
+diagnostics. TSX/JSX and cross-file TypeScript reference resolution are **not**
+implemented: `find_usages` still resolves C# references only. See the
+[TypeScript analyzer guide](../src/CodeSemantic4Llm.Analysis.TypeScript/README.md).
+
 Currently `dotnet-csharp` extracts declarations using Roslyn syntax trees, including
 language, kind, names, locations and immediate containing types. During indexing,
 an ephemeral `CSharpCompilation` and `SemanticModel` resolve references to indexed

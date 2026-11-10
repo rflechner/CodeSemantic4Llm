@@ -9,7 +9,7 @@
 
 **CodeSemantic4Llm** est un serveur MCP expérimental qui indexe le code sur la machine du développeur. Un agent peut demander les quelques lignes pertinentes au lieu de charger à plusieurs reprises des fichiers entiers dans le contexte du modèle.
 
-> État actuel : configuration YAML par dépôt, indexation des déclarations C# et des références résolues par Roslyn dans SQLite, analyse facultative Blazor/Razor (`dotnet-razor`), et requêtes MCP bornées sur les instantanés de branche. La résolution s’appuie sur une compilation légère à l’échelle du dépôt. La résolution complète des projets MSBuild reste à venir. Un LLM compatible avec l’API OpenAI peut résumer les types et méthodes C#. La recherche locale FTS5/BM25 porte sur les noms et les résumés. Les représentations vectorielles et l’analyse TypeScript sont prévues.
+> État actuel : configuration YAML par dépôt, indexation des déclarations C# et des références résolues par Roslyn dans SQLite, analyse facultative Blazor/Razor (`dotnet-razor`), et requêtes MCP bornées sur les instantanés de branche. La résolution s’appuie sur une compilation légère à l’échelle du dépôt. La résolution complète des projets MSBuild reste à venir. Un LLM compatible avec l’API OpenAI peut résumer les types et méthodes C#. La recherche locale FTS5/BM25 porte sur les noms et les résumés. L’analyse syntaxique TypeScript avec Tree-sitter est disponible ; les représentations vectorielles restent prévues.
 
 ## Table des matières
 
@@ -151,7 +151,7 @@ Demandez ensuite à l’agent où est définie `Main` dans HelloWorld. Il devrai
 | `CodeSemantic4Llm.Domain` | Identité du dépôt et de la branche, configuration, emplacements et symboles communs |
 | `CodeSemantic4Llm.Application` | Cas d’utilisation et contrats d’analyse, de configuration, de découverte et de stockage |
 | `CodeSemantic4Llm.Analysis.CSharp` | Extraction des déclarations C# avec Roslyn |
-| `CodeSemantic4Llm.Analysis.TypeScript` | Adaptateur prévu pour Tree-sitter et TypeScript/Angular |
+| `CodeSemantic4Llm.Analysis.TypeScript` | Extraction des déclarations TypeScript avec Tree-sitter, JSDoc et diagnostics |
 | `CodeSemantic4Llm.Configuration.Yaml` | Création, lecture et validation de la configuration à la racine |
 | `CodeSemantic4Llm.Persistence.Sqlite` | Instantanés versionnés, publication atomique et requêtes bornées |
 | `CodeSemantic4Llm.Infrastructure.Workspace` | Git, accès sécurisé au système de fichiers et motifs d’exclusion |
@@ -168,7 +168,7 @@ dotnet run --project src/CodeSemantic4Llm.Mcp.Server -- \
   init /absolute-or-relative/path/to/repository --name "My Project" --analyzer dotnet-csharp --lang fr
 ```
 
-Le répertoire doit exister. Les chemins relatifs partent du répertoire courant du processus. Mettez entre guillemets ceux contenant des espaces. `--lang` vaut `en` par défaut et accepte aussi la forme `--lang=fr`. Les options peuvent précéder ou suivre le chemin. Répétez `--analyzer <id>` pour sélectionner plusieurs analyseurs. Par défaut, `dotnet-csharp` est sélectionné. Les identifiants sont nettoyés, convertis en minuscules et dédupliqués dans leur ordre d’apparition. Tous doivent être disponibles. Seul `dotnet-csharp` l’est actuellement.
+Le répertoire doit exister. Les chemins relatifs partent du répertoire courant du processus. Mettez entre guillemets ceux contenant des espaces. `--lang` vaut `en` par défaut et accepte aussi la forme `--lang=fr`. Les options peuvent précéder ou suivre le chemin. Répétez `--analyzer <id>` pour sélectionner plusieurs analyseurs. Par défaut, `dotnet-csharp` est sélectionné. Les identifiants sont nettoyés, convertis en minuscules et dédupliqués dans leur ordre d’apparition. Tous doivent être disponibles. `dotnet-csharp`, `dotnet-razor` et `typescript` sont disponibles.
 
 `--name "My Project"` écrit le libellé facultatif `projectName`. Il conserve la casse, les espaces internes et les caractères Unicode ; les espaces de début et de fin sont supprimés. Sans cette option, le projet reste sans nom. Son identité dans le cache est indépendante du libellé. `init` conserve les extensions par défaut, ne crée aucune exclusion personnalisée et énumère tous les outils sous `tools`. Commentez ceux à masquer. Une configuration existante provoque une erreur sans être écrasée. Consultez `init --help`. Dans Rider, passez `init /path/to/repository --lang fr` à `CodeSemantic4Llm.Mcp.Server`.
 
@@ -206,7 +206,7 @@ Les motifs `**/.git/**`, `**/bin/**` et `**/obj/**` sont toujours exclus. Les so
 
 `semanticIndexing.llm.systemPrompt` personnalise les consignes et `{lang}` y insère la langue configurée. `init` fournit le modèle par défaut en commentaire. [Personnalisation du prompt](docs/repository-configuration.fr.md#personnaliser-le-prompt-système)
 
-Le serveur LLM reçoit **la méthode ou le type C# entier**, documentation XML comprise. Le résumé, limité à dix lignes, est disponible via MCP et le tableau de bord. SQLite ne copie pas les sources. [Configuration du LLM](docs/repository-configuration.fr.md#résumés-facultatifs-par-llm). L’analyseur TypeScript est prévu mais pas encore enregistré.
+Le serveur LLM reçoit **la méthode ou le type C# entier**, documentation XML comprise. Le résumé, limité à dix lignes, est disponible via MCP et le tableau de bord. SQLite ne copie pas les sources. [Configuration du LLM](docs/repository-configuration.fr.md#résumés-facultatifs-par-llm). L’analyseur `typescript` indexe les déclarations `.ts`, `.mts` et `.cts`, et lit les commentaires JSDoc. TSX et la résolution des références TypeScript entre fichiers restent à réaliser. Voir le [guide TypeScript](src/CodeSemantic4Llm.Analysis.TypeScript/README.fr.md).
 
 ## Compiler et tester
 
@@ -383,7 +383,7 @@ Les paquets NuGet utilisent **Central Package Management**. Les versions figuren
 ## Étapes prévues
 
 1. Compiler avec la connaissance des projets et stabiliser l’identité des symboles entre projets.
-2. Implémenter l’analyse TypeScript/Angular avec une intégration Tree-sitter validée.
+2. Ajouter la grammaire TSX et la résolution sémantique des références TypeScript/Angular.
 3. Ajouter des extraits source vérifiés par empreinte et une navigation paginée.
 4. Tenir compte des dépendances pour l’invalidation et la réutilisation entre branches.
 5. Introduire la recherche vectorielle et invalider les résumés plus finement, indépendamment de l’extraction des déclarations.

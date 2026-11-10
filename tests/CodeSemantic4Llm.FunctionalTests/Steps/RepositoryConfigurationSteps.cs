@@ -1,4 +1,5 @@
 using CodeSemantic4Llm.Analysis.CSharp;
+using CodeSemantic4Llm.Analysis.TypeScript;
 using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Configuration.Yaml;
@@ -263,7 +264,7 @@ public sealed partial class RepositoryConfigurationSteps
     {
         IRepositoryConfigurationLoader loader = new YamlRepositoryConfigurationLoader();
         IRepositoryFileEnumerator fileEnumerator = new FileSystemRepositoryFileEnumerator();
-        ISourceAnalyzer[] analyzers = [new CSharpSourceAnalyzer(), new RazorSourceAnalyzer()];
+        ISourceAnalyzer[] analyzers = [new CSharpSourceAnalyzer(), new RazorSourceAnalyzer(), new TypeScriptSourceAnalyzer()];
 
         return new PreviewRepositoryIndex(loader, fileEnumerator, analyzers);
     }
