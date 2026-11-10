@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Application.UseCases;
 using CodeSemantic4Llm.Domain.Symbols;
@@ -17,17 +18,20 @@ public sealed class CodeToolOperations(
     SelectCodeDeclaration selectDeclaration,
     GetTypeMembers getTypeMembers,
     FindUsages findUsages,
+    IIndexStore indexStore,
     MethodBodyOperations methodBodies,
     CurrentMethodOperations currentMethods,
     NavigationPages navigationPages,
     DiagnosticPages diagnosticPages,
     ILogger<CodeToolOperations> logger)
 {
+    private const int TypeUsagePreviewLimit = 5;
+
     public Task<CodeSymbolSearchResult> FindAsync(string name, int maxResults, CancellationToken cancellationToken) =>
         PresentAsync(async () =>
         {
             var result = await findSymbols.ExecuteAsync(Root, name, maxResults, cancellationToken);
-            return new CodeSymbolSearchResult(result.Symbols, result.HasMore);
+            return PresentSearchResult(result, cancellationToken);
         });
 
     /// <summary>Ranks declarations using saved names and summaries, never an LLM call.</summary>
@@ -37,7 +41,7 @@ public sealed class CodeToolOperations(
         {
             var result = await searchCode.ExecuteAsync(
                 Root, query, NormalizeSearchKind(kind), maxResults, cancellationToken);
-            return new CodeSymbolSearchResult(result.Symbols, result.HasMore);
+            return PresentSearchResult(result, cancellationToken);
         });
 
     public Task<CodeTypeMemberPage> GetMembersAsync(
@@ -116,6 +120,24 @@ public sealed class CodeToolOperations(
             return diagnosticPages.Present(continuation, result);
         });
 
+    private CodeSymbolSearchResult PresentSearchResult(SymbolSearchResult result, CancellationToken cancellationToken)
+    {
+        var types = result.Symbols
+            .Where(symbol => symbol.Kind is "class" or "struct" or "interface" or "record" or "enum" or "delegate")
+            .Select(symbol => symbol.Location)
+            .ToArray();
+
+        if (types.Length == 0)
+        {
+            return new CodeSymbolSearchResult(result.Symbols, result.HasMore);
+        }
+
+        var previews = indexStore.GetTypeUsagePreviews(
+            result.Snapshot.Scope, result.Snapshot.SnapshotId, types,
+            TypeUsagePreviewLimit, cancellationToken);
+        return new CodeSymbolSearchResult(result.Symbols, result.HasMore, previews);
+    }
+
     private string Root => configuration["CODESEMANTIC4LLM_REPOSITORY_ROOT"]
         ?? throw new McpException("Ask the server operator to select a repository before using code tools.");
 
@@ -179,7 +201,11 @@ public sealed class CodeToolOperations(
 }
 
 /// <summary>A bounded set of matching source declarations.</summary>
-public sealed record CodeSymbolSearchResult(IReadOnlyList<SymbolDefinition> Symbols, bool HasMore);
+public sealed record CodeSymbolSearchResult(
+    IReadOnlyList<SymbolDefinition> Symbols,
+    bool HasMore,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    IReadOnlyList<TypeUsagePreview>? TypeUsages = null);
 
 /// <summary>A page of direct members of the selected type declaration.</summary>
 public sealed record CodeTypeMemberPage(SymbolDefinition Type, IReadOnlyList<SymbolDefinition> Members, long? NextOffset)
