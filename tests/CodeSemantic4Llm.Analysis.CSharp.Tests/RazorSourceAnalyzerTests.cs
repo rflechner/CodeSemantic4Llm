@@ -124,7 +124,7 @@ public sealed class RazorSourceAnalyzerTests
     [Fact]
     public async Task Multiple_code_blocks_with_comments_and_literals_keep_independent_positions()
     {
-        const string source = """
+        const string source = """"
             <p>Example</p>
             @code {
                 private string A() => @"{ brace }";
@@ -133,7 +133,7 @@ public sealed class RazorSourceAnalyzerTests
             @code {
                 private string B() => """{ raw }""";
             }
-            """;
+            """";
         var symbols = await new RazorSourceAnalyzer().AnalyzeAsync(
             new SourceDocument("Example.razor", source),
             TestContext.Current.CancellationToken);
