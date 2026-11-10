@@ -94,7 +94,7 @@ Si le libellé est absent ou nul, la découverte utilise le nom du répertoire. 
 
 `--lang` choisit `semanticIndexing.language` avec la même validation et normalisation que le YAML (`FR-ch` devient `fr-CH`). Défaut : `en`.
 
-Répétez `--analyzer <analyzer-id>` pour sélectionner plusieurs analyseurs à la place du défaut `dotnet-csharp`. Les identifiants sont nettoyés, convertis en minuscules et dédupliqués dans leur ordre d’apparition. Tous doivent être disponibles avant écriture ; un identifiant inconnu ou non implémenté échoue en indiquant la liste disponible. Seul `dotnet-csharp` est installé. `typescript` est prévu et ne peut pas encore être sélectionné.
+Répétez `--analyzer <analyzer-id>` pour sélectionner plusieurs analyseurs à la place du défaut `dotnet-csharp`. Les identifiants sont nettoyés, convertis en minuscules et dédupliqués dans leur ordre d’apparition. Tous doivent être disponibles avant écriture ; un identifiant inconnu ou non implémenté échoue en indiquant la liste disponible. `dotnet-csharp` et `dotnet-razor` sont installés. `typescript` est prévu et ne peut pas encore être sélectionné.
 
 Les options peuvent précéder ou suivre le chemin, et `--lang` peut s’intercaler entre deux `--analyzer`. Spectre.Console.Cli accepte aussi `--name=MyProject`, `--lang=fr` et `--analyzer=dotnet-csharp`. Chaque occurrence exige une valeur. Seul `--analyzer` est répétable. Nom ou identifiant vide, valeur manquante, option inconnue ou doublon de `--name` ou `--lang` : aucun fichier n’est créé.
 
@@ -112,11 +112,13 @@ projectName: My Project
 
 analyzers:
   - dotnet-csharp
+  - dotnet-razor
   # - typescript  # Prévu, pas encore implémenté
 
-# Facultatif : remplace les valeurs par défaut. Omettre pour ne garder que .cs.
+# Facultatif : remplace les extensions des analyseurs indiqués.
 fileExtensions:
   dotnet-csharp: [.cs, .csharp]
+  dotnet-razor: [.razor, .cshtml]
 
 # Facultatif : outils MCP annoncés. Omettre la section pour tous les annoncer.
 tools:
@@ -154,7 +156,7 @@ exclude:
 
 - `version` doit valoir `1`.
 - `projectName` est un libellé facultatif non vide sur une ligne. Absent ou nul, il reste indéfini.
-- `analyzers` est une liste obligatoire et non vide d’analyseurs installés. Actuellement, seul `dotnet-csharp` est enregistré.
+- `analyzers` est une liste obligatoire et non vide d’analyseurs installés. `dotnet-csharp` et `dotnet-razor` sont enregistrés.
 - `fileExtensions` associe facultativement des analyseurs activés à des listes de remplacement.
 - `tools` est une liste facultative non vide d’outils MCP. Supprimer la section sélectionne tous les outils.
 - `semanticIndexing.language` vaut `en` (anglais) par défaut.
@@ -256,6 +258,7 @@ Chaque analyseur fournit ses extensions par défaut :
 | Analyseur installé | Extensions par défaut |
 | --- | --- |
 | `dotnet-csharp` | `.cs` |
+| `dotnet-razor` | `.razor`, `.cshtml` |
 
 Une section `fileExtensions` absente, un mappage vide (`{}`) ou une entrée omise conserve les valeurs par défaut de l’analyseur concerné. Une liste configurée les **remplace** :
 
@@ -264,7 +267,8 @@ fileExtensions:
   dotnet-csharp: [.csharp]       # Seulement les fichiers .csharp. Les fichiers .cs sont écartés.
 ```
 
-Utilisez `[.cs, .csharp]` pour garder `.cs` tout en ajoutant une extension. Ces réglages sélectionnent les chemins envoyés à l’analyseur sans lui apprendre un nouveau langage. Les fichiers doivent contenir une syntaxe comprise. TypeScript exige un adaptateur implémenté et activé, actuellement indisponible. Une surcharge ne contourne pas ces contrôles.
+Utilisez `[.cs, .csharp]` pour garder `.cs` tout en ajoutant une extension. Utilisez
+`dotnet-razor: [.razor]` pour conserver uniquement les composants Blazor. Ces réglages sélectionnent les chemins envoyés à l’analyseur sans lui apprendre un nouveau langage. Les fichiers doivent contenir une syntaxe comprise. TypeScript exige un adaptateur implémenté et activé, actuellement indisponible. Une surcharge ne contourne pas ces contrôles.
 
 - Comparaison insensible à la casse. Entrées nettoyées, converties en minuscules et dédupliquées.
 - Chaque extension commence par un point puis une ou plusieurs lettres ASCII, chiffres, `_` ou `-`.
