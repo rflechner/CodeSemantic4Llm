@@ -22,7 +22,7 @@ namespace CodeSemantic4Llm.FunctionalTests.Steps;
 [Binding]
 public sealed partial class RepositoryIndexingSteps
 {
-    private const string DefaultYaml = "version: 1\nanalyzers: [dotnet-csharp, dotnet-razor]\nfileExtensions:\n  dotnet-csharp: [.cs, .csharp]\nexclude: [vendor/**]\n";
+    private const string DefaultYaml = "version: 1\nanalyzers: [dotnet-csharp]\nfileExtensions:\n  dotnet-csharp: [.cs, .csharp]\nexclude: [vendor/**]\n";
     private const string SourceMarker = "SOURCE_BODY_MUST_NEVER_BE_STORED_37eabc";
     private readonly string _workspace = Path.Combine(Path.GetTempPath(), "CodeSemantic4Llm.IndexTests", Guid.NewGuid().ToString("N"));
     private readonly TrackingAnalyzer _analyzer = new();
@@ -47,6 +47,12 @@ public sealed partial class RepositoryIndexingSteps
     {
         _root = await CreateCheckoutAsync(Path.Combine(_workspace, "repo [index]"));
     }
+
+    [Given("the indexing checkout enables Razor indexing")]
+    public void GivenRazorIndexingEnabled() => File.WriteAllText(
+        Path.Combine(_root, "codesemantic4llm.yaml"),
+        DefaultYaml.Replace("analyzers: [dotnet-csharp]", "analyzers: [dotnet-csharp, dotnet-razor]",
+            StringComparison.Ordinal));
 
     [Given("the indexing checkout contains these sources:")]
     public void GivenSources(Table table)
