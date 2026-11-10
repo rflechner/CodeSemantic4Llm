@@ -4,7 +4,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>codesemantic4llm</ToolCommandName>
     <PackageId>CodeSemantic4Llm.Mcp.Server</PackageId>
-    <Version>0.1.4</Version>
+    <Version>0.1.5</Version>
     <Authors>Romain Flechner</Authors>
     <Description>Local-first MCP server for branch-aware C# code indexing, navigation and guarded editing.</Description>
     <PackageTags>mcp;model-context-protocol;dotnet-tool;code-indexing;roslyn</PackageTags>
