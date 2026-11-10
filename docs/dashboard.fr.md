@@ -35,9 +35,9 @@ La navigation porte sur les **instantanés publiés**. La révision enregistrée
 
 Choisissez un projet et une branche, ouvrez **Intent search** et posez par exemple la question `Where do we publish a branch snapshot?`. Cliquez sur **Search code**. Les résultats identifient l’instantané et la révision utilisés. Modifier question, catégorie, limite, projet ou branche efface les résultats ; soumettez la nouvelle sélection.
 
-La recherche est lexicale. Elle normalise la requête (mots vides anglais et français, préfixes littéraux) et applique les poids BM25 8, 4 et 1 au nom simple, au nom qualifié et au résumé. Les identifiants et résumés XML restent recherchables sans LLM. Privilégiez la langue de la documentation ou celle des descriptions générées : le moteur ne traduit pas les questions et ne déduit pas de synonymes. Le rang indique un ordre, pas une probabilité.
+La recherche est lexicale. Elle normalise la requête (mots vides anglais et français, préfixes littéraux) et découpe les noms composés (`AchatService` → `Achat Service`). Le nombre de termes trouvés prime, puis les types précèdent les membres à couverture égale, puis BM25 applique les poids 8, 4, 1 et 8 au nom simple, au nom qualifié, au résumé et aux composants du nom. Les identifiants et résumés XML restent recherchables sans LLM. Privilégiez la langue de la documentation ou celle des descriptions générées : le moteur ne traduit pas les questions et ne déduit pas de synonymes. Le rang indique un ordre, pas une probabilité.
 
-Le tableau de bord valide l’identifiant opaque du cache et délègue au même moteur que MCP, avec le même classement et les mêmes limites. Il interroge la **branche publiée sélectionnée** sans vérifier la branche actuelle ni HEAD. On peut ainsi examiner hors ligne un index dont les emplacements ont changé depuis. Pour un index antérieur à FTS5, relancez `index` ; une recherche ne le met jamais à niveau.
+Le tableau de bord valide l’identifiant opaque du cache et délègue au même moteur que MCP, avec le même classement et les mêmes limites. Il interroge la **branche publiée sélectionnée** sans vérifier la branche actuelle ni HEAD. On peut ainsi examiner hors ligne un index dont les emplacements ont changé depuis. Pour un index antérieur au schéma 7, relancez `index` ; une recherche ne le met jamais à niveau.
 
 ## Points d’accès HTTP internes
 

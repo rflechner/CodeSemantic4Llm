@@ -9,7 +9,8 @@ internal static class CSharpDocumentationSummary
 {
     public static string? Read(MemberDeclarationSyntax declaration)
     {
-        if (declaration is not (TypeDeclarationSyntax or MethodDeclarationSyntax or ConstructorDeclarationSyntax))
+        if (declaration is not (BaseTypeDeclarationSyntax or DelegateDeclarationSyntax
+            or MethodDeclarationSyntax or ConstructorDeclarationSyntax))
         {
             return null;
         }

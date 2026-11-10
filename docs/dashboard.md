@@ -73,7 +73,9 @@ submit again to evaluate the new selection.
 
 This is lexical search, not embedding similarity or a query-time LLM call.
 It uses the existing query normalization (English/French stop words, literal
-prefix terms) and BM25 weights for name, qualified name and summary (8, 4, 1).
+prefix terms), splitting compound names such as `AchatService` into `Achat Service`.
+Matching-term coverage ranks first, then types before members at equal coverage,
+then BM25 weights for name, qualified name, summary and name components (8, 4, 1, 8).
 Without LLM generation, identifiers and available XML summaries remain searchable. Words in
 the documentation's original language or the configured generation language usually work best; search does not translate
 queries or infer synonyms. The displayed rank is an ordering, not a confidence score.
@@ -83,7 +85,7 @@ search as MCP, preserving ranking and limits without duplicating SQL. Unlike
 the MCP use case, it searches the selected **published branch** without checking
 the checkout's current branch or HEAD. This permits offline inspection of saved
 indexes; it does not promise that their locations match today's working tree.
-Indexes predating FTS5 must be reindexed with `index`; searching never upgrades
+Indexes predating schema 7 must be reindexed with `index`; searching never upgrades
 or modifies them.
 
 ## Internal HTTP endpoints
