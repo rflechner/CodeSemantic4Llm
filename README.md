@@ -426,9 +426,21 @@ at most 200). **`search_code`** accepts a natural-language question such as
 SQLite FTS5/BM25 across symbol names and stored documentation or LLM summaries, and returns
 source locations and optional descriptions. No LLM server is required at search
 time. This is keyword-based relevance, not embedding similarity; see the
-[FTS5 search guide](docs/indexing.md#searching-saved-summaries-with-fts5). To list a class's methods, pass its file path and name to `get_type_members`
-with `kind: "method"`. To find callers or type references, use the same source-address
-arguments with `find_usages`. Both support pagination, defaulting to
+[FTS5 search guide](docs/indexing.md#searching-saved-summaries-with-fts5).
+
+When either search returns a type (class, interface, struct, record, enum or delegate),
+the response also includes `typeUsages`: each entry identifies the type's exact
+`typeLocation`, up to **five resolved reference locations** in `usages`, and a
+`hasMore` flag. The `isAvailable` flag distinguishes zero indexed references
+(`true` with an empty list) from references not yet computed (`false`, as in
+a partial folder index or an older cache). Method-only responses retain their
+original `symbols` / `hasMore` shape. Usage previews read the existing index;
+they neither analyze source files nor call an LLM.
+
+To list a class's methods, pass its file path and name to `get_type_members`
+with `kind: "method"`. To retrieve more than the five previewed references,
+or to find method callers, use the same source-address arguments with
+`find_usages`. Both navigation tools support pagination, defaulting to
 50 results with a maximum of 200. Overloads stay distinct, partial declarations
 are selected separately, and inherited members are not included. Reference results
 omit unresolved bindings and do not evaluate project dependency graphs.
