@@ -305,7 +305,8 @@ Feature: Persist a repository index before starting MCP
 
 
   Scenario: Blazor components and classic Razor views are persisted and invalidated like C# sources
-    Given the indexing checkout contains these sources:
+    Given the indexing checkout enables Razor indexing
+    And the indexing checkout contains these sources:
       | path                        | source                                                                 |
       | Components/Counter.razor    | <h1>Counter</h1> @code { private void Increment() {} }                   |
       | Views/Home/Index.cshtml     | <h1>Home</h1> @functions { public string Greeting() => "Welcome"; }     |
