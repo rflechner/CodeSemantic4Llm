@@ -106,7 +106,7 @@ public sealed partial class RepositoryIndexingSteps
         Assert.False(_fullTextReply.TryGetProperty("snapshot", out _));
         var containsType = _fullTextReply.GetProperty("symbols").EnumerateArray().Any(symbol =>
             symbol.GetProperty("kind").GetString() is "class" or "struct" or "interface" or "record" or "enum" or "delegate");
-        Assert.Equal(containsType ? new[] { "hasMore", "symbols", "typeUsages" } : ["hasMore", "symbols"],
+        Assert.Equal(containsType ? new[] { "hasMore", "symbols", "typeUsages" } : new[] { "hasMore", "symbols" },
             _fullTextReply.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
     }
 
