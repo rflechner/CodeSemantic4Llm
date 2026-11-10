@@ -406,6 +406,13 @@ public sealed partial class RepositoryIndexingSteps
         Assert.Equal(analyzed, _analyzer.AnalysisCount);
     }
 
+    [Then("the run reuses both Razor files")]
+    public void ThenBothRazorFilesAreReused()
+    {
+        Assert.Equal(0, _result!.AnalyzedFiles);
+        Assert.Equal(2, _result.ReusedFiles);
+    }
+
     [Then("only one snapshot remains for the indexed branch")]
     public void ThenOnlyOneCurrentSnapshot() => ThenOnlyOneBranchSnapshot(_result!.Snapshot.Scope.BranchName);
 
