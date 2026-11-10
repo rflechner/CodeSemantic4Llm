@@ -24,15 +24,28 @@ internal sealed class RepositoryIndexProgressDisplay(ProgressContext context) : 
             _task = context.AddTask(value.Phase.ToString(), maxValue: Math.Max(1, value.TotalFiles));
         }
 
-        _task!.IsIndeterminate = value.Phase is RepositoryIndexingPhase.Discovering or RepositoryIndexingPhase.Publishing;
+        _task!.IsIndeterminate = value.Phase is RepositoryIndexingPhase.Discovering
+            or RepositoryIndexingPhase.PreparingReferences
+            or RepositoryIndexingPhase.PreparingCompilation
+            or RepositoryIndexingPhase.SortingReferences
+            or RepositoryIndexingPhase.CheckingCheckout
+            or RepositoryIndexingPhase.Publishing;
         _task.Description = value.Phase switch
         {
             RepositoryIndexingPhase.Discovering => $"Discovering: {value.TotalFiles} files found",
-            RepositoryIndexingPhase.Publishing => "Publishing snapshot",
+            RepositoryIndexingPhase.PreparingReferences => "Preparing reference index (checking for reusable data)",
+            RepositoryIndexingPhase.LoadingReferenceSources => $"Loading reference sources: {value.CompletedFiles}/{value.TotalFiles} files",
+            RepositoryIndexingPhase.ParsingReferences => $"Parsing C# for references: {value.CompletedFiles}/{value.TotalFiles} files",
+            RepositoryIndexingPhase.PreparingCompilation => "Building Roslyn reference compilation",
+            RepositoryIndexingPhase.ResolvingReferences => $"Resolving references: {value.CompletedFiles}/{value.TotalFiles} files",
+            RepositoryIndexingPhase.SortingReferences => "Ordering resolved references",
+            RepositoryIndexingPhase.PersistingReferences => $"Saving references to SQLite: {value.CompletedFiles}/{value.TotalFiles} references",
+            RepositoryIndexingPhase.CheckingCheckout => "Checking repository and configuration",
+            RepositoryIndexingPhase.Publishing => "Publishing snapshot (SQLite)",
             _ => $"{value.Phase}: {value.CompletedFiles}/{value.TotalFiles} files"
         };
         _task.MaxValue = Math.Max(1, value.TotalFiles);
-        _task.Value = value.CompletedFiles;
+        _task.Value = _task.IsIndeterminate ? 0 : value.CompletedFiles;
     }
 
     private void FinishTask()

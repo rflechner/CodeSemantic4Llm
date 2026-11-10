@@ -145,10 +145,12 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
         return true;
     }
 
-    public void AddReferences(IReadOnlyList<SymbolReference> references, CancellationToken cancellationToken = default)
+    public void AddReferences(IReadOnlyList<SymbolReference> references, CancellationToken cancellationToken = default,
+        Action<int>? onProgress = null)
     {
         EnsureWritable(cancellationToken);
         ArgumentNullException.ThrowIfNull(references);
+        var inserted = 0;
 
         foreach (var reference in references)
         {
@@ -160,6 +162,13 @@ internal sealed class SqliteIndexUpdate : IIndexUpdate
             _insertReference.Parameters["$usageLine"].Value = reference.Usage.Line;
             _insertReference.Parameters["$usageColumn"].Value = reference.Usage.Column;
             _insertReference.ExecuteNonQuery();
+            inserted++;
+
+            // Avoid one terminal update per SQLite statement on large repositories.
+            if (inserted % 256 == 0 || inserted == references.Count)
+            {
+                onProgress?.Invoke(inserted);
+            }
         }
     }
 

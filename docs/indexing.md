@@ -58,12 +58,19 @@ types and reduced extension methods, but incomplete/ambiguous bindings are omitt
 than guessed. Thus a zero-result query does not prove there are no callers in a complex
 multi-project repository.
 
-An interactive terminal displays Spectre progress for discovery, indexing, verification
-and publication. Discovery has an unknown total; indexing and verification show file
-counts and percentages. The final summary includes the absolute SQLite database path,
-branch, recorded HEAD, file/declaration counts, analyzed/reused counts and snapshot ID.
-Redirected output contains this summary as plain text. An IDE
-console that does not advertise interactivity also receives the plain summary.
+An interactive terminal displays Spectre progress for discovery, declaration indexing,
+reference analysis (loading sources, Roslyn parsing, compilation, semantic resolution
+and ordering), saving references to SQLite, verification, checkout checks and publication. File-based phases
+show completed/total counts; saving references reports the number of reference rows.
+Reference reuse, checkout checks and publication display an indeterminate activity
+indicator rather than a misleading 100% bar. The file-indexing 100% mark does not
+mean cross-file references are finished.
+
+Redirected output and non-interactive IDE/CI consoles print each phase as it starts,
+with bounded 10% milestones for measurable work, followed by the normal summary.
+The final summary includes the absolute SQLite database path, branch, recorded HEAD,
+file/declaration counts, analyzed/reused counts and snapshot ID. Final success is
+reported only after SQLite publication commits.
 
 Exit status is 0 on success/help, 1 for invalid input or operation failure, and 130 for
 cancellation. Ctrl+C cancels the run. Completion is reported only after publication.
