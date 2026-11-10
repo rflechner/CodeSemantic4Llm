@@ -303,6 +303,28 @@ Feature: Persist a repository index before starting MCP
     And no index database was created
 
 
+
+  Scenario: Blazor components and classic Razor views are persisted and invalidated like C# sources
+    Given the indexing checkout enables Razor indexing
+    And the indexing checkout contains these sources:
+      | path                        | source                                                                 |
+      | Components/Counter.razor    | <h1>Counter</h1> @code { private void Increment() {} }                   |
+      | Views/Home/Index.cshtml     | <h1>Home</h1> @functions { public string Greeting() => "Welcome"; }     |
+    When I index the checkout
+    Then a new store reads a published snapshot with 2 files
+    And declaration "Counter" is stored at "Components/Counter.razor"
+    And declaration "Increment" is stored at "Components/Counter.razor"
+    And declaration "Index" is stored at "Views/Home/Index.cshtml"
+    And declaration "Greeting" is stored at "Views/Home/Index.cshtml"
+    When I index the checkout again
+    Then a new store reads a published snapshot with 2 files
+    And the run reuses both Razor files
+    When I delete indexing source "Views/Home/Index.cshtml"
+    And I index the checkout again
+    Then a new store reads a published snapshot with 1 files
+    And the saved index does not contain "Greeting"
+    And declaration "Counter" is stored at "Components/Counter.razor"
+
   Scenario: Indexing successive folders accumulates MCP-searchable declarations
     Given the indexing checkout contains these sources:
       | path                  | source                                   |

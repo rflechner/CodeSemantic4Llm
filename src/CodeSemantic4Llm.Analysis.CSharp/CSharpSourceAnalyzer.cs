@@ -68,7 +68,7 @@ public sealed class CSharpSourceAnalyzer : ISourceAnalyzer
         return new SourceLocation(path, position.Line + 1, position.Character + 1);
     }
 
-    private static string? GetContainerName(MemberDeclarationSyntax member) => member switch
+    internal static string? GetContainerName(MemberDeclarationSyntax member) => member switch
     {
         BaseNamespaceDeclarationSyntax namespaceDeclaration => namespaceDeclaration.Name.ToString(),
         TypeDeclarationSyntax typeDeclaration => typeDeclaration.Identifier.ValueText,
@@ -76,7 +76,7 @@ public sealed class CSharpSourceAnalyzer : ISourceAnalyzer
         _ => null
     };
 
-    private static IEnumerable<(string Name, SyntaxToken Identifier, string Kind)> GetDeclarations(
+    internal static IEnumerable<(string Name, SyntaxToken Identifier, string Kind)> GetDeclarations(
         MemberDeclarationSyntax member)
     {
         switch (member)

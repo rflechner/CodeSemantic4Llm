@@ -8,6 +8,7 @@ sharedSummaries: false
 
 analyzers:
   - dotnet-csharp
+  - dotnet-razor
 
 # Watch waits this many seconds after the most recent source change (default: 15).
 # Override for one session with: codesemantic4llm watch . --debounce-seconds 5
@@ -15,10 +16,11 @@ watch:
   debounceSeconds: 15
 
 # Optional extension overrides, keyed by enabled analyzer ID.
-# Each list replaces that analyzer's defaults (.cs for dotnet-csharp).
+# Each list replaces that analyzer's defaults (.cs for dotnet-csharp; .razor/.cshtml for dotnet-razor).
 # Discovery always visits nested directories, subject to exclusions below.
 # fileExtensions:
 #   dotnet-csharp: [.cs, .csharp]
+#   dotnet-razor: [.razor, .cshtml]
 
 # Natural-language summary language (independent of the source language).
 # Existing XML summaries are indexed locally. LLM calls are disabled by default.

@@ -48,6 +48,12 @@ public sealed partial class RepositoryIndexingSteps
         _root = await CreateCheckoutAsync(Path.Combine(_workspace, "repo [index]"));
     }
 
+    [Given("the indexing checkout enables Razor indexing")]
+    public void GivenRazorIndexingEnabled() => File.WriteAllText(
+        Path.Combine(_root, "codesemantic4llm.yaml"),
+        DefaultYaml.Replace("analyzers: [dotnet-csharp]", "analyzers: [dotnet-csharp, dotnet-razor]",
+            StringComparison.Ordinal));
+
     [Given("the indexing checkout contains these sources:")]
     public void GivenSources(Table table)
     {
@@ -406,6 +412,13 @@ public sealed partial class RepositoryIndexingSteps
         Assert.Equal(analyzed, _analyzer.AnalysisCount);
     }
 
+    [Then("the run reuses both Razor files")]
+    public void ThenBothRazorFilesAreReused()
+    {
+        Assert.Equal(0, _result!.AnalyzedFiles);
+        Assert.Equal(2, _result.ReusedFiles);
+    }
+
     [Then("only one snapshot remains for the indexed branch")]
     public void ThenOnlyOneCurrentSnapshot() => ThenOnlyOneBranchSnapshot(_result!.Snapshot.Scope.BranchName);
 
@@ -508,8 +521,8 @@ public sealed partial class RepositoryIndexingSteps
     private CancellationToken Token => _cancellation?.Token ?? TestContext.Current.CancellationToken;
 
     private IndexRepository CreateIndexer() => new(_stateProvider, new YamlRepositoryConfigurationLoader(),
-        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer], [new CSharpReferenceAnalyzer()],
-        [new CSharpSymbolSourceExtractor()], _summaryGenerator);
+        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer, new RazorSourceAnalyzer()], [new CSharpReferenceAnalyzer()],
+        [new CSharpSymbolSourceExtractor(), new RazorSymbolSourceExtractor()], _summaryGenerator);
 
     private RepositoryIndexTools CreateMcpTools()
     {
