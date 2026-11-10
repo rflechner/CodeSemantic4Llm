@@ -191,6 +191,103 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
         return declarations;
     }
 
+    /// <inheritdoc />
+    public IReadOnlyList<TypeUsagePreview> GetTypeUsagePreviews(
+        RepositoryScope scope, long snapshotId, IReadOnlyList<SourceLocation> typeLocations,
+        int maxUsagesPerType, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(typeLocations);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(snapshotId);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxUsagesPerType);
+
+        if (maxUsagesPerType > 200)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxUsagesPerType), "Limit must not exceed 200.");
+        }
+
+        if (typeLocations.Count == 0)
+        {
+            return [];
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        var path = paths.GetDatabasePath(scope.RootPath);
+
+        if (!File.Exists(path))
+        {
+            throw MissingIndex();
+        }
+
+        using var connection = IndexDatabase.Open(path, scope.RootPath, writable: false);
+        using var transaction = connection.BeginTransaction(deferred: true);
+        var snapshot = ReadSnapshot(connection, transaction, scope) ?? throw MissingIndex();
+
+        if (snapshot.SnapshotId != snapshotId)
+        {
+            throw new InvalidOperationException("The active index snapshot changed. Search again before reading type usages.");
+        }
+
+        // Folder-only and legacy snapshots can expose declarations without a complete
+        // reference index. Do not misrepresent that state as zero references.
+        bool isAvailable;
+        using (var version = IndexDatabase.Command(connection, transaction, "PRAGMA user_version;"))
+        {
+            isAvailable = Convert.ToInt32(version.ExecuteScalar()) >= 3;
+        }
+
+        if (isAvailable)
+        {
+            using var version = IndexDatabase.Command(connection, transaction,
+                "SELECT reference_index_version FROM snapshots WHERE id = $snapshot;",
+                ("$snapshot", snapshotId));
+            isAvailable = Convert.ToInt32(version.ExecuteScalar()) == 1;
+        }
+
+        if (!isAvailable)
+        {
+            return typeLocations.Select(location =>
+                new TypeUsagePreview(location, [], HasMore: false, IsAvailable: false)).ToArray();
+        }
+
+        // Reuse one connection and prepared query for all returned types, including searches
+        // with many matches. Each sample reads just one extra row to establish HasMore.
+        using var command = IndexDatabase.Command(connection, transaction, """
+            SELECT usage_path, usage_line, usage_column
+            FROM symbol_references
+            WHERE snapshot_id = $snapshot AND target_path = $path
+                AND target_line = $line AND target_column = $column
+            ORDER BY usage_path COLLATE BINARY, usage_line, usage_column
+            LIMIT $limit;
+            """, ("$snapshot", snapshotId), ("$path", ""),
+            ("$line", 0), ("$column", 0), ("$limit", maxUsagesPerType + 1));
+
+        var previews = new List<TypeUsagePreview>(typeLocations.Count);
+
+        foreach (var location in typeLocations)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            command.Parameters["$path"].Value = location.RelativePath;
+            command.Parameters["$line"].Value = location.Line;
+            command.Parameters["$column"].Value = location.Column;
+
+            var usages = new List<SourceLocation>(maxUsagesPerType + 1);
+            using (var reader = command.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    usages.Add(new SourceLocation(reader.GetString(0), reader.GetInt32(1), reader.GetInt32(2)));
+                }
+            }
+
+            previews.Add(new TypeUsagePreview(
+                location, usages.Take(maxUsagesPerType).ToArray(),
+                HasMore: usages.Count > maxUsagesPerType, IsAvailable: true));
+        }
+
+        return previews;
+    }
+
     public SymbolUsagePage FindUsages(
         RepositoryScope scope, SourceLocation targetLocation, long snapshotId,
         int maxResults, int offset, CancellationToken cancellationToken = default)

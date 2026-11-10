@@ -273,7 +273,22 @@ Les réponses JSON conservent les accents et la ponctuation du code. Les guillem
 
 `find_symbols` cherche un nom simple exact et sensible à la casse (20 résultats par défaut, 200 au maximum). `search_code` classe une question en langage naturel avec SQLite FTS5/BM25 sur les noms, la documentation et les résumés enregistrés. Il renvoie les emplacements et les descriptions disponibles. La recherche par mots-clés fonctionne sans serveur LLM et sans représentations vectorielles. [Recherche FTS5](docs/indexing.fr.md#rechercher-avec-fts5)
 
-Pour lister les méthodes d’une classe, utilisez `get_type_members` avec son fichier, son nom et `kind: "method"`. Pour trouver des appelants ou des références à un type, utilisez `find_usages` avec la même adresse source. Les deux paginent à 50 résultats par défaut et 200 au maximum. Les surcharges restent distinctes, les déclarations partielles se sélectionnent séparément et les membres hérités sont exclus. Les références non résolues et les graphes de dépendances des projets ne sont pas évalués.
+Lorsqu'une recherche renvoie un type (classe, interface, structure, record, énumération ou délégué),
+la réponse contient également `typeUsages`. Chaque entrée relie la déclaration par son
+`typeLocation` à **cinq références résolues au maximum** dans `usages`, avec `hasMore`
+pour signaler d'autres utilisations. `isAvailable: true` et une liste vide signifient
+qu'aucune référence n'est indexée. `isAvailable: false` signifie au contraire que
+les références n'ont pas été calculées (indexation partielle par dossiers ou ancien cache).
+Une recherche limitée aux méthodes conserve la structure `symbols` / `hasMore`.
+Ces aperçus réutilisent SQLite sans réanalyser les sources ni appeler un LLM.
+
+Pour lister les méthodes d’une classe, utilisez `get_type_members` avec son fichier,
+son nom et `kind: "method"`. Pour récupérer les références supplémentaires ou les
+appelants d'une méthode, utilisez `find_usages` avec la même adresse source. Ces deux
+outils paginent à 50 résultats par défaut et 200 au maximum. Les surcharges restent
+distinctes, les déclarations partielles se sélectionnent séparément et les membres
+hérités sont exclus. Les références non résolues et les graphes de dépendances des
+projets ne sont pas évalués.
 
 La personne qui exploite le serveur doit relancer `index` après modification. Ni le démarrage MCP ni les requêtes ne reconstruisent l’index. Pour ajouter `get_repository_configuration`, `preview_repository_index` et `get_repository_index_status` :
 
