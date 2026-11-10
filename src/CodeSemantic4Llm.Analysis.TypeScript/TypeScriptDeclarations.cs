@@ -136,7 +136,7 @@ internal static class TypeScriptDeclarations
                 }
                 else if (member.Type is "property_identifier" or "string" or "number")
                 {
-                    Add(member, member, "enum-member", scope, containingType);
+                    AddNamed(member, member, "enum-member", scope, containingType);
                 }
             }
         }
@@ -144,10 +144,10 @@ internal static class TypeScriptDeclarations
         TypeScriptDeclaration? Add(
             Node syntax, string kind, string scope, SourceLocation? containingType) =>
             syntax.GetChildForField("name") is { } name
-                ? Add(syntax, name, kind, scope, containingType)
+                ? AddNamed(syntax, name, kind, scope, containingType)
                 : null;
 
-        TypeScriptDeclaration? Add(
+        TypeScriptDeclaration? AddNamed(
             Node syntax, Node identifier, string kind, string scope, SourceLocation? containingType)
         {
             // A computed name is an expression, not a reliable stable declaration identity.
