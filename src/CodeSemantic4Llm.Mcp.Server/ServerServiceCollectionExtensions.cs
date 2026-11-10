@@ -15,7 +15,9 @@ internal static class ServerServiceCollectionExtensions
     public static void AddRepositoryServices(this IServiceCollection services)
     {
         services.AddSingleton<ISourceAnalyzer, CSharpSourceAnalyzer>();
+        services.AddSingleton<ISourceAnalyzer, RazorSourceAnalyzer>();
         services.AddSingleton<ISymbolSourceExtractor, CSharpSymbolSourceExtractor>();
+        services.AddSingleton<ISymbolSourceExtractor, RazorSymbolSourceExtractor>();
         services.AddHttpClient<ISymbolSummaryGenerator, OpenAiSymbolSummaryGenerator>(client =>
             client.Timeout = TimeSpan.FromMinutes(5));
         services.AddSingleton<ISourceReferenceAnalyzer, CSharpReferenceAnalyzer>();
