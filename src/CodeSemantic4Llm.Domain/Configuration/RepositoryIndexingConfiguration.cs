@@ -25,7 +25,8 @@ public sealed class RepositoryIndexingConfiguration
         string? projectName = null,
         McpToolSelection? tools = null,
         bool sharedSummaries = false,
-        RepositoryWatchConfiguration? watch = null)
+        RepositoryWatchConfiguration? watch = null,
+        McpPathFormat mcpPaths = McpPathFormat.Both)
     {
         ArgumentNullException.ThrowIfNull(analyzerIds);
 
@@ -53,7 +54,17 @@ public sealed class RepositoryIndexingConfiguration
         Tools = tools ?? McpToolSelection.All;
         SharedSummaries = sharedSummaries;
         Watch = watch ?? new RepositoryWatchConfiguration();
+
+        if (!Enum.IsDefined(mcpPaths))
+        {
+            throw new ArgumentOutOfRangeException(nameof(mcpPaths));
+        }
+
+        McpPaths = mcpPaths;
     }
+
+    /// <summary>MCP response presentation only; changing this does not invalidate the index.</summary>
+    public McpPathFormat McpPaths { get; }
 
     public int Version => CurrentVersion;
 

@@ -26,7 +26,8 @@ internal sealed class McpToolAvailability(
     {
         var result = await next(context, cancellationToken);
         var availability = context.Services!.GetRequiredService<McpToolAvailability>();
-        var selection = await availability.GetSelectionAsync(cancellationToken);
+        var settings = await availability.GetSettingsAsync(cancellationToken);
+        var selection = settings?.Tools;
 
         if (selection is null)
         {
@@ -49,7 +50,8 @@ internal sealed class McpToolAvailability(
         McpRequestHandler<CallToolRequestParams, CallToolResult> next) => async (context, cancellationToken) =>
     {
         var availability = context.Services!.GetRequiredService<McpToolAvailability>();
-        var selection = await availability.GetSelectionAsync(cancellationToken);
+        var settings = await availability.GetSettingsAsync(cancellationToken);
+        var selection = settings?.Tools;
         var requested = context.Params?.Name;
 
         if (requested is not null && selection is not null && !selection.IsEnabled(requested))
@@ -59,16 +61,26 @@ internal sealed class McpToolAvailability(
                 "Ask the server operator to select it in the repository configuration, then refresh the tool list.");
         }
 
-        return await next(context, cancellationToken);
+        var previousFormat = RepositoryPathJson.CurrentFormat;
+        RepositoryPathJson.CurrentFormat = settings?.McpPaths ?? McpPathFormat.Both;
+
+        try
+        {
+            return await next(context, cancellationToken);
+        }
+        finally
+        {
+            RepositoryPathJson.CurrentFormat = previousFormat;
+        }
     };
 
     /// <summary>
-    /// Reads the current selection, or null when no repository is selected or its configuration
+    /// Reads the current settings, or null when no repository is selected or its configuration
     /// cannot be read. Discovery and diagnostics must keep working without valid indexing
     /// settings, so an unreadable file leaves the process capabilities as the only restriction.
     /// Re-reading per request lets an operator's edit take effect after a tool-list refresh.
     /// </summary>
-    private async Task<McpToolSelection?> GetSelectionAsync(CancellationToken cancellationToken)
+    private async Task<RepositoryIndexingConfiguration?> GetSettingsAsync(CancellationToken cancellationToken)
     {
         var root = configuration["CODESEMANTIC4LLM_REPOSITORY_ROOT"];
 
@@ -80,7 +92,7 @@ internal sealed class McpToolAvailability(
         try
         {
             var settings = await configurationLoader.LoadAsync(root, cancellationToken);
-            return settings.Tools;
+            return settings;
         }
         catch (Exception exception) when (exception is RepositoryConfigurationException or UnauthorizedAccessException)
         {

@@ -29,6 +29,10 @@ public sealed partial class RepositoryConfigurationSteps
         Directory.CreateDirectory(_repositoryRoot);
     }
 
+    [Then("the configured MCP path format is \"(.*)\"")]
+    public void ThenMcpPathFormat(string expected) =>
+        Assert.Equal(expected, _loadedConfiguration!.McpPaths.ToString().ToLowerInvariant());
+
     [Given("the repository configuration is:")]
     public async Task GivenRepositoryConfigurationIs(string yaml)
     {

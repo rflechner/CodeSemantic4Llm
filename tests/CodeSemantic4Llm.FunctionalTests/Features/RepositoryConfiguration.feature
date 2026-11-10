@@ -225,3 +225,37 @@ Feature: Per-repository YAML indexing configuration
       """
     When I preview source indexing
     Then the preview fails with an error containing "Invalid indexing configuration"
+
+  Scenario Outline: Invalid MCP path formats fail explicitly
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers: [dotnet-csharp]
+      mcpPaths: <value>
+      """
+    When I preview source indexing
+    Then the preview fails with an error containing "<error>"
+
+    Examples:
+      | value   | error        |
+      | unknown | mcpPaths     |
+      | 1       | mcpPaths     |
+      | null    | mcpPaths     |
+      | ""      | mcpPaths     |
+      | []      | Invalid YAML |
+
+  Scenario Outline: Writing repository configuration preserves the MCP path format
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers: [dotnet-csharp]
+      mcpPaths: <format>
+      """
+    When I write and reload the repository configuration
+    Then the configured MCP path format is "<format>"
+
+    Examples:
+      | format   |
+      | relative |
+      | absolute |
+      | both     |

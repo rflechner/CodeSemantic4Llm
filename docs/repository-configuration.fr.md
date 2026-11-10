@@ -4,6 +4,31 @@
 
 Chaque copie à indexer contient son propre `codesemantic4llm.yaml` **à la racine du dépôt**. Le serveur ne cherche pas de valeurs partagées dans les dossiers parents. Le YAML appartient au dépôt, pas au cache central. Le [schéma de stockage prévu](architecture.fr.md#stockage-prévu) distingue copies d’origine, instantanés de branche et caches de données dérivées.
 
+`mcpPaths` choisit les champs de chemin source des réponses MCP : `relative` renvoie
+uniquement `relativePath`, `absolute` uniquement `absolutePath`, et `both` (par défaut)
+renvoie les deux champs. Exemple :
+
+```yaml
+mcpPaths: relative
+```
+
+Configuration minimale d’un dépôt C# renvoyant uniquement les champs `absolutePath` :
+
+```yaml
+version: 1
+analyzers: [dotnet-csharp]
+mcpPaths: absolute
+```
+
+Ce réglage couvre les emplacements imbriqués, références, diagnostics, lectures et
+éditions de code, ainsi que les candidats de l’aperçu d’indexation. Les chemins absolus
+utilisent le système de fichiers du serveur et la racine choisie par l’opérateur.
+Les entrées exigent toujours des chemins relatifs au dépôt, même en mode `absolute` ;
+convertissez donc les chemins reçus relativement à cette racine avant de les transmettre
+à un outil. Les modifications s’appliquent au prochain appel, sans redémarrage ni
+réindexation. Seule la présentation change ; les chemins persistés restent relatifs.
+Les valeurs inconnues, vides et nulles sont rejetées. `init` écrit `mcpPaths: both`.
+
 ## Créer la configuration par défaut
 
 Depuis le dépôt CodeSemantic4Llm :

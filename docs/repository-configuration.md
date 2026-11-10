@@ -8,6 +8,30 @@ The YAML file does not belong in the central index cache. See the
 [planned index storage illustration](architecture.md#planned-index-storage) for the separation
 between original checkouts, branch snapshots, and shared derived-data caches.
 
+`mcpPaths` controls source path fields in MCP responses: `relative` returns only
+`relativePath`, `absolute` returns only `absolutePath`, and `both` (the default)
+returns both fields. For example:
+
+```yaml
+mcpPaths: relative
+```
+
+Minimal C# repository configuration returning only `absolutePath` fields:
+
+```yaml
+version: 1
+analyzers: [dotnet-csharp]
+mcpPaths: absolute
+```
+
+The setting applies to nested locations, references, diagnostics, source reads and edits,
+and indexing preview candidates. Absolute paths use the server filesystem and the
+operator-selected checkout root. Inputs still require repository-relative paths, even
+in `absolute` mode; convert returned paths relative to that root before passing them
+back to a tool. Changes take effect on the next tool call without restarting or
+re-indexing. Only presentation changes; persisted paths remain relative. Unknown,
+empty and null values are rejected. `init` writes `mcpPaths: both`.
+
 ## Create the default configuration
 
 From the CodeSemantic4Llm checkout, run:

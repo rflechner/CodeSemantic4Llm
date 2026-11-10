@@ -95,7 +95,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
             return new RepositoryIndexingConfiguration(
                 document.Analyzers, document.Exclude, semanticIndexing, fileExtensions, document.ProjectName, tools,
                 document.SharedSummaries,
-                document.Watch is null ? null : new RepositoryWatchConfiguration(document.Watch.DebounceSeconds));
+                document.Watch is null ? null : new RepositoryWatchConfiguration(document.Watch.DebounceSeconds),
+                MapMcpPaths(document.McpPaths));
         }
         catch (YamlException exception)
         {
@@ -131,6 +132,14 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         return new McpToolSelection(tools);
     }
 
+    private static McpPathFormat MapMcpPaths(string? value) => value switch
+    {
+        "both" => McpPathFormat.Both,
+        "relative" => McpPathFormat.Relative,
+        "absolute" => McpPathFormat.Absolute,
+        _ => throw new RepositoryConfigurationException("mcpPaths must be one of: both, relative, absolute.")
+    };
+
     private static IReadOnlyDictionary<string, SourceFileExtensions> MapFileExtensions(
         Dictionary<string, List<string>?>? overrides)
     {
@@ -156,6 +165,8 @@ public sealed class YamlRepositoryConfigurationLoader : IRepositoryConfiguration
         internal static readonly List<string> MissingTools = [];
 
         public int Version { get; set; }
+
+        public string? McpPaths { get; set; } = "both";
 
         public bool SharedSummaries { get; set; }
 
