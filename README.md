@@ -12,7 +12,7 @@
 The goal is to let coding agents retrieve small, relevant slices of a repository instead of repeatedly loading large source files into the LLM context.
 
 > Status: repository-local YAML configuration, C# declaration and Roslyn-resolved reference
-> indexing into SQLite, and bounded MCP queries against saved branch snapshots.
+> indexing into SQLite, optional Blazor/Razor view indexing (`dotnet-razor`), and bounded MCP queries against saved branch snapshots.
 > Reference binding currently uses a lightweight repository-wide compilation rather than
 > full MSBuild project resolution; optional OpenAI-compatible LLM summaries are implemented
 > for C# methods and types, with local FTS5/BM25 keyword search over stored
