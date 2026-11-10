@@ -1,4 +1,5 @@
 using CodeSemantic4Llm.Analysis.CSharp;
+using CodeSemantic4Llm.Application.Abstractions;
 using CodeSemantic4Llm.Domain.Source;
 using CodeSemantic4Llm.Domain.Symbols;
 using Xunit;
@@ -84,6 +85,43 @@ public sealed class CSharpReferenceAnalyzerTests
 
         var reference = Assert.Single(references, usage => usage.Target == method.Location);
         Assert.Equal(6, reference.Usage.Line);
+    }
+
+    [Fact]
+    public async Task Reports_parsing_and_semantic_resolution_progress_for_each_file()
+    {
+        var documents = new[]
+        {
+            new SourceDocument("Worker.cs", "class Worker { public void Run() {} }"),
+            new SourceDocument("Caller.cs", "class Caller { void Go() { new Worker().Run(); } }")
+        };
+        var updates = new List<ReferenceAnalysisProgress>();
+        var references = await new CSharpReferenceAnalyzer().AnalyzeAsync(
+            documents, TestContext.Current.CancellationToken, new InlineProgress(updates.Add));
+
+        Assert.NotEmpty(references);
+        Assert.Equal(new[] { 0, 1, 2 }, updates.Where(item => item.Phase == ReferenceAnalysisPhase.Parsing)
+            .Select(item => item.CompletedFiles));
+        Assert.Equal(new[] { 0, 1, 2 }, updates.Where(item => item.Phase == ReferenceAnalysisPhase.Resolving)
+            .Select(item => item.CompletedFiles));
+        Assert.Contains(updates, item => item.Phase == ReferenceAnalysisPhase.PreparingCompilation);
+        Assert.Contains(updates, item => item.Phase == ReferenceAnalysisPhase.Sorting);
+        Assert.All(updates, item =>
+        {
+            if (item.Phase is ReferenceAnalysisPhase.Parsing or ReferenceAnalysisPhase.Resolving)
+            {
+                Assert.Equal(2, item.TotalFiles);
+            }
+            else
+            {
+                Assert.Equal(0, item.TotalFiles);
+            }
+        });
+    }
+
+    private sealed class InlineProgress(Action<ReferenceAnalysisProgress> report) : IProgress<ReferenceAnalysisProgress>
+    {
+        public void Report(ReferenceAnalysisProgress value) => report(value);
     }
 
     [Fact]

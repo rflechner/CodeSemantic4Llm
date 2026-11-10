@@ -14,6 +14,29 @@ Feature: Persist a repository index before starting MCP
     And MCP finds declarations in the saved snapshot
     And the cache contains derived metadata without source text
 
+  Scenario: Full indexing reports the cross-file reference pass after file indexing
+    Given the indexing checkout contains these sources:
+      | path      | source                                                   |
+      | Worker.cs | class Worker { public void Run() {} }                      |
+      | Caller.cs | class Caller { void Go() { new Worker().Run(); } }        |
+    When I index the checkout
+    Then progress reports reference analysis and persistence before verification
+    And indexing progress reaches completion after publication
+
+  Scenario: Redirected output identifies reference analysis and SQLite publication
+    Given the indexing checkout contains these sources:
+      | path      | source                                                   |
+      | Worker.cs | class Worker { public void Run() {} }                      |
+      | Caller.cs | class Caller { void Go() { new Worker().Run(); } }        |
+    When I index the checkout from the console
+    Then redirected output identifies reference analysis and SQLite publication
+
+  Scenario: Reusing unchanged references skips the semantic pass without going silent
+    Given the indexing checkout contains 2 C# files
+    When I index the checkout
+    And I index the checkout again
+    Then reference reuse is visible without repeating semantic resolution
+
   Scenario: Apply extensions, exclusions and symbolic link boundaries
     Given the indexing checkout contains these sources:
       | path                  | source                                |

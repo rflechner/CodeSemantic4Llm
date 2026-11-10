@@ -15,8 +15,9 @@ public interface IIndexUpdate : IDisposable
     /// <summary>Copies existing references only when every indexed file and the analyzer configuration are unchanged.</summary>
     bool TryReuseReferences(CancellationToken cancellationToken = default);
 
-    /// <summary>Adds resolved references; none of the referenced source code is persisted.</summary>
-    void AddReferences(IReadOnlyList<SymbolReference> references, CancellationToken cancellationToken = default);
+    /// <summary>Adds resolved references; reports persisted row counts without exposing source code.</summary>
+    void AddReferences(IReadOnlyList<SymbolReference> references, CancellationToken cancellationToken = default,
+        Action<int>? onProgress = null);
 
     /// <summary>Atomically publishes the branch's active snapshot, retaining other folders for cumulative updates.</summary>
     RepositoryIndexSnapshot Publish(CancellationToken cancellationToken = default);

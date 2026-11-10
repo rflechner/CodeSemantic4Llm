@@ -11,9 +11,15 @@ using CodeSemantic4Llm.Domain.Source;
 namespace CodeSemantic4Llm.Application.UseCases;
 
 /// <summary>Stages in an index run; Completed is emitted only after the transaction commits.</summary>
-public enum RepositoryIndexingPhase { Discovering, Indexing, Verifying, Publishing, Completed, FolderCompleted }
+public enum RepositoryIndexingPhase
+{
+    Discovering, Indexing, PreparingReferences, LoadingReferenceSources, ParsingReferences,
+    PreparingCompilation, ResolvingReferences, SortingReferences, PersistingReferences,
+    Verifying, CheckingCheckout, Publishing,
+    Completed, FolderCompleted
+}
 
-/// <summary>Progress counts refer to matching source files, with completion reported only after publication.</summary>
+/// <summary>Counts represent files, except when persisting references (number of references); completion follows publication.</summary>
 public sealed record RepositoryIndexingProgress(RepositoryIndexingPhase Phase, int CompletedFiles, int TotalFiles);
 
 /// <summary>Summary of a fully published repository index, including how much analysis was reused.</summary>
@@ -219,12 +225,18 @@ public sealed class IndexRepository(
 
         // Reference binding depends on other files and cannot be reused per file like declarations.
         // An unchanged snapshot can copy all resolved edges; otherwise rebuild them together.
-        if (folder is null && (force || !update.TryReuseReferences(cancellationToken)))
+        if (folder is null)
         {
-            await IndexReferencesAsync(root, candidates, indexedFiles, update, cancellationToken);
+            progress?.Report(new(RepositoryIndexingPhase.PreparingReferences, 0, 0));
+
+            if (force || !update.TryReuseReferences(cancellationToken))
+            {
+                await IndexReferencesAsync(root, candidates, indexedFiles, update, progress, cancellationToken);
+            }
         }
 
         await VerifyFilesAsync(root, indexedFiles, progress, cancellationToken);
+        progress?.Report(new(RepositoryIndexingPhase.CheckingCheckout, 0, 0));
 
         if (useSharedSummaries && sharedSummaryCache is not null)
         {
@@ -246,7 +258,7 @@ public sealed class IndexRepository(
         }
 
         await VerifyCheckoutAsync(state, fingerprint, cancellationToken);
-        progress?.Report(new(RepositoryIndexingPhase.Publishing, candidates.Count, candidates.Count));
+        progress?.Report(new(RepositoryIndexingPhase.Publishing, 0, 0));
         var snapshot = update.Publish(cancellationToken);
         progress?.Report(new(folder is null ? RepositoryIndexingPhase.Completed : RepositoryIndexingPhase.FolderCompleted,
             candidates.Count, candidates.Count));
@@ -371,12 +383,15 @@ public sealed class IndexRepository(
 
     private async Task IndexReferencesAsync(
         string root, IReadOnlyList<IndexingSource> candidates, IReadOnlyList<IndexedSourceFile> files,
-        IIndexUpdate update, CancellationToken cancellationToken)
+        IIndexUpdate update, IProgress<RepositoryIndexingProgress>? progress, CancellationToken cancellationToken)
     {
         foreach (var analyzer in _referenceAnalyzers)
         {
             cancellationToken.ThrowIfCancellationRequested();
             var documents = new List<SourceDocument>();
+            var total = candidates.Count(candidate => string.Equals(candidate.Analyzer.Analyzer.AnalyzerId,
+                analyzer.AnalyzerId, StringComparison.Ordinal));
+            progress?.Report(new(RepositoryIndexingPhase.LoadingReferenceSources, 0, total));
 
             for (var index = 0; index < candidates.Count; index++)
             {
@@ -395,10 +410,14 @@ public sealed class IndexRepository(
                 }
 
                 documents.Add(observed.Document);
+                progress?.Report(new(RepositoryIndexingPhase.LoadingReferenceSources, documents.Count, total));
             }
 
-            var references = await analyzer.AnalyzeAsync(documents, cancellationToken);
-            update.AddReferences(references, cancellationToken);
+            var referenceProgress = progress is null ? null : new ReferenceProgressAdapter(progress);
+            var references = await analyzer.AnalyzeAsync(documents, cancellationToken, referenceProgress);
+            progress?.Report(new(RepositoryIndexingPhase.PersistingReferences, 0, references.Count));
+            update.AddReferences(references, cancellationToken, persisted =>
+                progress?.Report(new(RepositoryIndexingPhase.PersistingReferences, persisted, references.Count)));
         }
     }
 
@@ -477,6 +496,22 @@ public sealed class IndexRepository(
     /// <summary>Portable model, prompt and language identity; secrets never enter exported metadata.</summary>
     public SummaryProfile GetSummaryProfile(RepositoryIndexingConfiguration configuration) =>
         SummaryProfile.Create(configuration.SemanticIndexing, summaryGenerator?.CacheVersion ?? "unavailable");
+
+    /// <summary>Forwards analyzer progress synchronously so console phases never arrive out of order.</summary>
+    private sealed class ReferenceProgressAdapter(IProgress<RepositoryIndexingProgress> progress)
+        : IProgress<ReferenceAnalysisProgress>
+    {
+        public void Report(ReferenceAnalysisProgress value) => progress.Report(new(
+            value.Phase switch
+            {
+                ReferenceAnalysisPhase.Parsing => RepositoryIndexingPhase.ParsingReferences,
+                ReferenceAnalysisPhase.PreparingCompilation => RepositoryIndexingPhase.PreparingCompilation,
+                ReferenceAnalysisPhase.Resolving => RepositoryIndexingPhase.ResolvingReferences,
+                ReferenceAnalysisPhase.Sorting => RepositoryIndexingPhase.SortingReferences,
+                _ => throw new ArgumentOutOfRangeException(nameof(value))
+            },
+            value.CompletedFiles, value.TotalFiles));
+    }
 
     private sealed record PendingSummary(
         IndexedSourceFile File, Task<IReadOnlyList<CodeSemantic4Llm.Domain.Symbols.SymbolDefinition>>? Summaries);

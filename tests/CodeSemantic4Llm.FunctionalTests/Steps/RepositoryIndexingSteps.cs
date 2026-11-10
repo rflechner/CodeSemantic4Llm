@@ -339,6 +339,54 @@ public sealed partial class RepositoryIndexingSteps
         Assert.True(symbol.Location.Line > 0 && symbol.Location.Column > 0);
     }
 
+    [Then("progress reports reference analysis and persistence before verification")]
+    public void ThenReferenceAnalysisProgress()
+    {
+        var phases = _progress.Select(item => item.Phase).Distinct().ToArray();
+        Assert.Equal(new[]
+        {
+            RepositoryIndexingPhase.Discovering,
+            RepositoryIndexingPhase.Indexing,
+            RepositoryIndexingPhase.PreparingReferences,
+            RepositoryIndexingPhase.LoadingReferenceSources,
+            RepositoryIndexingPhase.ParsingReferences,
+            RepositoryIndexingPhase.PreparingCompilation,
+            RepositoryIndexingPhase.ResolvingReferences,
+            RepositoryIndexingPhase.SortingReferences,
+            RepositoryIndexingPhase.PersistingReferences,
+            RepositoryIndexingPhase.Verifying,
+            RepositoryIndexingPhase.CheckingCheckout,
+            RepositoryIndexingPhase.Publishing,
+            RepositoryIndexingPhase.Completed
+        }, phases);
+        Assert.Contains(_progress, item => item.Phase == RepositoryIndexingPhase.ResolvingReferences
+            && item.CompletedFiles == 2 && item.TotalFiles == 2);
+        Assert.Contains(_progress, item => item.Phase == RepositoryIndexingPhase.PersistingReferences
+            && item.TotalFiles > 0 && item.CompletedFiles == item.TotalFiles);
+        Assert.Contains(_progress, item => item.Phase == RepositoryIndexingPhase.Publishing
+            && item.CompletedFiles == 0 && item.TotalFiles == 0);
+    }
+
+    [Then("redirected output identifies reference analysis and SQLite publication")]
+    public void ThenRedirectedProgressIsReadable()
+    {
+        Assert.Equal(0, _console!.ExitCode);
+        Assert.Contains("Parsing C# for references", _console.Output);
+        Assert.Contains("Resolving references: 2/2", _console.Output);
+        Assert.Contains("Saving references to SQLite", _console.Output);
+        Assert.Contains("Publishing snapshot (SQLite)", _console.Output);
+        Assert.Contains("Index published successfully.", _console.Output);
+    }
+
+    [Then("reference reuse is visible without repeating semantic resolution")]
+    public void ThenReferenceReuseProgress()
+    {
+        Assert.Contains(_progress, item => item.Phase == RepositoryIndexingPhase.PreparingReferences);
+        Assert.DoesNotContain(_progress, item => item.Phase is RepositoryIndexingPhase.ParsingReferences
+            or RepositoryIndexingPhase.ResolvingReferences);
+        Assert.Equal(RepositoryIndexingPhase.Completed, _progress[^1].Phase);
+    }
+
     [Then("indexing progress reaches completion after publication")]
     public void ThenProgressCompletes()
     {

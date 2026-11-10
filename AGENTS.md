@@ -120,6 +120,14 @@ Treat project specifications and accepted design decisions as authoritative when
 - Do not read outside the configured project boundaries or expose secrets unnecessarily in logs, diagnostics, or MCP responses.
 - Make index updates recoverable and avoid leaving partially updated data presented as current.
 
+## Keep long-running operations observable
+
+- Announce what an operation is doing before starting work that may take noticeable time, and identify each significant phase (for example: reading sources, resolving references, saving data, and publishing).
+- Report completed/total work and meaningful progress when a measurable unit exists. If the total or duration is unknown, show an explicit activity indicator and a descriptive phase instead of inventing a percentage.
+- Never imply that the entire operation is finished merely because one stage reached 100%. Report final success only after all verification and commits have completed.
+- Keep output useful in both interactive terminals and redirected/IDE/CI consoles. Throttle frequent updates so reporting does not become a bottleneck or flood logs.
+- Preserve cancellation and error feedback; test phase ordering and completion semantics for potentially lengthy workflows.
+
 ## Testing and changes
 
 - Add or update focused tests for behavioral changes, particularly parser edge cases, symbol identity, persistence, incremental invalidation, and branch isolation.

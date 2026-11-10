@@ -19,7 +19,8 @@ public sealed class RepositoryIndexCommand(IndexRepository indexRepository, Inde
                     new PercentageColumn(), new ElapsedTimeColumn())
                 .StartAsync(progress => indexRepository.RunAsync(
                     settings.RepositoryRoot, settings.Folder, new RepositoryIndexProgressDisplay(progress), cancellationToken, settings.Force))
-            : await indexRepository.RunAsync(settings.RepositoryRoot, settings.Folder, cancellationToken: cancellationToken, force: settings.Force);
+            : await indexRepository.RunAsync(settings.RepositoryRoot, settings.Folder,
+                new RepositoryIndexTextProgressDisplay(console), cancellationToken, settings.Force);
 
         console.WriteLine($"Repository: {result.State.Scope.RootPath}");
         console.WriteLine($"Index database: {storagePaths.GetDatabasePath(result.State.Scope.RootPath)}");

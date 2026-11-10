@@ -20,7 +20,8 @@ public sealed class CSharpReferenceAnalyzer : ISourceReferenceAnalyzer
 
     public Task<IReadOnlyList<SymbolReference>> AnalyzeAsync(
         IReadOnlyList<SourceDocument> documents,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IProgress<ReferenceAnalysisProgress>? progress = null)
     {
         ArgumentNullException.ThrowIfNull(documents);
         cancellationToken.ThrowIfCancellationRequested();
@@ -30,13 +31,19 @@ public sealed class CSharpReferenceAnalyzer : ISourceReferenceAnalyzer
             return Task.FromResult<IReadOnlyList<SymbolReference>>([]);
         }
 
-        var trees = documents.Select(document =>
+        progress?.Report(new(ReferenceAnalysisPhase.Parsing, 0, documents.Count));
+        var trees = new SyntaxTree[documents.Count];
+
+        for (var index = 0; index < documents.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return CSharpSyntaxTree.ParseText(document.Content, path: document.RelativePath,
+            var document = documents[index];
+            trees[index] = CSharpSyntaxTree.ParseText(document.Content, path: document.RelativePath,
                 cancellationToken: cancellationToken);
-        }).ToArray();
+            progress?.Report(new(ReferenceAnalysisPhase.Parsing, index + 1, documents.Count));
+        }
 
+        progress?.Report(new(ReferenceAnalysisPhase.PreparingCompilation, 0, 0));
         var compilation = CSharpCompilation.Create(
             "CodeSemantic4Llm.ReferenceIndex",
             trees,
@@ -45,9 +52,12 @@ public sealed class CSharpReferenceAnalyzer : ISourceReferenceAnalyzer
 
         var references = new HashSet<SymbolReference>();
 
-        foreach (var tree in trees)
+        progress?.Report(new(ReferenceAnalysisPhase.Resolving, 0, trees.Length));
+
+        for (var index = 0; index < trees.Length; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var tree = trees[index];
             var model = compilation.GetSemanticModel(tree);
             var root = tree.GetRoot(cancellationToken);
 
@@ -81,8 +91,11 @@ public sealed class CSharpReferenceAnalyzer : ISourceReferenceAnalyzer
                     }
                 }
             }
+
+            progress?.Report(new(ReferenceAnalysisPhase.Resolving, index + 1, trees.Length));
         }
 
+        progress?.Report(new(ReferenceAnalysisPhase.Sorting, 0, 0));
         return Task.FromResult<IReadOnlyList<SymbolReference>>(references
             .OrderBy(reference => reference.Target.RelativePath, StringComparer.Ordinal)
             .ThenBy(reference => reference.Target.Line)

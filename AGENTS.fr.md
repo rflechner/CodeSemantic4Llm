@@ -120,6 +120,14 @@ Les spécifications et décisions de conception acceptées font autorité. Disti
 - Respectez les frontières du dépôt et évitez d’exposer des secrets dans les journaux, diagnostics ou réponses MCP.
 - Rendez les mises à jour récupérables. Ne présentez jamais des données partielles comme actuelles.
 
+## Rendre les opérations longues observables
+
+- Annoncez la tâche en cours avant toute opération susceptible de prendre du temps et nommez chaque phase importante (lecture des sources, résolution des références, enregistrement, publication, etc.).
+- Affichez l'avancement réel et le nombre d'éléments terminés/attendus lorsqu'ils sont mesurables. Si la durée ou le total est inconnu, montrez une activité explicite et une phase descriptive plutôt qu'un pourcentage inventé.
+- Ne laissez jamais croire que l'opération entière est terminée parce qu'une étape a atteint 100 %. N'annoncez le succès final qu'après vérification et validation des transactions.
+- Fournissez des indications utiles aussi bien en terminal interactif qu'en console IDE, CI ou redirigée. Limitez la fréquence des mises à jour pour ne pas ralentir le traitement ou saturer les journaux.
+- Préservez les retours d'annulation et d'erreur ; testez l'ordre des phases et la signification de la fin des opérations longues.
+
 ## Tests et modifications
 
 - Ajoutez ou adaptez des tests ciblés pour les changements de comportement, en particulier les cas limites des analyseurs, l’identité des symboles, la persistance, l’invalidation incrémentale et l’isolation des branches.
