@@ -9,7 +9,7 @@
 
 **CodeSemantic4Llm** est un serveur MCP expérimental qui indexe le code sur la machine du développeur. Un agent peut demander les quelques lignes pertinentes au lieu de charger à plusieurs reprises des fichiers entiers dans le contexte du modèle.
 
-> État actuel : configuration YAML par dépôt, indexation des déclarations C# et des références résolues par Roslyn dans SQLite, et requêtes MCP bornées sur les instantanés de branche. La résolution s’appuie sur une compilation légère à l’échelle du dépôt. La résolution complète des projets MSBuild reste à venir. Un LLM compatible avec l’API OpenAI peut résumer les types et méthodes C#. La recherche locale FTS5/BM25 porte sur les noms et les résumés. Les représentations vectorielles et l’analyse TypeScript sont prévues.
+> État actuel : configuration YAML par dépôt, indexation des déclarations C# et des références résolues par Roslyn dans SQLite, analyse facultative Blazor/Razor (`dotnet-razor`), et requêtes MCP bornées sur les instantanés de branche. La résolution s’appuie sur une compilation légère à l’échelle du dépôt. La résolution complète des projets MSBuild reste à venir. Un LLM compatible avec l’API OpenAI peut résumer les types et méthodes C#. La recherche locale FTS5/BM25 porte sur les noms et les résumés. Les représentations vectorielles et l’analyse TypeScript sont prévues.
 
 ## Table des matières
 
