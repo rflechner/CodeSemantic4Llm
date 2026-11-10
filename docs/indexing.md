@@ -36,7 +36,10 @@ no source text, copied project files or Roslyn syntax trees are persisted. The r
 pass loads the selected C# files into memory, so its peak memory scales with the size of
 the compilation. References to framework and other external declarations are not saved.
 C# methods, constructors and types store their own usable XML `<summary>` text locally,
-even without LLM generation. The complete documentation is retained as readable text.
+even with `semanticIndexing.llm.enabled: false`, including enums and delegates.
+The complete documentation is retained as readable text; `<inheritdoc>` and external
+`<include>` files are not expanded. Previously missing enum/delegate descriptions
+are populated by source analysis on the next `index` run.
 Optional OpenAI-compatible LLM summaries of methods and types are available through
 `semanticIndexing.llm` in each repository YAML. The feature is disabled by default.
 When enabled, declarations without usable documentation are sent to the model; set
@@ -143,12 +146,24 @@ with model clients that stringify missing optional arguments, the MCP endpoint
 also treats the text `"null"` (ignoring surrounding whitespace and case) as no
 kind filter. Other kind values retain their filtering behavior.
 
-SQLite **FTS5** indexes these fields and ranks results with **BM25**, emphasizing
-exact declaration names and qualified names. A bounded set of English and French
-grammatical stop words is ignored; remaining words are interpreted as literal
-Unicode-aware prefix terms. This means `index` can also match `indexing`.
-Queries with quotation marks, punctuation, colons or boolean operators are
-sanitized before building the FTS expression and always bound as SQL parameters.
+SQLite **FTS5** indexes original names, qualified names, summaries and derived
+name components (`AchatService` → `Achat Service`, `HTTPClient` → `HTTP Client`).
+Queries split compound identifiers too and ignore common English/French stop words.
+Case and accents are normalized by FTS5. Up to 12 distinct terms (2–64 characters)
+from a query of at most 512 characters become literal prefixes, in any order:
+`service d’achat`, `achat service` and `serv ach` all find `AchatService`, even
+without a summary. At least one term must match. Results first rank by the number
+of matching terms; at equal coverage, types (classes, interfaces, structs,
+records, enums and delegates) precede members. BM25 then weights original names,
+qualified names, summaries and name components by 8, 4, 1 and 8 respectively.
+Source location breaks ties. A kind filter still restricts the candidates.
+
+This uses inverted-index lookups, without scanning every name for `contains` or
+computing edit distances. Broad prefixes can still match many declarations; the
+result limit bounds the response, not the number of matching postings examined.
+Typos, arbitrary infixes, translations and synonyms are not inferred. `find_symbols`
+keeps its exact, case-sensitive identity lookup; use `search_code` for flexible search.
+Punctuation and operators cannot inject FTS expressions or SQL.
 
 This is **lexical relevance search, not embedding/vector similarity**. It may
 miss conceptual synonyms when the summary uses different words. Queries work
@@ -159,8 +174,9 @@ Searches read only the published, branch-specific SQLite snapshot. They do not
 start the configured LLM, send code over the network, or reread the checkout.
 A maximum of 200 results is returned, with a `hasMore` indication, and ties
 are resolved deterministically by source location. If the cache has not yet
-been upgraded to schema 5, run `index` once on that checkout. Reindex after
-source changes as before; FTS5 rows are updated and removed in the same SQLite
+been upgraded to schema 7, run `index` once on that checkout. Reindex after
+source changes as before. Schema 7 rebuilds name components from saved symbols
+without LLM calls or source reads, including reused files; FTS5 rows are updated and removed in the same SQLite
 transaction as their declarations.
 
 ## Querying through MCP

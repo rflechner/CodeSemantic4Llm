@@ -87,7 +87,8 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
             throw new ArgumentOutOfRangeException(nameof(maxResults), "Limit must not exceed 200.");
         }
 
-        var match = FullTextSearchQuery.Build(query);
+        var terms = FullTextSearchQuery.Terms(query);
+        var match = string.Join(" OR ", terms);
         var path = paths.GetDatabasePath(scope.RootPath);
 
         if (!File.Exists(path))
@@ -101,14 +102,17 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
 
         using (var version = IndexDatabase.Command(connection, transaction, "PRAGMA user_version;"))
         {
-            if (Convert.ToInt32(version.ExecuteScalar()) < 5)
+            if (Convert.ToInt32(version.ExecuteScalar()) < 7)
             {
                 throw new InvalidOperationException(
-                    "This index does not contain full-text search metadata. Run the index command again.");
+                    "This index needs upgraded full-text search metadata. Run the index command again.");
             }
         }
 
-        using var command = IndexDatabase.Command(connection, transaction, """
+        // Each membership check uses the inverted index, never a substring scan of symbols.
+        var coverage = string.Join(" + ", terms.Select((_, index) =>
+            $"(s.rowid IN (SELECT rowid FROM symbol_search WHERE symbol_search MATCH $term{index}))"));
+        using var command = IndexDatabase.Command(connection, transaction, $"""
             SELECT s.language, s.kind, s.name, s.qualified_name, s.path,
                    s.line, s.column_number, s.containing_type_line, s.containing_type_column, s.summary
             FROM symbol_search
@@ -116,13 +120,20 @@ public sealed class SqliteIndexStore(IndexStoragePaths paths) : IIndexStore
             WHERE symbol_search MATCH $match
               AND s.snapshot_id = $snapshot
               AND ($kind IS NULL OR s.kind = $kind COLLATE BINARY)
-            ORDER BY bm25(symbol_search, 8.0, 4.0, 1.0),
+            ORDER BY ({coverage}) DESC,
+                     CASE WHEN s.kind IN ('class', 'interface', 'struct', 'record', 'enum', 'delegate') THEN 0 ELSE 1 END,
+                     bm25(symbol_search, 8.0, 4.0, 1.0, 8.0),
                      s.path COLLATE BINARY, s.line, s.column_number, s.ordinal
             LIMIT $limit;
             """,
             ("$match", match), ("$snapshot", snapshot.SnapshotId),
             ("$kind", string.IsNullOrWhiteSpace(kind) ? null : kind.Trim()),
             ("$limit", maxResults + 1));
+
+        for (var index = 0; index < terms.Count; index++)
+        {
+            command.Parameters.AddWithValue($"$term{index}", terms[index]);
+        }
 
         using var reader = command.ExecuteReader();
         var symbols = new List<SymbolDefinition>(maxResults + 1);

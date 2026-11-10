@@ -6,6 +6,21 @@ namespace CodeSemantic4Llm.Analysis.CSharp.Tests;
 
 public sealed class CSharpDocumentationSummaryTests
 {
+    [Theory]
+    [InlineData("class Catalog {}")]
+    [InlineData("interface Catalog {}")]
+    [InlineData("struct Catalog {}")]
+    [InlineData("record Catalog;")]
+    [InlineData("enum Catalog { First }")]
+    [InlineData("delegate void Catalog();")]
+    public async Task Every_type_kind_preserves_its_own_summary(string declaration)
+    {
+        var symbols = await new CSharpSourceAnalyzer().AnalyzeAsync(
+            new SourceDocument("Catalog.cs", "/// <summary>Catalog documentation.</summary>\npublic " + declaration),
+            TestContext.Current.CancellationToken);
+        Assert.Equal("Catalog documentation.", Assert.Single(symbols, symbol => symbol.Name == "Catalog").Summary);
+    }
+
     [Fact]
     public async Task Summaries_belong_to_the_exact_declaration_including_overloads_and_nested_types()
     {
