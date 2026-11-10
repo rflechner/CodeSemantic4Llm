@@ -167,6 +167,21 @@ exclude:
 - `exclude` complète les exclusions intégrées. Indiquez explicitement les chemins de sous-modules à ignorer.
 - Propriétés inconnues, clés en double, configuration manquante ou analyseur inconnu/non implémenté : échec explicite.
 
+Pour indexer les composants Blazor et les vues MVC / Razor Pages historiques, activez
+explicitement les deux analyseurs dans le **YAML de chaque dépôt**, y compris ceux
+créés précédemment par `init` :
+
+```yaml
+analyzers:
+  - dotnet-csharp
+  - dotnet-razor
+```
+
+`dotnet-razor` prend en charge `.razor` et `.cshtml`. Le code-behind `.razor.cs`
+et `.cshtml.cs` reste analysé par `dotnet-csharp`. Après avoir modifié les
+analyseurs, lancez une indexation complète avant de reprendre l'indexation
+par dossier. Voir [l'indexation Razor](indexing.fr.md#portée-et-progression).
+
 ## Configurer le délai de surveillance
 
 La section facultative `watch` définit le temps d'attente de la commande
