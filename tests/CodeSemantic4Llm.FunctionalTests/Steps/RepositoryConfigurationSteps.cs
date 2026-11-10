@@ -263,7 +263,7 @@ public sealed partial class RepositoryConfigurationSteps
     {
         IRepositoryConfigurationLoader loader = new YamlRepositoryConfigurationLoader();
         IRepositoryFileEnumerator fileEnumerator = new FileSystemRepositoryFileEnumerator();
-        ISourceAnalyzer[] analyzers = [new CSharpSourceAnalyzer()];
+        ISourceAnalyzer[] analyzers = [new CSharpSourceAnalyzer(), new RazorSourceAnalyzer()];
 
         return new PreviewRepositoryIndex(loader, fileEnumerator, analyzers);
     }
