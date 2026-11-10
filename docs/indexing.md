@@ -28,6 +28,24 @@ preview. Built-in exclusions always apply; submodules are included unless exclud
 Symlinked files and directories are skipped, and each source path is checked before and
 after reading. The command does not run target builds, restore packages or execute source.
 
+Enable `dotnet-razor` alongside `dotnet-csharp` in `codesemantic4llm.yaml` to
+index Blazor `.razor` components and legacy MVC / Razor Pages `.cshtml` files.
+Each file becomes a searchable `component` or `view` declaration, including
+metadata from `@page`, `@model`, `@layout`, headings, and used component tags.
+Roslyn extracts C# types and members from `@code` and `@functions`, preserving
+original source locations, containing component/view identity and available
+XML `<summary>` comments. Classic `@section` and `@helper` names are indexed.
+With LLM summaries enabled, the analyzer can provide transient Razor and C#
+declaration snippets; no original source files are stored in SQLite.
+Code-behind `.razor.cs` / `.cshtml.cs` remains supported by `dotnet-csharp`.
+
+**Razor limitations:** The lightweight parser does not compile Razor templates,
+resolve component or tag-helper bindings, discover markup-level references,
+or validate Razor syntax for the `watch` syntax gate. `find_usages` resolves
+references between regular C# files only. Incomplete `@code`/`@functions` blocks
+are skipped rather than turned into unreliable declarations. Use
+`dotnet-razor: [.razor]` in `fileExtensions` to exclude classic views.
+
 Currently `dotnet-csharp` extracts declarations using Roslyn syntax trees, including
 language, kind, names, locations and immediate containing types. During indexing,
 an ephemeral `CSharpCompilation` and `SemanticModel` resolve references to indexed
