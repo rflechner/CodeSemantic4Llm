@@ -45,6 +45,14 @@ public interface IIndexStore
         RepositoryScope scope, SourceLocation targetLocation, long snapshotId,
         int maxResults, int offset, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Reads a bounded preview of resolved references for each type, all from the expected
+    /// published snapshot. An incomplete index reports unavailable references rather than none.
+    /// </summary>
+    IReadOnlyList<TypeUsagePreview> GetTypeUsagePreviews(
+        RepositoryScope scope, long snapshotId, IReadOnlyList<SourceLocation> typeLocations,
+        int maxUsagesPerType, CancellationToken cancellationToken = default);
+
     /// <summary>Finds one exact indexed method and its source-file hash in a published snapshot.</summary>
     IndexedMethod GetIndexedMethod(
         RepositoryScope scope, SourceLocation methodLocation, long snapshotId,
@@ -74,6 +82,13 @@ public sealed record SymbolUsagePage(
 {
     public bool HasMore => NextOffset.HasValue;
 }
+
+/// <summary>
+/// A bounded reference sample for one exact type declaration. IsAvailable is false when
+/// the published snapshot does not contain resolved reference metadata.
+/// </summary>
+public sealed record TypeUsagePreview(
+    SourceLocation TypeLocation, IReadOnlyList<SourceLocation> Usages, bool HasMore, bool IsAvailable);
 
 /// <summary>One method declaration with the exact original bytes' hash, scoped to a branch snapshot.</summary>
 public sealed record IndexedMethod(
