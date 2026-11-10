@@ -93,6 +93,49 @@ Feature: Per-repository YAML indexing configuration
     When I preview source indexing
     Then the preview fails with an error containing "Invalid YAML"
 
+
+  Scenario: Razor files are selected only when the .NET Razor analyzer is enabled
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers: [dotnet-csharp, dotnet-razor]
+      """
+    And the repository contains these source files:
+      | path                            |
+      | Components/Counter.razor        |
+      | Components/Counter.razor.cs     |
+      | Views/Home/Index.cshtml         |
+      | src/Program.cs                  |
+      | src/template.html               |
+    When I preview source indexing
+    Then the indexable files are:
+      | path                        | analyzer      |
+      | Components/Counter.razor    | dotnet-razor  |
+      | Components/Counter.razor.cs | dotnet-csharp |
+      | Views/Home/Index.cshtml     | dotnet-razor  |
+      | src/Program.cs              | dotnet-csharp |
+    And the effective extensions for "dotnet-razor" are:
+      | extension |
+      | .razor    |
+      | .cshtml   |
+
+  Scenario: A repository may disable classic views while keeping Blazor components
+    Given the repository configuration is:
+      """
+      version: 1
+      analyzers: [dotnet-razor]
+      fileExtensions:
+        dotnet-razor: [.razor]
+      """
+    And the repository contains these source files:
+      | path                    |
+      | Components/Main.razor   |
+      | Views/Home/Index.cshtml |
+    When I preview source indexing
+    Then the indexable files are:
+      | path                  | analyzer     |
+      | Components/Main.razor | dotnet-razor |
+
   Scenario: Default build folders and an explicitly excluded submodule are never indexed
     Given the repository configuration is:
       """
