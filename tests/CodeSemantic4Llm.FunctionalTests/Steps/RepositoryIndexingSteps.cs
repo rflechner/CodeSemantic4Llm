@@ -22,7 +22,7 @@ namespace CodeSemantic4Llm.FunctionalTests.Steps;
 [Binding]
 public sealed partial class RepositoryIndexingSteps
 {
-    private const string DefaultYaml = "version: 1\nanalyzers: [dotnet-csharp]\nfileExtensions:\n  dotnet-csharp: [.cs, .csharp]\nexclude: [vendor/**]\n";
+    private const string DefaultYaml = "version: 1\nanalyzers: [dotnet-csharp, dotnet-razor]\nfileExtensions:\n  dotnet-csharp: [.cs, .csharp]\nexclude: [vendor/**]\n";
     private const string SourceMarker = "SOURCE_BODY_MUST_NEVER_BE_STORED_37eabc";
     private readonly string _workspace = Path.Combine(Path.GetTempPath(), "CodeSemantic4Llm.IndexTests", Guid.NewGuid().ToString("N"));
     private readonly TrackingAnalyzer _analyzer = new();
@@ -508,8 +508,8 @@ public sealed partial class RepositoryIndexingSteps
     private CancellationToken Token => _cancellation?.Token ?? TestContext.Current.CancellationToken;
 
     private IndexRepository CreateIndexer() => new(_stateProvider, new YamlRepositoryConfigurationLoader(),
-        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer], [new CSharpReferenceAnalyzer()],
-        [new CSharpSymbolSourceExtractor()], _summaryGenerator);
+        new FileSystemRepositoryFileEnumerator(), new RepositorySourceReader(), Store, [_analyzer, new RazorSourceAnalyzer()], [new CSharpReferenceAnalyzer()],
+        [new CSharpSymbolSourceExtractor(), new RazorSymbolSourceExtractor()], _summaryGenerator);
 
     private RepositoryIndexTools CreateMcpTools()
     {
