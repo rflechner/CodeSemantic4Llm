@@ -5,7 +5,7 @@ namespace CodeSemantic4Llm.Persistence.Sqlite;
 /// <summary>Versioned, regenerable schema for declaration snapshots. It contains no source text.</summary>
 internal static class IndexDatabase
 {
-    private const int SchemaVersion = 7;
+    private const int SchemaVersion = 8;
 
     public static SqliteConnection Open(string path, string repositoryRoot, bool writable)
     {
@@ -26,6 +26,7 @@ internal static class IndexDatabase
         try
         {
             connection.Open();
+            connection.CreateFunction<string, string>("identifier_terms", IdentifierSearchTerms.Split, isDeterministic: true);
             ValidateSchema(connection, repositoryRoot, writable);
             return connection;
         }
@@ -61,7 +62,7 @@ internal static class IndexDatabase
         {
             Initialize(connection, root);
         }
-        else if (version is not 1 and not 2 and not 3 and not 4 and not 5 and not 6 && version != SchemaVersion)
+        else if (version is not 1 and not 2 and not 3 and not 4 and not 5 and not 6 and not 7 && version != SchemaVersion)
         {
             throw new InvalidOperationException($"Unsupported index schema version {version}. Use a new index cache directory.");
         }
@@ -107,13 +108,13 @@ internal static class IndexDatabase
             UpgradeFromVersionFive(connection);
         }
 
-        if (writable && version is >= 1 and <= 6)
+        if (writable && version is >= 1 and <= 7)
         {
-            UpgradeFromVersionSix(connection);
+            UpgradeToVersionEight(connection);
         }
     }
 
-    private static void UpgradeFromVersionSix(SqliteConnection connection)
+    private static void UpgradeToVersionEight(SqliteConnection connection)
     {
         using var transaction = connection.BeginTransaction();
         using var columns = Command(connection, transaction, "PRAGMA table_info(snapshots);");
@@ -133,8 +134,19 @@ internal static class IndexDatabase
             add.ExecuteNonQuery();
         }
 
-        using var version = Command(connection, transaction, "PRAGMA user_version = 7;");
-        version.ExecuteNonQuery();
+        // Rebuild derived terms from saved names, without source reads or summary generation.
+        using var drop = Command(connection, transaction, """
+            DROP TRIGGER IF EXISTS symbol_search_insert;
+            DROP TRIGGER IF EXISTS symbol_search_update;
+            DROP TRIGGER IF EXISTS symbol_search_delete;
+            DROP TABLE IF EXISTS symbol_search;
+            """);
+        drop.ExecuteNonQuery();
+        using var schema = Command(connection, transaction, FullTextSchema);
+        schema.ExecuteNonQuery();
+        using var rebuild = Command(connection, transaction,
+            "INSERT INTO symbol_search(symbol_search) VALUES ('rebuild'); PRAGMA user_version = 8;");
+        rebuild.ExecuteNonQuery();
         transaction.Commit();
     }
 
@@ -247,8 +259,19 @@ internal static class IndexDatabase
     /// <summary>Legacy read-only caches have no partial flag; their published indexes are full.</summary>
     public static string PartialColumn(SqliteConnection connection, SqliteTransaction? transaction, string prefix = "")
     {
-        using var version = Command(connection, transaction, "PRAGMA user_version;");
-        return Convert.ToInt32(version.ExecuteScalar()) >= 7 ? prefix + "is_partial" : "0";
+        // Main and develop both shipped version 7 with different capabilities. Inspect
+        // the column so read-only clients can open either variant without migrating it.
+        using var columns = Command(connection, transaction, "PRAGMA table_info(snapshots);");
+        using var reader = columns.ExecuteReader();
+        while (reader.Read())
+        {
+            if (reader.GetString(1) == "is_partial")
+            {
+                return prefix + "is_partial";
+            }
+        }
+
+        return "0";
     }
 
     /// <summary>Legacy read-only caches have no summary column and are never migrated by readers.</summary>
@@ -317,32 +340,34 @@ internal static class IndexDatabase
         CREATE INDEX ix_symbols_name ON symbols(snapshot_id, name, path, line, column_number);
         CREATE INDEX ix_symbols_container ON symbols(
             snapshot_id, path, containing_type_line, containing_type_column, line, column_number, ordinal);
-        PRAGMA user_version = 7;
+        PRAGMA user_version = 8;
         """;
 
     // External-content FTS keeps the authoritative name/summary text solely in
     // symbols. SQLite maintains the term index in the same transaction as symbol
     // inserts, copies, updates and cascading deletes across snapshot publication.
     private const string FullTextSchema = """
+        CREATE VIEW IF NOT EXISTS symbol_search_content AS
+            SELECT rowid, name, qualified_name, summary, identifier_terms(name) AS name_terms FROM symbols;
         CREATE VIRTUAL TABLE IF NOT EXISTS symbol_search USING fts5(
-            name, qualified_name, summary,
-            content='symbols', content_rowid='rowid',
+            name, qualified_name, summary, name_terms,
+            content='symbol_search_content', content_rowid='rowid',
             tokenize='unicode61 remove_diacritics 2',
             prefix='2 3 4'
         );
         CREATE TRIGGER IF NOT EXISTS symbol_search_insert AFTER INSERT ON symbols BEGIN
-            INSERT INTO symbol_search(rowid, name, qualified_name, summary)
-            VALUES (new.rowid, new.name, new.qualified_name, new.summary);
+            INSERT INTO symbol_search(rowid, name, qualified_name, summary, name_terms)
+            VALUES (new.rowid, new.name, new.qualified_name, new.summary, identifier_terms(new.name));
         END;
         CREATE TRIGGER IF NOT EXISTS symbol_search_delete AFTER DELETE ON symbols BEGIN
-            INSERT INTO symbol_search(symbol_search, rowid, name, qualified_name, summary)
-            VALUES ('delete', old.rowid, old.name, old.qualified_name, old.summary);
+            INSERT INTO symbol_search(symbol_search, rowid, name, qualified_name, summary, name_terms)
+            VALUES ('delete', old.rowid, old.name, old.qualified_name, old.summary, identifier_terms(old.name));
         END;
         CREATE TRIGGER IF NOT EXISTS symbol_search_update AFTER UPDATE ON symbols BEGIN
-            INSERT INTO symbol_search(symbol_search, rowid, name, qualified_name, summary)
-            VALUES ('delete', old.rowid, old.name, old.qualified_name, old.summary);
-            INSERT INTO symbol_search(rowid, name, qualified_name, summary)
-            VALUES (new.rowid, new.name, new.qualified_name, new.summary);
+            INSERT INTO symbol_search(symbol_search, rowid, name, qualified_name, summary, name_terms)
+            VALUES ('delete', old.rowid, old.name, old.qualified_name, old.summary, identifier_terms(old.name));
+            INSERT INTO symbol_search(rowid, name, qualified_name, summary, name_terms)
+            VALUES (new.rowid, new.name, new.qualified_name, new.summary, identifier_terms(new.name));
         END;
         """;
 }

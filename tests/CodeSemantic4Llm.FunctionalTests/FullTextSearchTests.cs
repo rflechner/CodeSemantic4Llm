@@ -282,7 +282,132 @@ public sealed class FullTextSearchTests : IDisposable
         verify.Open();
         using var version = verify.CreateCommand();
         version.CommandText = "PRAGMA user_version;";
-        Assert.Equal(7L, version.ExecuteScalar());
+        Assert.Equal(8L, version.ExecuteScalar());
+    }
+
+    [Theory]
+    [InlineData("service d’achat")]
+    [InlineData("achat service")]
+    [InlineData("SERVICE ACHAT")]
+    [InlineData("serv ach")]
+    [InlineData("AchatService")]
+    public void Compound_names_rank_by_coverage_then_types_before_properties(string query)
+    {
+        var scope = Scope("main");
+        Publish(scope,
+        [
+            File("src/Types.cs", "types",
+                Symbol("class", "Service", "src/Types.cs", 1, null),
+                Symbol("class", "AchatService", "src/Types.cs", 2, null)),
+            File("src/Properties.cs", "properties",
+                Symbol("property", "AchatService", "src/Properties.cs", 1, null))
+        ]);
+
+        var result = _store.SearchCode(scope, query, null, 1);
+        Assert.Equal("AchatService", Assert.Single(result.Symbols).Name);
+        Assert.Equal("class", result.Symbols[0].Kind);
+        Assert.True(result.HasMore);
+        Assert.Equal("property", Assert.Single(_store.SearchCode(scope, query, "property", 10).Symbols).Kind);
+    }
+
+    [Theory]
+    [InlineData("HTTPClientFactory", "factory http client")]
+    [InlineData("achat_service", "service achat")]
+    [InlineData("ÉtatService", "service etat")]
+    public void Compound_names_support_acronyms_separators_and_accents(string name, string query)
+    {
+        var scope = Scope("main");
+        Publish(scope, [File("Type.cs", "hash", Symbol("class", name, "Type.cs", 1, null))]);
+        Assert.Equal(name, Assert.Single(_store.SearchCode(scope, query, null, 10).Symbols).Name);
+    }
+
+    [Fact]
+    public void Upgrading_schema_six_rebuilds_compound_names_from_reused_symbols()
+    {
+        var scope = Scope("main");
+        var file = File("Type.cs", "hash", Symbol("class", "AchatService", "Type.cs", 1, "Handles orders."));
+        Publish(scope, [file]);
+        using (var connection = new SqliteConnection($"Data Source={_paths.GetDatabasePath(_root)};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                DROP TRIGGER symbol_search_insert;
+                DROP TRIGGER symbol_search_update;
+                DROP TRIGGER symbol_search_delete;
+                DROP TABLE symbol_search;
+                DROP VIEW symbol_search_content;
+                CREATE VIRTUAL TABLE symbol_search USING fts5(name, qualified_name, summary, content='symbols');
+                INSERT INTO symbol_search(symbol_search) VALUES ('rebuild');
+                PRAGMA user_version = 6;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        Assert.Throws<InvalidOperationException>(() => _store.SearchCode(scope, "achat service", null, 10));
+        using (var update = _store.BeginUpdate(State(scope), "config", "en"))
+        {
+            Assert.True(update.TryReuse(file.File));
+            update.Publish();
+        }
+
+        Assert.Equal("Handles orders.", Assert.Single(_store.SearchCode(scope, "service", null, 10).Symbols).Summary);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Both_schema_seven_variants_upgrade_without_losing_snapshots(bool cumulativeVariant)
+    {
+        var scope = Scope("main");
+        var file = File("Type.cs", "hash", Symbol("class", "AchatService", "Type.cs", 1,
+            "Orchestre les commandes fournisseurs."));
+        var original = Publish(scope, [file]);
+        using (var connection = new SqliteConnection($"Data Source={_paths.GetDatabasePath(_root)};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = cumulativeVariant ? """
+                UPDATE snapshots SET is_partial = 1;
+                DROP TRIGGER symbol_search_insert;
+                DROP TRIGGER symbol_search_update;
+                DROP TRIGGER symbol_search_delete;
+                DROP TABLE symbol_search;
+                DROP VIEW symbol_search_content;
+                CREATE VIRTUAL TABLE symbol_search USING fts5(name, qualified_name, summary, content='symbols');
+                INSERT INTO symbol_search(symbol_search) VALUES ('rebuild');
+                PRAGMA user_version = 7;
+                """ : """
+                ALTER TABLE snapshots DROP COLUMN is_partial;
+                PRAGMA user_version = 7;
+                """;
+            command.ExecuteNonQuery();
+        }
+
+        var dashboard = new SqliteIndexDashboardReader(_paths);
+        var project = Assert.Single(dashboard.ListProjects(TestContext.Current.CancellationToken));
+        Assert.Equal(cumulativeVariant, Assert.Single(project.Branches).IsPartial);
+        Assert.Equal(cumulativeVariant, _store.GetSnapshot(scope)!.IsPartial);
+        Assert.Throws<InvalidOperationException>(() => _store.SearchCode(scope, "achat service", null, 10));
+
+        // Opening a writer migrates metadata; aborting its new generation retains the old snapshot.
+        using (var update = _store.BeginUpdate(State(scope), "config", "en"))
+        {
+            Assert.True(update.TryReuse(file.File));
+        }
+
+        var preserved = _store.GetSnapshot(scope)!;
+        Assert.Equal(original.SnapshotId, preserved.SnapshotId);
+        Assert.Equal(cumulativeVariant, preserved.IsPartial);
+        Assert.Equal("Orchestre les commandes fournisseurs.",
+            Assert.Single(_store.SearchCode(scope, "service d’achat", null, 10).Symbols).Summary);
+        Assert.Equal("AchatService", Assert.Single(dashboard.SearchCode(
+            project.Id, "main", "service d’achat", null, 10).Symbols).Name);
+        using var verify = new SqliteConnection($"Data Source={_paths.GetDatabasePath(_root)};Mode=ReadOnly;Pooling=False");
+        verify.Open();
+        using var version = verify.CreateCommand();
+        version.CommandText = "PRAGMA user_version;";
+        Assert.Equal(8L, version.ExecuteScalar());
     }
 
     private RepositoryScope Scope(string branch) => new(_root, branch);

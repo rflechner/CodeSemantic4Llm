@@ -115,6 +115,23 @@ public sealed partial class RepositoryIndexingSteps
     [Then("full-text search reports an error")]
     public void ThenFullTextSearchReportsError() => Assert.True(_fullTextError);
 
+    [When("MCP searches all declarations for \"(.*)\"")]
+    public async Task WhenSearchAllDeclarations(string query)
+    {
+        await using var client = await StartCodeClientAsync(exposeIndexing: false);
+        var response = await client.CallAsync("search_code", new { query });
+        _fullTextReply = McpCodeClient.ReadContent(response);
+    }
+
+    [Then("the first code result is type \"(.*)\" with description \"(.*)\"")]
+    public void ThenFirstTypeDescription(string name, string summary)
+    {
+        var symbol = _fullTextReply.GetProperty("symbols")[0];
+        Assert.Equal(name, symbol.GetProperty("name").GetString());
+        Assert.Equal("class", symbol.GetProperty("kind").GetString());
+        Assert.Equal(summary, symbol.GetProperty("summary").GetString());
+    }
+
     private async Task SearchWithMcpAsync(string query, bool exposeIndexing)
     {
         await using var client = await StartCodeClientAsync(exposeIndexing: exposeIndexing);
