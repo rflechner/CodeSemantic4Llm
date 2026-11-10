@@ -16,6 +16,14 @@ returns both fields. For example:
 mcpPaths: relative
 ```
 
+Minimal C# repository configuration returning only `absolutePath` fields:
+
+```yaml
+version: 1
+analyzers: [dotnet-csharp]
+mcpPaths: absolute
+```
+
 The setting applies to nested locations, references, diagnostics, source reads and edits,
 and indexing preview candidates. Absolute paths use the server filesystem and the
 operator-selected checkout root. Inputs still require repository-relative paths, even

@@ -12,6 +12,14 @@ renvoie les deux champs. Exemple :
 mcpPaths: relative
 ```
 
+Configuration minimale d’un dépôt C# renvoyant uniquement les champs `absolutePath` :
+
+```yaml
+version: 1
+analyzers: [dotnet-csharp]
+mcpPaths: absolute
+```
+
 Ce réglage couvre les emplacements imbriqués, références, diagnostics, lectures et
 éditions de code, ainsi que les candidats de l’aperçu d’indexation. Les chemins absolus
 utilisent le système de fichiers du serveur et la racine choisie par l’opérateur.
