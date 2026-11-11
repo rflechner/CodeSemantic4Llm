@@ -12,7 +12,7 @@ This is a tool installation, **not** a `<PackageReference>` added to your applic
 
 ## Prerequisites
 
-- The **.NET 10 SDK** (the tool targets `net10.0` and uses the ASP.NET Core shared runtime).
+- The **.NET 11 SDK** (the tool targets `net11.0` and uses the ASP.NET Core shared runtime).
 - Git and an existing Git checkout on a named branch for indexing.
 - A GitHub account and a **personal access token (classic)** with `read:packages`.
 

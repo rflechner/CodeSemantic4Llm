@@ -6,7 +6,7 @@ CodeSemantic4Llm est une **application en ligne de commande et un serveur MCP lo
 
 ## Prérequis
 
-- **SDK .NET 10**. L’outil cible `net10.0` et utilise le runtime partagé ASP.NET Core.
+- **SDK .NET 11**. L’outil cible `net11.0` et utilise le runtime partagé ASP.NET Core.
 - Git et une copie de travail sur une branche nommée pour indexer le code.
 - Compte GitHub et **jeton d’accès personnel classique** avec `read:packages`.
 

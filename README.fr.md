@@ -210,7 +210,7 @@ Le serveur LLM reçoit **la méthode ou le type C# entier**, documentation XML c
 
 ## Compiler et tester
 
-Installez le SDK .NET 10 et Git pour les opérations sur les dépôts :
+Installez le SDK .NET 11 et Git pour les opérations sur les dépôts :
 
 ```shell
 dotnet restore CodeSemantic4Llm.slnx
