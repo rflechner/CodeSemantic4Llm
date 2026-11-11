@@ -19,7 +19,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
       - name: Build, test and pack with NUKE
         id: pack
         run: dotnet run --project build/Build.csproj -- Pack
@@ -47,7 +47,7 @@ jobs:
           path: artifacts
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: '11.0.x'
       - name: Publish tested tool to GitHub Packages
         env:
           VERSION: ${{ needs.build.outputs.version }}

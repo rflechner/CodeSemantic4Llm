@@ -323,7 +323,7 @@ cross-file TypeScript reference resolution. See [TypeScript analyzer](src/CodeSe
 
 ## Build and test
 
-Requires .NET 10 SDK and Git for operations against checked-out repositories.
+Requires .NET 11 SDK and Git for operations against checked-out repositories.
 
 ```shell
 dotnet restore CodeSemantic4Llm.slnx
